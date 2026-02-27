@@ -8,14 +8,14 @@ export const saveLoanInput = async (input: LoanInput): Promise<void> => {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(input));
 };
 
-export const loadLoanInput = async (): Promise<LoanInput | null> => {
+export const loadLoanInput = async (): Promise<Partial<LoanInput> | null> => {
   const raw = await AsyncStorage.getItem(STORAGE_KEY);
   if (!raw) {
     return null;
   }
 
   try {
-    return JSON.parse(raw) as LoanInput;
+    return JSON.parse(raw) as Partial<LoanInput>;
   } catch {
     return null;
   }

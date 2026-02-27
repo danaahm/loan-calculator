@@ -1,12 +1,23 @@
-import { Dimensions, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Animated,
+  Dimensions,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { PieChart } from "react-native-chart-kit";
 
-import { formatCurrency } from "../utils/format";
+import { formatCurrency, formatDurationLabel } from "../utils/format";
+import { CardHeader } from "./CardHeader";
 
 interface PieBreakdownChartProps {
   principal: number;
   interest: number;
   fees: number;
+  currencyCode: string;
+  loanLengthYears: number;
 }
 
 const COLORS = {
@@ -19,65 +30,136 @@ export const PieBreakdownChart = ({
   principal,
   interest,
   fees,
+  currencyCode,
+  loanLengthYears,
 }: PieBreakdownChartProps) => {
-  const total = principal + interest + fees;
-  const data = [
+  const [visibleSeries, setVisibleSeries] = useState({
+    principal: true,
+    interest: true,
+    fees: true,
+  });
+  const [animatedValues, setAnimatedValues] = useState({
+    principal,
+    interest,
+    fees,
+  });
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const previous = { ...animatedValues };
+    const durationMs = 280;
+    const start = Date.now();
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const progress = Math.min(1, elapsed / durationMs);
+      setAnimatedValues({
+        principal: previous.principal + (principal - previous.principal) * progress,
+        interest: previous.interest + (interest - previous.interest) * progress,
+        fees: previous.fees + (fees - previous.fees) * progress,
+      });
+      if (progress >= 1) {
+        clearInterval(timer);
+      }
+    }, 16);
+
+    Animated.sequence([
+      Animated.timing(opacity, {
+        toValue: 0.7,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    return () => clearInterval(timer);
+  }, [principal, interest, fees]);
+
+  const rawData = [
     {
+      id: "principal",
       name: "Principal",
-      population: Math.max(0, principal),
+      population: Math.max(0, animatedValues.principal),
       color: COLORS.principal,
       legendFontColor: "#111827",
       legendFontSize: 12,
     },
     {
+      id: "interest",
       name: "Interest",
-      population: Math.max(0, interest),
+      population: Math.max(0, animatedValues.interest),
       color: COLORS.interest,
       legendFontColor: "#111827",
       legendFontSize: 12,
     },
     {
+      id: "fees",
       name: "Account Fees",
-      population: Math.max(0, fees),
+      population: Math.max(0, animatedValues.fees),
       color: COLORS.fees,
       legendFontColor: "#111827",
       legendFontSize: 12,
     },
-  ];
-  const chartWidth = Math.min(Dimensions.get("window").width - 48, 380);
+  ] as const;
+  const data = rawData.filter((item) => visibleSeries[item.id]);
+  const total = useMemo(
+    () => data.reduce((sum, item) => sum + item.population, 0),
+    [data]
+  );
+  const chartWidth = Math.min(Dimensions.get("window").width - 96, 300);
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>Repayment Breakdown</Text>
+      <CardHeader
+        title="Repayment Breakdown"
+        subtitle={`(${formatDurationLabel(loanLengthYears)})`}
+      />
 
-      <View style={styles.chartWrap}>
-        <PieChart
-          data={data}
-          width={chartWidth}
-          height={220}
-          accessor="population"
-          backgroundColor="transparent"
-          paddingLeft="20"
-          chartConfig={{
-            color: () => "#111827",
-          }}
-          hasLegend={false}
-        />
-      </View>
+      <Animated.View style={[styles.chartWrap, { opacity }]}>
+        {data.length > 0 ? (
+          <PieChart
+            data={data}
+            width={chartWidth}
+            height={220}
+            accessor="population"
+            backgroundColor="transparent"
+            paddingLeft="46"
+            chartConfig={{
+              color: () => "#111827",
+            }}
+            hasLegend={false}
+            style={styles.pieChart}
+          />
+        ) : (
+          <Text style={styles.hiddenAllText}>Enable at least one series.</Text>
+        )}
+      </Animated.View>
 
       <View style={styles.legend}>
-        {data.map((item) => (
-          <View key={item.name} style={styles.legendRow}>
+        {rawData.map((item) => (
+          <Pressable
+            key={item.name}
+            style={[styles.legendRow, !visibleSeries[item.id] && styles.legendRowMuted]}
+            onPress={() =>
+              setVisibleSeries((previous) => ({
+                ...previous,
+                [item.id]: !previous[item.id],
+              }))
+            }
+          >
             <View style={[styles.dot, { backgroundColor: item.color }]} />
             <Text style={styles.legendLabel}>{item.name}</Text>
             <Text style={styles.legendValue}>
-              {formatCurrency(item.population)}
+              {formatCurrency(item.population, currencyCode)}
             </Text>
-          </View>
+          </Pressable>
         ))}
         <View style={[styles.legendRow, styles.totalRow]}>
           <Text style={styles.totalLabel}>Total Paid</Text>
-          <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
+          <Text style={styles.totalValue}>{formatCurrency(total, currencyCode)}</Text>
         </View>
       </View>
     </View>
@@ -91,14 +173,12 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 8,
-    color: "#111827",
-  },
   chartWrap: {
     alignItems: "center",
+    width: "100%",
+  },
+  pieChart: {
+    alignSelf: "center",
   },
   legend: {
     marginTop: 4,
@@ -107,6 +187,10 @@ const styles = StyleSheet.create({
   legendRow: {
     flexDirection: "row",
     alignItems: "center",
+    paddingVertical: 4,
+  },
+  legendRowMuted: {
+    opacity: 0.45,
   },
   dot: {
     width: 10,
@@ -139,5 +223,10 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontSize: 15,
     fontWeight: "700",
+  },
+  hiddenAllText: {
+    color: "#6b7280",
+    fontWeight: "600",
+    marginVertical: 40,
   },
 });

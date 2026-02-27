@@ -13,6 +13,7 @@ export interface ExtraRepaymentConfig {
 }
 
 export interface LoanInput {
+  currencyCode: string;
   amountBorrowed: number;
   annualInterestRatePercent: number;
   repaymentFrequency: RepaymentFrequency;

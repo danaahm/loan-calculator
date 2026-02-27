@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  FlatList,
+  Modal,
   Pressable,
   StyleSheet,
   Switch,
@@ -13,7 +15,13 @@ import {
   type LoanInput,
   type RepaymentFrequency,
 } from "../types/loan";
-import { formatFrequencyLabel } from "../utils/format";
+import {
+  getAvailableCurrencies,
+  getCurrencySymbol,
+  type CurrencyOption,
+  formatFrequencyLabel,
+} from "../utils/format";
+import { CardHeader } from "./CardHeader";
 
 interface LoanFormProps {
   initialValue: LoanInput;
@@ -64,9 +72,14 @@ const FrequencySelector = ({
 };
 
 export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
+  const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const [currencySearch, setCurrencySearch] = useState("");
+  const currencies = useMemo(() => getAvailableCurrencies(), []);
+
   const [amountBorrowed, setAmountBorrowed] = useState(
     String(initialValue.amountBorrowed)
   );
+  const [currencyCode, setCurrencyCode] = useState(initialValue.currencyCode);
   const [interestRate, setInterestRate] = useState(
     String(initialValue.annualInterestRatePercent)
   );
@@ -93,6 +106,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setCurrencyCode(initialValue.currencyCode);
     setAmountBorrowed(String(initialValue.amountBorrowed));
     setInterestRate(String(initialValue.annualInterestRatePercent));
     setLoanLengthYears(String(initialValue.loanLengthYears));
@@ -107,6 +121,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
 
   const fieldValue = useMemo<LoanInput>(() => {
     return {
+      currencyCode,
       amountBorrowed: parsePositiveNumber(amountBorrowed),
       annualInterestRatePercent: parsePositiveNumber(interestRate),
       repaymentFrequency,
@@ -124,6 +139,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     accountFee,
     accountFeeFrequency,
     amountBorrowed,
+    currencyCode,
     extraAmount,
     extraEnabled,
     extraFrequency,
@@ -132,6 +148,36 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     loanLengthYears,
     repaymentFrequency,
   ]);
+  const moneySymbol = useMemo(() => getCurrencySymbol(currencyCode), [currencyCode]);
+
+  const filteredCurrencies = useMemo(() => {
+    const query = currencySearch.trim().toLowerCase();
+    if (!query) {
+      return currencies;
+    }
+    return currencies.filter((currency) => {
+      return (
+        currency.code.toLowerCase().includes(query) ||
+        currency.symbol.toLowerCase().includes(query)
+      );
+    });
+  }, [currencies, currencySearch]);
+
+  const renderCurrencyItem = ({ item }: { item: CurrencyOption }) => {
+    const selected = item.code === currencyCode;
+    return (
+      <Pressable
+        style={[styles.currencyRow, selected && styles.currencyRowActive]}
+        onPress={() => {
+          setCurrencyCode(item.code);
+          setCurrencyModalVisible(false);
+        }}
+      >
+        <Text style={styles.currencyRowCode}>{item.code}</Text>
+        <Text style={styles.currencyRowLabel}>{item.label}</Text>
+      </Pressable>
+    );
+  };
 
   const submit = () => {
     if (fieldValue.amountBorrowed <= 0) {
@@ -155,24 +201,37 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>Loan Inputs</Text>
+      <CardHeader title="Loan Inputs" subtitle="Enter values to calculate repayments." />
+
+      <Text style={styles.label}>Currency</Text>
+      <Pressable
+        style={styles.currencySelectButton}
+        onPress={() => setCurrencyModalVisible(true)}
+      >
+        <Text style={styles.currencySelectText}>
+          {currencyCode} ({moneySymbol})
+        </Text>
+      </Pressable>
 
       <Text style={styles.label}>Amount Borrowed</Text>
-      <TextInput
-        keyboardType="decimal-pad"
-        value={amountBorrowed}
-        onChangeText={setAmountBorrowed}
-        style={styles.input}
-        placeholder="e.g. 500000"
-      />
+      <View style={styles.inputWrap}>
+        <Text style={styles.prefixText}>{moneySymbol}</Text>
+        <TextInput
+          keyboardType="decimal-pad"
+          value={amountBorrowed}
+          onChangeText={setAmountBorrowed}
+          style={styles.input}
+          placeholder="e.g. 500000"
+        />
+      </View>
 
       <Text style={styles.label}>Interest Rate (% per year)</Text>
       <TextInput
         keyboardType="decimal-pad"
         value={interestRate}
         onChangeText={setInterestRate}
-        style={styles.input}
-        placeholder="e.g. 6.25"
+        style={styles.simpleInput}
+        placeholder="e.g. 6.25%"
       />
 
       <Text style={styles.label}>Repayment Frequency</Text>
@@ -183,18 +242,21 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
         keyboardType="decimal-pad"
         value={loanLengthYears}
         onChangeText={setLoanLengthYears}
-        style={styles.input}
+        style={styles.simpleInput}
         placeholder="e.g. 30"
       />
 
       <Text style={styles.label}>Account Fee (per fee event)</Text>
-      <TextInput
-        keyboardType="decimal-pad"
-        value={accountFee}
-        onChangeText={setAccountFee}
-        style={styles.input}
-        placeholder="e.g. 10"
-      />
+      <View style={styles.inputWrap}>
+        <Text style={styles.prefixText}>{moneySymbol}</Text>
+        <TextInput
+          keyboardType="decimal-pad"
+          value={accountFee}
+          onChangeText={setAccountFee}
+          style={styles.input}
+          placeholder="e.g. 10"
+        />
+      </View>
 
       <Text style={styles.label}>Account Fee Frequency</Text>
       <FrequencySelector value={accountFeeFrequency} onChange={setAccountFeeFrequency} />
@@ -207,13 +269,16 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
       {extraEnabled ? (
         <View>
           <Text style={styles.label}>Extra Repayment Amount</Text>
-          <TextInput
-            keyboardType="decimal-pad"
-            value={extraAmount}
-            onChangeText={setExtraAmount}
-            style={styles.input}
-            placeholder="e.g. 250"
-          />
+          <View style={styles.inputWrap}>
+            <Text style={styles.prefixText}>{moneySymbol}</Text>
+            <TextInput
+              keyboardType="decimal-pad"
+              value={extraAmount}
+              onChangeText={setExtraAmount}
+              style={styles.input}
+              placeholder="e.g. 250"
+            />
+          </View>
 
           <Text style={styles.label}>Extra Repayment Frequency</Text>
           <FrequencySelector value={extraFrequency} onChange={setExtraFrequency} />
@@ -223,7 +288,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             keyboardType="number-pad"
             value={extraStartAfter}
             onChangeText={setExtraStartAfter}
-            style={styles.input}
+            style={styles.simpleInput}
             placeholder="e.g. 12"
           />
         </View>
@@ -234,6 +299,34 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
       <Pressable style={styles.calculateButton} onPress={submit}>
         <Text style={styles.calculateButtonText}>Calculate</Text>
       </Pressable>
+
+      <Modal
+        visible={currencyModalVisible}
+        animationType="slide"
+        onRequestClose={() => setCurrencyModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <Text style={styles.modalTitle}>Select Currency</Text>
+          <TextInput
+            style={styles.modalSearch}
+            placeholder="Search currency code or symbol"
+            value={currencySearch}
+            onChangeText={setCurrencySearch}
+          />
+          <FlatList
+            data={filteredCurrencies}
+            keyExtractor={(item) => item.code}
+            renderItem={renderCurrencyItem}
+            contentContainerStyle={styles.currencyList}
+          />
+          <Pressable
+            style={styles.modalCloseButton}
+            onPress={() => setCurrencyModalVisible(false)}
+          >
+            <Text style={styles.modalCloseText}>Close</Text>
+          </Pressable>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -245,12 +338,6 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 12,
-    color: "#111827",
-  },
   label: {
     marginBottom: 6,
     marginTop: 10,
@@ -258,6 +345,14 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   input: {
+    flex: 1,
+    borderWidth: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    backgroundColor: "#f9fafb",
+  },
+  simpleInput: {
     borderWidth: 1,
     borderColor: "#d1d5db",
     borderRadius: 10,
@@ -265,6 +360,32 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 15,
     backgroundColor: "#f9fafb",
+  },
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 10,
+    backgroundColor: "#f9fafb",
+  },
+  prefixText: {
+    paddingLeft: 12,
+    fontSize: 15,
+    color: "#111827",
+    fontWeight: "700",
+  },
+  currencySelectButton: {
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#f9fafb",
+  },
+  currencySelectText: {
+    color: "#111827",
+    fontWeight: "600",
   },
   frequencyWrap: {
     flexDirection: "row",
@@ -318,5 +439,62 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "700",
     fontSize: 16,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+    padding: 16,
+    paddingTop: 56,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  modalSearch: {
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  currencyList: {
+    paddingBottom: 16,
+  },
+  currencyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  currencyRowActive: {
+    borderColor: "#2563eb",
+    backgroundColor: "#dbeafe",
+  },
+  currencyRowCode: {
+    width: 56,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  currencyRowLabel: {
+    color: "#374151",
+    flex: 1,
+  },
+  modalCloseButton: {
+    borderRadius: 10,
+    backgroundColor: "#2563eb",
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  modalCloseText: {
+    color: "#ffffff",
+    fontWeight: "700",
   },
 });

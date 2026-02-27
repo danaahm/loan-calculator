@@ -2,18 +2,20 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { type YearlyRow } from "../types/loan";
 import { formatCurrency } from "../utils/format";
+import { CardHeader } from "./CardHeader";
 
 interface AmortizationGridProps {
   rows: YearlyRow[];
+  currencyCode: string;
 }
 
-export const AmortizationGrid = ({ rows }: AmortizationGridProps) => {
+export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) => {
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>Yearly Loan Grid</Text>
-      <Text style={styles.subtitle}>
-        Opening balance, yearly payments, and closing balance.
-      </Text>
+      <CardHeader
+        title="Yearly Loan Grid"
+        subtitle="Opening balance, yearly payments, and closing balance."
+      />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View>
@@ -30,12 +32,22 @@ export const AmortizationGrid = ({ rows }: AmortizationGridProps) => {
           {rows.map((row) => (
             <View key={row.year} style={styles.row}>
               <Text style={[styles.cell, styles.yearCell]}>{row.year}</Text>
-              <Text style={styles.cell}>{formatCurrency(row.openingBalance)}</Text>
-              <Text style={styles.cell}>{formatCurrency(row.principalPaid)}</Text>
-              <Text style={styles.cell}>{formatCurrency(row.interestPaid)}</Text>
-              <Text style={styles.cell}>{formatCurrency(row.feesPaid)}</Text>
-              <Text style={styles.cell}>{formatCurrency(row.extraPaid)}</Text>
-              <Text style={styles.cell}>{formatCurrency(row.closingBalance)}</Text>
+              <Text style={styles.cell}>
+                {formatCurrency(row.openingBalance, currencyCode)}
+              </Text>
+              <Text style={styles.cell}>
+                {formatCurrency(row.principalPaid, currencyCode)}
+              </Text>
+              <Text style={styles.cell}>
+                {formatCurrency(row.interestPaid, currencyCode)}
+              </Text>
+              <Text style={styles.cell}>
+                {formatCurrency(row.feesPaid, currencyCode)}
+              </Text>
+              <Text style={styles.cell}>{formatCurrency(row.extraPaid, currencyCode)}</Text>
+              <Text style={styles.cell}>
+                {formatCurrency(row.closingBalance, currencyCode)}
+              </Text>
             </View>
           ))}
         </View>
@@ -50,15 +62,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     marginBottom: 24,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  subtitle: {
-    color: "#6b7280",
-    marginBottom: 12,
   },
   row: {
     flexDirection: "row",

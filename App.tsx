@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AmortizationGrid } from "./src/components/AmortizationGrid";
 import { BalanceComparisonChart } from "./src/components/BalanceComparisonChart";
@@ -18,6 +20,7 @@ import { type LoanCalculationResult, type LoanInput } from "./src/types/loan";
 import { calculateLoan, normalizeInput } from "./src/utils/loanMath";
 
 const DEFAULT_INPUT: LoanInput = {
+  currencyCode: "AUD",
   amountBorrowed: 500000,
   annualInterestRatePercent: 6.2,
   repaymentFrequency: "monthly",
@@ -69,34 +72,53 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.heading}>Loan Calculator</Text>
-        <Text style={styles.subheading}>
-          Compare your normal repayment path with optional extra repayments.
-        </Text>
-
-        <LoanForm initialValue={input} onSubmit={handleSubmit} />
-
-        {result ? (
-          <View>
-            <PieBreakdownChart
-              principal={result.activeSchedule.summary.totalPrincipalPaid}
-              interest={result.activeSchedule.summary.totalInterestPaid}
-              fees={result.activeSchedule.summary.totalFeesPaid}
-            />
-
-            <BalanceComparisonChart
-              result={result}
-              repaymentFrequency={input.repaymentFrequency}
-            />
-
-            <AmortizationGrid rows={result.activeSchedule.yearlyRows} />
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="dark" />
+        <ScrollView
+          contentContainerStyle={styles.content}
+          stickyHeaderIndices={[0]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.stickyHeader}>
+            <View style={styles.brandRow}>
+              <Image source={require("./assets/icon.png")} style={styles.logo} />
+              <Text style={styles.heading}>Loan Calculator</Text>
+            </View>
           </View>
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
+
+          {/* <Text style={styles.subheading}>
+            Compare your normal repayment path with optional extra repayments.
+          </Text> */}
+
+          <LoanForm initialValue={input} onSubmit={handleSubmit} />
+
+          {result ? (
+            <View>
+              <PieBreakdownChart
+                principal={result.activeSchedule.summary.totalPrincipalPaid}
+                interest={result.activeSchedule.summary.totalInterestPaid}
+                fees={result.activeSchedule.summary.totalFeesPaid}
+                currencyCode={input.currencyCode}
+                loanLengthYears={input.loanLengthYears}
+              />
+
+              <BalanceComparisonChart
+                result={result}
+                repaymentFrequency={input.repaymentFrequency}
+                currencyCode={input.currencyCode}
+                loanLengthYears={input.loanLengthYears}
+              />
+
+              <AmortizationGrid
+                rows={result.activeSchedule.yearlyRows}
+                currencyCode={input.currencyCode}
+              />
+            </View>
+          ) : null}
+        </ScrollView>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
@@ -115,11 +137,31 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
   },
+  stickyHeader: {
+    marginHorizontal: -16,
+    marginTop: -16,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    marginBottom: 12,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  logo: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+  },
   heading: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "800",
     color: "#111827",
-    marginBottom: 4,
   },
   subheading: {
     color: "#4b5563",

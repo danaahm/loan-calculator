@@ -213,17 +213,23 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
   };
 };
 
-export const normalizeInput = (input: LoanInput): LoanInput => {
+export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
   return {
-    ...input,
-    amountBorrowed: Math.max(0, input.amountBorrowed),
-    annualInterestRatePercent: Math.max(0, input.annualInterestRatePercent),
-    loanLengthYears: Math.max(0.5, input.loanLengthYears),
-    accountFee: Math.max(0, input.accountFee),
+    currencyCode: input.currencyCode ?? "AUD",
+    amountBorrowed: Math.max(0, input.amountBorrowed ?? 0),
+    annualInterestRatePercent: Math.max(0, input.annualInterestRatePercent ?? 0),
+    repaymentFrequency: input.repaymentFrequency ?? "monthly",
+    loanLengthYears: Math.max(0.5, input.loanLengthYears ?? 0.5),
+    accountFee: Math.max(0, input.accountFee ?? 0),
+    accountFeeFrequency: input.accountFeeFrequency ?? "monthly",
     extraRepayment: {
-      ...input.extraRepayment,
-      amount: Math.max(0, input.extraRepayment.amount),
-      startAfterPeriods: Math.max(0, Math.floor(input.extraRepayment.startAfterPeriods)),
+      enabled: Boolean(input.extraRepayment?.enabled),
+      amount: Math.max(0, input.extraRepayment?.amount ?? 0),
+      frequency: input.extraRepayment?.frequency ?? "monthly",
+      startAfterPeriods: Math.max(
+        0,
+        Math.floor(input.extraRepayment?.startAfterPeriods ?? 0)
+      ),
     },
   };
 };
