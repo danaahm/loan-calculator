@@ -4,12 +4,14 @@ export type RepaymentFrequency =
   | "monthly"
   | "fortnightly"
   | "weekly";
+export type ExtraRepaymentStartUnit = "months" | "years";
 
 export interface ExtraRepaymentConfig {
   enabled: boolean;
   amount: number;
   frequency: RepaymentFrequency;
-  startAfterPeriods: number;
+  startAfterValue: number;
+  startAfterUnit: ExtraRepaymentStartUnit;
 }
 
 export interface LoanInput {

@@ -56,15 +56,11 @@ export const BalanceComparisonChart = ({
   currencyCode,
   loanLengthYears,
 }: BalanceComparisonChartProps) => {
+  const [collapsed, setCollapsed] = useState(false);
   const [showBaseline, setShowBaseline] = useState(true);
   const [showExtra, setShowExtra] = useState(true);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [focusedYearIndex, setFocusedYearIndex] = useState<number | null>(null);
-  const [activePoint, setActivePoint] = useState<{
-    year: string;
-    value: number;
-    seriesName: string;
-  } | null>(null);
   const opacity = useRef(new Animated.Value(1)).current;
   const pinchStartZoom = useRef(1);
 
@@ -101,6 +97,13 @@ export const BalanceComparisonChart = ({
     result.savings.periodsSaved,
     periodsPerYear
   );
+  const totalLoanTime = result.withExtra
+    ? formatYearsAndPeriods(
+        result.withExtra.summary.payoffYears,
+        result.withExtra.summary.payoffPeriods,
+        periodsPerYear
+      )
+    : formatDurationLabel(loanLengthYears);
   const baseWidth = Math.min(Dimensions.get("window").width - 48, 380);
   const chartWidth = baseWidth;
 
@@ -230,144 +233,147 @@ export const BalanceComparisonChart = ({
       <CardHeader
         title="Loan Balance Over Time"
         subtitle={`(${formatDurationLabel(loanLengthYears)})`}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
 
-      <View style={styles.toolbar}>
-        <View style={styles.zoomButtons}>
-          <Pressable
-            style={styles.toolButton}
-            onPress={() => {
-              setZoomLevel((prev) => Math.min(4, prev + 0.5));
-              if (focusedYearIndex === null) {
-                setFocusedYearIndex(Math.floor(baselineSeries.length / 2));
-              }
-            }}
-          >
-            <Text style={styles.toolButtonText}>Zoom In</Text>
-          </Pressable>
-          <Pressable
-            style={styles.toolButton}
-            onPress={() => setZoomLevel((prev) => Math.max(1, prev - 0.5))}
-          >
-            <Text style={styles.toolButtonText}>Zoom Out</Text>
-          </Pressable>
-          {zoomLevel > 1 ? (
-            <Pressable
-              style={styles.toolButton}
-              onPress={() => {
-                setZoomLevel(1);
-                setFocusedYearIndex(null);
-              }}
+      {!collapsed ? (
+        <View>
+          <View style={styles.toolbar}>
+            <View style={styles.zoomButtons}>
+              <Pressable
+                style={styles.toolButton}
+                onPress={() => {
+                  setZoomLevel((prev) => Math.min(4, prev + 0.5));
+                  if (focusedYearIndex === null) {
+                    setFocusedYearIndex(Math.floor(baselineSeries.length / 2));
+                  }
+                }}
+              >
+                <Text style={styles.toolButtonText}>Zoom In</Text>
+              </Pressable>
+              <Pressable
+                style={styles.toolButton}
+                onPress={() => setZoomLevel((prev) => Math.max(1, prev - 0.5))}
+              >
+                <Text style={styles.toolButtonText}>Zoom Out</Text>
+              </Pressable>
+              {zoomLevel > 1 ? (
+                <Pressable
+                  style={styles.toolButton}
+                  onPress={() => {
+                    setZoomLevel(1);
+                    setFocusedYearIndex(null);
+                  }}
+                >
+                  <Text style={styles.toolButtonText}>Reset</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+
+          <View style={styles.chartArea}>
+            <PinchGestureHandler
+              onGestureEvent={handlePinchGestureEvent}
+              onHandlerStateChange={handlePinchStateChange}
             >
-              <Text style={styles.toolButtonText}>Reset</Text>
+              <View style={styles.chartCanvasWrap} {...panResponder.panHandlers}>
+                <Animated.View style={{ opacity }}>
+                  {datasets.length > 0 ? (
+                    <LineChart
+                      data={{
+                        labels,
+                        datasets,
+                      }}
+                      width={chartWidth}
+                      height={260}
+                      yAxisLabel=""
+                      withHorizontalLabels
+                      withVerticalLabels
+                      withInnerLines
+                      withOuterLines
+                      withHorizontalLines
+                      withVerticalLines
+                      verticalLabelRotation={0}
+                      formatXLabel={(value) => value}
+                      formatYLabel={(value) => formatCompactThousands(Number(value))}
+                      bezier
+                      onDataPointClick={({ index }) => {
+                        const absoluteIndex = visiblePoints.startIndex + index;
+                        setFocusedYearIndex(absoluteIndex);
+                      }}
+                      chartConfig={{
+                        backgroundGradientFrom: "#ffffff",
+                        backgroundGradientTo: "#ffffff",
+                        color: (opacityValue = 1) =>
+                          `rgba(17,24,39,${opacityValue})`,
+                        labelColor: (opacityValue = 1) =>
+                          `rgba(75,85,99,${opacityValue})`,
+                        decimalPlaces: 0,
+                        propsForDots: {
+                          r: "2",
+                          strokeWidth: "1",
+                          stroke: "#ffffff",
+                        },
+                        propsForBackgroundLines: {
+                          stroke: "#d1d5db",
+                          strokeDasharray: "0",
+                          strokeWidth: 1,
+                        },
+                      }}
+                      style={styles.chart}
+                      fromZero
+                      segments={6}
+                    />
+                  ) : (
+                    <Text style={styles.chartFallbackText}>
+                      Enable at least one series.
+                    </Text>
+                  )}
+                </Animated.View>
+                <Text style={styles.xAxisTitle}>Years</Text>
+              </View>
+            </PinchGestureHandler>
+          </View>
+
+          <Pressable
+            style={[styles.legendRow, !showBaseline && styles.legendRowMuted]}
+            onPress={() => setShowBaseline((prev) => !prev)}
+          >
+            <View style={[styles.dot, { backgroundColor: "#2563eb" }]} />
+            <Text style={styles.legendText}>Original repayment</Text>
+          </Pressable>
+          {extraData ? (
+            <Pressable
+              style={[styles.legendRow, !showExtra && styles.legendRowMuted]}
+              onPress={() => setShowExtra((prev) => !prev)}
+            >
+              <View style={[styles.dot, { backgroundColor: "#10b981" }]} />
+              <Text style={styles.legendText}>With extra repayment</Text>
             </Pressable>
           ) : null}
-        </View>
-      </View>
 
-      <View style={styles.chartArea}>
-        <PinchGestureHandler
-          onGestureEvent={handlePinchGestureEvent}
-          onHandlerStateChange={handlePinchStateChange}
-        >
-          <View style={styles.chartCanvasWrap} {...panResponder.panHandlers}>
-            <Animated.View style={{ opacity }}>
-              {datasets.length > 0 ? (
-                <LineChart
-                  data={{
-                    labels,
-                    datasets,
-                  }}
-                  width={chartWidth}
-                  height={260}
-                  yAxisLabel=""
-                  withHorizontalLabels
-                  withVerticalLabels
-                  withInnerLines
-                  withOuterLines
-                  withHorizontalLines
-                  withVerticalLines
-                  verticalLabelRotation={0}
-                  formatXLabel={(value) => value}
-                  formatYLabel={(value) => formatCompactThousands(Number(value))}
-                  bezier
-                  onDataPointClick={({ value, index, dataset }) => {
-                    const year = labels[index] ?? "N/A";
-                    const absoluteIndex = visiblePoints.startIndex + index;
-                    setFocusedYearIndex(absoluteIndex);
-                    const seriesName =
-                      ((dataset as { seriesName?: string }).seriesName as string) ??
-                      "Series";
-                    setActivePoint({ year, value, seriesName });
-                  }}
-                  chartConfig={{
-                    backgroundGradientFrom: "#ffffff",
-                    backgroundGradientTo: "#ffffff",
-                    color: (opacityValue = 1) =>
-                      `rgba(17,24,39,${opacityValue})`,
-                    labelColor: (opacityValue = 1) =>
-                      `rgba(75,85,99,${opacityValue})`,
-                    decimalPlaces: 0,
-                    propsForDots: {
-                      r: "2",
-                      strokeWidth: "1",
-                      stroke: "#ffffff",
-                    },
-                    propsForBackgroundLines: {
-                      stroke: "#d1d5db",
-                      strokeDasharray: "0",
-                      strokeWidth: 1,
-                    },
-                  }}
-                  style={styles.chart}
-                  fromZero
-                  segments={6}
-                />
-              ) : (
-                <Text style={styles.chartFallbackText}>
-                  Enable at least one series.
-                </Text>
-              )}
-            </Animated.View>
-            <Text style={styles.xAxisTitle}>Years</Text>
-          </View>
-        </PinchGestureHandler>
-      </View>
-
-      <Pressable
-        style={[styles.legendRow, !showBaseline && styles.legendRowMuted]}
-        onPress={() => setShowBaseline((prev) => !prev)}
-      >
-        <View style={[styles.dot, { backgroundColor: "#2563eb" }]} />
-        <Text style={styles.legendText}>Original repayment path</Text>
-      </Pressable>
-      {extraData ? (
-        <Pressable
-          style={[styles.legendRow, !showExtra && styles.legendRowMuted]}
-          onPress={() => setShowExtra((prev) => !prev)}
-        >
-          <View style={[styles.dot, { backgroundColor: "#10b981" }]} />
-          <Text style={styles.legendText}>With extra repayment</Text>
-        </Pressable>
-      ) : null}
-
-      {activePoint ? (
-        <View style={styles.tooltipCard}>
-          <Text style={styles.tooltipSeries}>{activePoint.seriesName}</Text>
-          <Text style={styles.tooltipText}>{activePoint.year}</Text>
-          <Text style={styles.tooltipText}>
-            {formatCurrency(activePoint.value, currencyCode)}
-          </Text>
-        </View>
-      ) : null}
-
-      {extraData ? (
-        <View style={styles.savingsWrap}>
-          <Text style={styles.savingsTitle}>Extra Repayment Benefit</Text>
-          <Text style={styles.savingsLine}>
-            Money saved: {formatCurrency(result.savings.moneySaved, currencyCode)}
-          </Text>
-          <Text style={styles.savingsLine}>Time saved: {savedTime}</Text>
+          {extraData ? (
+            <View style={styles.savingsWrap}>
+              <Text style={styles.savingsTitle}>Extra Repayment Benefit</Text>
+              <View style={styles.savingsCardsRow}>
+                <View style={styles.savingsCard}>
+                  <Text style={styles.savingsCardLabel}>Interest saved:</Text>
+                  <Text style={styles.savingsCardValue}>
+                    {formatCurrency(result.savings.moneySaved, currencyCode)}
+                  </Text>
+                </View>
+                <View style={styles.savingsCard}>
+                  <Text style={styles.savingsCardLabel}>Time saved:</Text>
+                  <Text style={styles.savingsCardValue}>{savedTime}</Text>
+                </View>
+              </View>
+              <View style={styles.savingsCardWide}>
+                <Text style={styles.savingsCardLabel}>Total loan time:</Text>
+                <Text style={styles.savingsCardValue}>{totalLoanTime}</Text>
+              </View>
+            </View>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -436,23 +442,6 @@ const styles = StyleSheet.create({
     color: "#374151",
     fontWeight: "600",
   },
-  tooltipCard: {
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 10,
-    padding: 10,
-    backgroundColor: "#f9fafb",
-  },
-  tooltipSeries: {
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 2,
-  },
-  tooltipText: {
-    color: "#374151",
-    fontWeight: "600",
-  },
   savingsWrap: {
     marginTop: 12,
     paddingTop: 10,
@@ -462,11 +451,41 @@ const styles = StyleSheet.create({
   savingsTitle: {
     fontWeight: "700",
     color: "#111827",
-    marginBottom: 4,
+    marginBottom: 10,
   },
-  savingsLine: {
-    color: "#374151",
+  savingsCardsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  savingsCard: {
+    flex: 1,
+    backgroundColor: "rgba(34, 197, 94, 0.5)",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+  },
+  savingsCardWide: {
+    marginTop: 10,
+    width: "100%",
+    backgroundColor: "rgba(34, 197, 94, 0.5)",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+  },
+  savingsCardLabel: {
+    color: "#14532d",
     fontWeight: "600",
+    marginBottom: 6,
+    textAlign: "center",
+
+  },
+  savingsCardValue: {
+    color: "#14532d",
+    fontWeight: "500",
+    fontSize: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
   },
   chartFallbackText: {
     color: "#6b7280",
@@ -474,3 +493,4 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
 });
+

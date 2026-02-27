@@ -12,6 +12,7 @@ import {
 
 import {
   FREQUENCIES,
+  type ExtraRepaymentStartUnit,
   type LoanInput,
   type RepaymentFrequency,
 } from "../types/loan";
@@ -72,6 +73,7 @@ const FrequencySelector = ({
 };
 
 export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
+  const [collapsed, setCollapsed] = useState(false);
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
   const [currencySearch, setCurrencySearch] = useState("");
   const currencies = useMemo(() => getAvailableCurrencies(), []);
@@ -101,8 +103,10 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     initialValue.extraRepayment.frequency
   );
   const [extraStartAfter, setExtraStartAfter] = useState(
-    String(initialValue.extraRepayment.startAfterPeriods)
+    String(initialValue.extraRepayment.startAfterValue)
   );
+  const [extraStartAfterUnit, setExtraStartAfterUnit] =
+    useState<ExtraRepaymentStartUnit>(initialValue.extraRepayment.startAfterUnit);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -116,7 +120,8 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     setExtraEnabled(initialValue.extraRepayment.enabled);
     setExtraAmount(String(initialValue.extraRepayment.amount));
     setExtraFrequency(initialValue.extraRepayment.frequency);
-    setExtraStartAfter(String(initialValue.extraRepayment.startAfterPeriods));
+    setExtraStartAfter(String(initialValue.extraRepayment.startAfterValue));
+    setExtraStartAfterUnit(initialValue.extraRepayment.startAfterUnit);
   }, [initialValue]);
 
   const fieldValue = useMemo<LoanInput>(() => {
@@ -132,7 +137,8 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
         enabled: extraEnabled,
         amount: parsePositiveNumber(extraAmount),
         frequency: extraFrequency,
-        startAfterPeriods: parsePositiveInt(extraStartAfter),
+        startAfterValue: parsePositiveInt(extraStartAfter),
+        startAfterUnit: extraStartAfterUnit,
       },
     };
   }, [
@@ -144,6 +150,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     extraEnabled,
     extraFrequency,
     extraStartAfter,
+    extraStartAfterUnit,
     interestRate,
     loanLengthYears,
     repaymentFrequency,
@@ -201,104 +208,155 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
 
   return (
     <View style={styles.card}>
-      <CardHeader title="Loan Inputs" subtitle="Enter values to calculate repayments." />
-
-      <Text style={styles.label}>Currency</Text>
-      <Pressable
-        style={styles.currencySelectButton}
-        onPress={() => setCurrencyModalVisible(true)}
-      >
-        <Text style={styles.currencySelectText}>
-          {currencyCode} ({moneySymbol})
-        </Text>
-      </Pressable>
-
-      <Text style={styles.label}>Amount Borrowed</Text>
-      <View style={styles.inputWrap}>
-        <Text style={styles.prefixText}>{moneySymbol}</Text>
-        <TextInput
-          keyboardType="decimal-pad"
-          value={amountBorrowed}
-          onChangeText={setAmountBorrowed}
-          style={styles.input}
-          placeholder="e.g. 500000"
-        />
-      </View>
-
-      <Text style={styles.label}>Interest Rate (% per year)</Text>
-      <TextInput
-        keyboardType="decimal-pad"
-        value={interestRate}
-        onChangeText={setInterestRate}
-        style={styles.simpleInput}
-        placeholder="e.g. 6.25%"
+      <CardHeader
+        title="Loan Profile"
+        subtitle="Enter values to calculate repayments."
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
 
-      <Text style={styles.label}>Repayment Frequency</Text>
-      <FrequencySelector value={repaymentFrequency} onChange={setRepaymentFrequency} />
-
-      <Text style={styles.label}>Loan Length (years)</Text>
-      <TextInput
-        keyboardType="decimal-pad"
-        value={loanLengthYears}
-        onChangeText={setLoanLengthYears}
-        style={styles.simpleInput}
-        placeholder="e.g. 30"
-      />
-
-      <Text style={styles.label}>Account Fee (per fee event)</Text>
-      <View style={styles.inputWrap}>
-        <Text style={styles.prefixText}>{moneySymbol}</Text>
-        <TextInput
-          keyboardType="decimal-pad"
-          value={accountFee}
-          onChangeText={setAccountFee}
-          style={styles.input}
-          placeholder="e.g. 10"
-        />
-      </View>
-
-      <Text style={styles.label}>Account Fee Frequency</Text>
-      <FrequencySelector value={accountFeeFrequency} onChange={setAccountFeeFrequency} />
-
-      <View style={styles.switchRow}>
-        <Text style={styles.switchLabel}>Enable Extra Repayment</Text>
-        <Switch value={extraEnabled} onValueChange={setExtraEnabled} />
-      </View>
-
-      {extraEnabled ? (
+      {!collapsed ? (
         <View>
-          <Text style={styles.label}>Extra Repayment Amount</Text>
+          <Text style={styles.label}>Currency</Text>
+          <Pressable
+            style={styles.currencySelectButton}
+            onPress={() => setCurrencyModalVisible(true)}
+          >
+            <Text style={styles.currencySelectText}>
+              {currencyCode} ({moneySymbol})
+            </Text>
+          </Pressable>
+
+          <Text style={styles.label}>Amount Borrowed</Text>
           <View style={styles.inputWrap}>
             <Text style={styles.prefixText}>{moneySymbol}</Text>
             <TextInput
               keyboardType="decimal-pad"
-              value={extraAmount}
-              onChangeText={setExtraAmount}
+              value={amountBorrowed}
+              onChangeText={setAmountBorrowed}
               style={styles.input}
-              placeholder="e.g. 250"
+              placeholder="e.g. 500000"
             />
           </View>
 
-          <Text style={styles.label}>Extra Repayment Frequency</Text>
-          <FrequencySelector value={extraFrequency} onChange={setExtraFrequency} />
-
-          <Text style={styles.label}>Start Extra After N Repayment Periods</Text>
+          <Text style={styles.label}>Interest Rate (% per year)</Text>
           <TextInput
-            keyboardType="number-pad"
-            value={extraStartAfter}
-            onChangeText={setExtraStartAfter}
+            keyboardType="decimal-pad"
+            value={interestRate}
+            onChangeText={setInterestRate}
             style={styles.simpleInput}
-            placeholder="e.g. 12"
+            placeholder="e.g. 6.25%"
           />
+
+          <Text style={styles.label}>Repayment Frequency</Text>
+          <FrequencySelector value={repaymentFrequency} onChange={setRepaymentFrequency} />
+
+          <Text style={styles.label}>Loan Length (years)</Text>
+          <TextInput
+            keyboardType="decimal-pad"
+            value={loanLengthYears}
+            onChangeText={setLoanLengthYears}
+            style={styles.simpleInput}
+            placeholder="e.g. 30"
+          />
+
+          <Text style={styles.label}>Account Fee (per fee event)</Text>
+          <View style={styles.inputWrap}>
+            <Text style={styles.prefixText}>{moneySymbol}</Text>
+            <TextInput
+              keyboardType="decimal-pad"
+              value={accountFee}
+              onChangeText={setAccountFee}
+              style={styles.input}
+              placeholder="e.g. 10"
+            />
+          </View>
+
+          <Text style={styles.label}>Account Fee Frequency</Text>
+          <FrequencySelector value={accountFeeFrequency} onChange={setAccountFeeFrequency} />
+
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Enable Extra Repayment</Text>
+            <Switch value={extraEnabled} onValueChange={setExtraEnabled} />
+          </View>
+
+          {extraEnabled ? (
+            <View>
+              <Text style={styles.label}>Extra Repayment Amount</Text>
+              <View style={styles.inputWrap}>
+                <Text style={styles.prefixText}>{moneySymbol}</Text>
+                <TextInput
+                  keyboardType="decimal-pad"
+                  value={extraAmount}
+                  onChangeText={setExtraAmount}
+                  style={styles.input}
+                  placeholder="e.g. 250"
+                />
+              </View>
+
+              <Text style={styles.label}>Extra Repayment Frequency</Text>
+              <FrequencySelector value={extraFrequency} onChange={setExtraFrequency} />
+
+              <Text style={styles.label}>Start Extra After</Text>
+              <View style={styles.startAfterRow}>
+                <View style={styles.startAfterInputWrap}>
+                  <TextInput
+                    keyboardType="number-pad"
+                    value={extraStartAfter}
+                    onChangeText={setExtraStartAfter}
+                    style={styles.simpleInput}
+                    placeholder="e.g. 12"
+                  />
+                </View>
+                <View style={styles.startAfterToggle}>
+                  <Pressable
+                    style={[
+                      styles.startAfterToggleButton,
+                      extraStartAfterUnit === "months" &&
+                        styles.startAfterToggleButtonActive,
+                    ]}
+                    onPress={() => setExtraStartAfterUnit("months")}
+                  >
+                    <Text
+                      style={[
+                        styles.startAfterToggleText,
+                        extraStartAfterUnit === "months" &&
+                          styles.startAfterToggleTextActive,
+                      ]}
+                    >
+                      Months
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.startAfterToggleButton,
+                      extraStartAfterUnit === "years" &&
+                        styles.startAfterToggleButtonActive,
+                    ]}
+                    onPress={() => setExtraStartAfterUnit("years")}
+                  >
+                    <Text
+                      style={[
+                        styles.startAfterToggleText,
+                        extraStartAfterUnit === "years" &&
+                          styles.startAfterToggleTextActive,
+                      ]}
+                    >
+                      Years
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <Pressable style={styles.calculateButton} onPress={submit}>
+            <Text style={styles.calculateButtonText}>Calculate</Text>
+          </Pressable>
         </View>
       ) : null}
-
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-      <Pressable style={styles.calculateButton} onPress={submit}>
-        <Text style={styles.calculateButtonText}>Calculate</Text>
-      </Pressable>
 
       <Modal
         visible={currencyModalVisible}
@@ -422,6 +480,37 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#111827",
     fontWeight: "600",
+  },
+  startAfterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  startAfterInputWrap: {
+    flex: 1,
+  },
+  startAfterToggle: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+  startAfterToggleButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#f9fafb",
+  },
+  startAfterToggleButtonActive: {
+    backgroundColor: "#dbeafe",
+  },
+  startAfterToggleText: {
+    color: "#374151",
+    fontWeight: "600",
+  },
+  startAfterToggleTextActive: {
+    color: "#1e40af",
+    fontWeight: "700",
   },
   errorText: {
     color: "#dc2626",

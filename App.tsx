@@ -31,7 +31,8 @@ const DEFAULT_INPUT: LoanInput = {
     enabled: false,
     amount: 200,
     frequency: "monthly",
-    startAfterPeriods: 12,
+    startAfterValue: 12,
+    startAfterUnit: "months",
   },
 };
 

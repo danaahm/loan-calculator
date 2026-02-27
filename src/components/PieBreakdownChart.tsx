@@ -33,6 +33,7 @@ export const PieBreakdownChart = ({
   currencyCode,
   loanLengthYears,
 }: PieBreakdownChartProps) => {
+  const [collapsed, setCollapsed] = useState(false);
   const [visibleSeries, setVisibleSeries] = useState({
     principal: true,
     interest: true,
@@ -116,52 +117,58 @@ export const PieBreakdownChart = ({
       <CardHeader
         title="Repayment Breakdown"
         subtitle={`(${formatDurationLabel(loanLengthYears)})`}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
 
-      <Animated.View style={[styles.chartWrap, { opacity }]}>
-        {data.length > 0 ? (
-          <PieChart
-            data={data}
-            width={chartWidth}
-            height={220}
-            accessor="population"
-            backgroundColor="transparent"
-            paddingLeft="46"
-            chartConfig={{
-              color: () => "#111827",
-            }}
-            hasLegend={false}
-            style={styles.pieChart}
-          />
-        ) : (
-          <Text style={styles.hiddenAllText}>Enable at least one series.</Text>
-        )}
-      </Animated.View>
+      {!collapsed ? (
+        <View>
+          <Animated.View style={[styles.chartWrap, { opacity }]}>
+            {data.length > 0 ? (
+              <PieChart
+                data={data}
+                width={chartWidth}
+                height={220}
+                accessor="population"
+                backgroundColor="transparent"
+                paddingLeft="46"
+                chartConfig={{
+                  color: () => "#111827",
+                }}
+                hasLegend={false}
+                style={styles.pieChart}
+              />
+            ) : (
+              <Text style={styles.hiddenAllText}>Enable at least one series.</Text>
+            )}
+          </Animated.View>
 
-      <View style={styles.legend}>
-        {rawData.map((item) => (
-          <Pressable
-            key={item.name}
-            style={[styles.legendRow, !visibleSeries[item.id] && styles.legendRowMuted]}
-            onPress={() =>
-              setVisibleSeries((previous) => ({
-                ...previous,
-                [item.id]: !previous[item.id],
-              }))
-            }
-          >
-            <View style={[styles.dot, { backgroundColor: item.color }]} />
-            <Text style={styles.legendLabel}>{item.name}</Text>
-            <Text style={styles.legendValue}>
-              {formatCurrency(item.population, currencyCode)}
-            </Text>
-          </Pressable>
-        ))}
-        <View style={[styles.legendRow, styles.totalRow]}>
-          <Text style={styles.totalLabel}>Total Paid</Text>
-          <Text style={styles.totalValue}>{formatCurrency(total, currencyCode)}</Text>
+          <View style={styles.legend}>
+            {rawData.map((item) => (
+              <Pressable
+                key={item.name}
+                style={[styles.legendRow, !visibleSeries[item.id] && styles.legendRowMuted]}
+                onPress={() =>
+                  setVisibleSeries((previous) => ({
+                    ...previous,
+                    [item.id]: !previous[item.id],
+                  }))
+                }
+              >
+                <View style={[styles.dot, { backgroundColor: item.color }]} />
+                <Text style={styles.legendLabel}>{item.name}</Text>
+                <Text style={styles.legendValue}>
+                  {formatCurrency(item.population, currencyCode)}
+                </Text>
+              </Pressable>
+            ))}
+            <View style={[styles.legendRow, styles.totalRow]}>
+              <Text style={styles.totalLabel}>Total Paid</Text>
+              <Text style={styles.totalValue}>{formatCurrency(total, currencyCode)}</Text>
+            </View>
+          </View>
         </View>
-      </View>
+      ) : null}
     </View>
   );
 };

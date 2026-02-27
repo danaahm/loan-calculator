@@ -1,17 +1,10 @@
 import { type RepaymentFrequency } from "../types/loan";
+import {
+  formatCurrency as formatWithLibrary,
+  getSupportedCurrencies,
+} from "react-native-format-currency";
 
-const FALLBACK_CURRENCIES = [
-  "AUD",
-  "USD",
-  "CNY",
-  "EUR",
-  "GBP",
-  "JPY",
-  "INR",
-  "NZD",
-  "CAD",
-  "SGD",
-];
+const FALLBACK_CURRENCIES = ["AUD", "USD", "CNY", "EUR", "GBP", "JPY"];
 
 export interface CurrencyOption {
   code: string;
@@ -21,39 +14,51 @@ export interface CurrencyOption {
 
 export const getCurrencySymbol = (currencyCode: string): string => {
   try {
-    const parts = new Intl.NumberFormat("en", {
-      style: "currency",
-      currency: currencyCode,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).formatToParts(0);
-    return parts.find((part) => part.type === "currency")?.value ?? currencyCode;
+    const [, , symbol] = formatWithLibrary({
+      amount: 0,
+      code: currencyCode,
+    });
+    return symbol || currencyCode;
   } catch {
     return currencyCode;
   }
 };
 
 export const getAvailableCurrencies = (): CurrencyOption[] => {
-  const hasSupportedValues = typeof Intl.supportedValuesOf === "function";
-  const codes = hasSupportedValues
-    ? Intl.supportedValuesOf("currency")
-    : FALLBACK_CURRENCIES;
-
-  return codes
-    .map((code) => ({
-      code,
-      symbol: getCurrencySymbol(code),
-      label: `${code} (${getCurrencySymbol(code)})`,
-    }))
-    .sort((a, b) => a.code.localeCompare(b.code));
+  try {
+    return getSupportedCurrencies()
+      .map((currency) => {
+        const symbol = getCurrencySymbol(currency.code);
+        return {
+          code: currency.code,
+          symbol,
+          label: `${currency.code} (${symbol})`,
+        };
+      })
+      .sort((a, b) => a.code.localeCompare(b.code));
+  } catch {
+    return FALLBACK_CURRENCIES.map((code) => {
+      const symbol = getCurrencySymbol(code);
+      return {
+        code,
+        symbol,
+        label: `${code} (${symbol})`,
+      };
+    });
+  }
 };
 
 export const formatCurrency = (value: number, currencyCode: string): string => {
-  return new Intl.NumberFormat("en", {
-    style: "currency",
-    currency: currencyCode,
-    maximumFractionDigits: 2,
-  }).format(Number.isFinite(value) ? value : 0);
+  const safeValue = Number.isFinite(value) ? value : 0;
+  try {
+    const [formatted] = formatWithLibrary({
+      amount: safeValue,
+      code: currencyCode,
+    });
+    return formatted;
+  } catch {
+    return `${currencyCode} ${safeValue.toFixed(2)}`;
+  }
 };
 
 export const formatPercent = (value: number): string => {
@@ -87,16 +92,18 @@ export const formatYearsAndPeriods = (
   }
 
   const wholeYears = Math.floor(years);
-  const remainingPeriods = Math.max(
+  const remainingPeriods = Math.max(0, periods - wholeYears * periodsPerYear);
+  const monthsPerPeriod = 12 / periodsPerYear;
+  const remainingMonths = Math.max(
     0,
-    Math.round(periods - wholeYears * periodsPerYear)
+    Math.round(remainingPeriods * monthsPerPeriod)
   );
 
   if (wholeYears === 0) {
-    return `${remainingPeriods} period(s)`;
+    return `${remainingMonths} month${remainingMonths === 1 ? "" : "s"}`;
   }
 
-  return `${wholeYears} year(s) and ${remainingPeriods} period(s)`;
+  return `${wholeYears} year${wholeYears === 1 ? "" : "s"} and ${remainingMonths} month${remainingMonths === 1 ? "" : "s"}`;
 };
 
 export const formatDurationLabel = (loanLengthYears: number): string => {

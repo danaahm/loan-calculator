@@ -42,6 +42,17 @@ const calculateBaseRepayment = (
   return (principal * periodRate * factor) / (factor - 1);
 };
 
+const getExtraRepaymentStartAfterPeriods = (
+  startAfterValue: number,
+  startAfterUnit: "months" | "years",
+  periodsPerYear: number
+): number => {
+  if (startAfterUnit === "years") {
+    return Math.max(0, Math.round(startAfterValue * periodsPerYear));
+  }
+  return Math.max(0, Math.round((startAfterValue / 12) * periodsPerYear));
+};
+
 const computeSchedule = (
   input: LoanInput,
   includeExtraRepayment: boolean
@@ -49,6 +60,11 @@ const computeSchedule = (
   const periodsPerYear = getPeriodsPerYear(input.repaymentFrequency);
   const feeEventsPerYear = getPeriodsPerYear(input.accountFeeFrequency);
   const extraEventsPerYear = getPeriodsPerYear(input.extraRepayment.frequency);
+  const extraStartAfterPeriods = getExtraRepaymentStartAfterPeriods(
+    input.extraRepayment.startAfterValue,
+    input.extraRepayment.startAfterUnit,
+    periodsPerYear
+  );
   const totalPeriods = Math.max(
     1,
     Math.round(input.loanLengthYears * periodsPerYear)
@@ -89,7 +105,7 @@ const computeSchedule = (
     if (
       includeExtraRepayment &&
       input.extraRepayment.enabled &&
-      periodIndex > input.extraRepayment.startAfterPeriods &&
+      periodIndex > extraStartAfterPeriods &&
       balance > ZERO_EPSILON
     ) {
       extraEventCarry += extraEventsPerYear / periodsPerYear;
@@ -214,11 +230,22 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
 };
 
 export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
+  const repaymentFrequency = input.repaymentFrequency ?? "monthly";
+  const periodsPerYear = getPeriodsPerYear(repaymentFrequency);
+  const legacyStartAfterPeriods =
+    (
+      input.extraRepayment as Partial<{ startAfterPeriods: number }> | undefined
+    )?.startAfterPeriods ?? 0;
+  const legacyMonths = Math.max(
+    0,
+    Math.round((legacyStartAfterPeriods / periodsPerYear) * 12)
+  );
+
   return {
     currencyCode: input.currencyCode ?? "AUD",
     amountBorrowed: Math.max(0, input.amountBorrowed ?? 0),
     annualInterestRatePercent: Math.max(0, input.annualInterestRatePercent ?? 0),
-    repaymentFrequency: input.repaymentFrequency ?? "monthly",
+    repaymentFrequency,
     loanLengthYears: Math.max(0.5, input.loanLengthYears ?? 0.5),
     accountFee: Math.max(0, input.accountFee ?? 0),
     accountFeeFrequency: input.accountFeeFrequency ?? "monthly",
@@ -226,10 +253,11 @@ export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
       enabled: Boolean(input.extraRepayment?.enabled),
       amount: Math.max(0, input.extraRepayment?.amount ?? 0),
       frequency: input.extraRepayment?.frequency ?? "monthly",
-      startAfterPeriods: Math.max(
+      startAfterValue: Math.max(
         0,
-        Math.floor(input.extraRepayment?.startAfterPeriods ?? 0)
+        Math.floor(input.extraRepayment?.startAfterValue ?? legacyMonths)
       ),
+      startAfterUnit: input.extraRepayment?.startAfterUnit ?? "months",
     },
   };
 };
