@@ -31,7 +31,22 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.env.*
 .env*.local
+
+# secrets and service credentials
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+serviceAccount*.json
+*firebase*adminsdk*.json
+
+# release/build artifacts
+*.apk
+*.aab
+*.apks
+*.keystore
 
 # typescript
 *.tsbuildinfo
