@@ -30,7 +30,7 @@ interface LoanFormProps {
 }
 
 const parsePositiveNumber = (value: string): number => {
-  const parsed = Number(value);
+  const parsed = Number(value.replace(/,/g, ""));
   if (!Number.isFinite(parsed) || parsed < 0) {
     return 0;
   }
@@ -38,11 +38,32 @@ const parsePositiveNumber = (value: string): number => {
 };
 
 const parsePositiveInt = (value: string): number => {
-  const parsed = Number(value);
+  const parsed = Number(value.replace(/,/g, ""));
   if (!Number.isFinite(parsed) || parsed < 0) {
     return 0;
   }
   return Math.floor(parsed);
+};
+
+const formatGroupedNumberInput = (value: string): string => {
+  const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
+  if (!cleaned) {
+    return "";
+  }
+
+  const firstDotIndex = cleaned.indexOf(".");
+  const integerRaw =
+    firstDotIndex >= 0 ? cleaned.slice(0, firstDotIndex) : cleaned;
+  const decimalRaw =
+    firstDotIndex >= 0 ? cleaned.slice(firstDotIndex + 1).replace(/\./g, "") : "";
+
+  const integerPart = integerRaw.replace(/^0+(?=\d)/, "") || "0";
+  const groupedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+  if (firstDotIndex >= 0) {
+    return `${groupedInteger}.${decimalRaw}`;
+  }
+  return groupedInteger;
 };
 
 const FrequencySelector = ({
@@ -79,7 +100,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
   const currencies = useMemo(() => getAvailableCurrencies(), []);
 
   const [amountBorrowed, setAmountBorrowed] = useState(
-    String(initialValue.amountBorrowed)
+    formatGroupedNumberInput(String(initialValue.amountBorrowed))
   );
   const [currencyCode, setCurrencyCode] = useState(initialValue.currencyCode);
   const [interestRate, setInterestRate] = useState(
@@ -97,7 +118,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
   );
   const [extraEnabled, setExtraEnabled] = useState(initialValue.extraRepayment.enabled);
   const [extraAmount, setExtraAmount] = useState(
-    String(initialValue.extraRepayment.amount)
+    formatGroupedNumberInput(String(initialValue.extraRepayment.amount))
   );
   const [extraFrequency, setExtraFrequency] = useState(
     initialValue.extraRepayment.frequency
@@ -107,21 +128,35 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
   );
   const [extraStartAfterUnit, setExtraStartAfterUnit] =
     useState<ExtraRepaymentStartUnit>(initialValue.extraRepayment.startAfterUnit);
+  const [lumpSumEnabled, setLumpSumEnabled] = useState(initialValue.lumpSum.enabled);
+  const [lumpSumAmount, setLumpSumAmount] = useState(
+    formatGroupedNumberInput(String(initialValue.lumpSum.amount))
+  );
+  const [offsetEnabled, setOffsetEnabled] = useState(initialValue.offsetSavings.enabled);
+  const [offsetAmount, setOffsetAmount] = useState(
+    formatGroupedNumberInput(String(initialValue.offsetSavings.amount))
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrencyCode(initialValue.currencyCode);
-    setAmountBorrowed(String(initialValue.amountBorrowed));
+    setAmountBorrowed(formatGroupedNumberInput(String(initialValue.amountBorrowed)));
     setInterestRate(String(initialValue.annualInterestRatePercent));
     setLoanLengthYears(String(initialValue.loanLengthYears));
     setAccountFee(String(initialValue.accountFee));
     setRepaymentFrequency(initialValue.repaymentFrequency);
     setAccountFeeFrequency(initialValue.accountFeeFrequency);
     setExtraEnabled(initialValue.extraRepayment.enabled);
-    setExtraAmount(String(initialValue.extraRepayment.amount));
+    setExtraAmount(formatGroupedNumberInput(String(initialValue.extraRepayment.amount)));
     setExtraFrequency(initialValue.extraRepayment.frequency);
     setExtraStartAfter(String(initialValue.extraRepayment.startAfterValue));
     setExtraStartAfterUnit(initialValue.extraRepayment.startAfterUnit);
+    setLumpSumEnabled(initialValue.lumpSum.enabled);
+    setLumpSumAmount(formatGroupedNumberInput(String(initialValue.lumpSum.amount)));
+    setOffsetEnabled(initialValue.offsetSavings.enabled);
+    setOffsetAmount(
+      formatGroupedNumberInput(String(initialValue.offsetSavings.amount))
+    );
   }, [initialValue]);
 
   const fieldValue = useMemo<LoanInput>(() => {
@@ -140,6 +175,14 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
         startAfterValue: parsePositiveInt(extraStartAfter),
         startAfterUnit: extraStartAfterUnit,
       },
+      lumpSum: {
+        enabled: lumpSumEnabled,
+        amount: parsePositiveNumber(lumpSumAmount),
+      },
+      offsetSavings: {
+        enabled: offsetEnabled,
+        amount: parsePositiveNumber(offsetAmount),
+      },
     };
   }, [
     accountFee,
@@ -151,8 +194,12 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     extraFrequency,
     extraStartAfter,
     extraStartAfterUnit,
+    lumpSumAmount,
+    lumpSumEnabled,
     interestRate,
     loanLengthYears,
+    offsetAmount,
+    offsetEnabled,
     repaymentFrequency,
   ]);
   const moneySymbol = useMemo(() => getCurrencySymbol(currencyCode), [currencyCode]);
@@ -201,6 +248,14 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
       setError("Extra repayment amount must be greater than zero.");
       return;
     }
+    if (fieldValue.lumpSum.enabled && fieldValue.lumpSum.amount <= 0) {
+      setError("Lump sum amount must be greater than zero.");
+      return;
+    }
+    if (fieldValue.offsetSavings.enabled && fieldValue.offsetSavings.amount <= 0) {
+      setError("Offset savings amount must be greater than zero.");
+      return;
+    }
 
     setError(null);
     onSubmit(fieldValue);
@@ -233,7 +288,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             <TextInput
               keyboardType="decimal-pad"
               value={amountBorrowed}
-              onChangeText={setAmountBorrowed}
+          onChangeText={(value) => setAmountBorrowed(formatGroupedNumberInput(value))}
               style={styles.input}
               placeholder="e.g. 500000"
             />
@@ -288,7 +343,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                 <TextInput
                   keyboardType="decimal-pad"
                   value={extraAmount}
-                  onChangeText={setExtraAmount}
+                  onChangeText={(value) => setExtraAmount(formatGroupedNumberInput(value))}
                   style={styles.input}
                   placeholder="e.g. 250"
                 />
@@ -346,6 +401,46 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                     </Text>
                   </Pressable>
                 </View>
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Enable Lump Sum (final payment)</Text>
+            <Switch value={lumpSumEnabled} onValueChange={setLumpSumEnabled} />
+          </View>
+          {lumpSumEnabled ? (
+            <View>
+              <Text style={styles.label}>Lump Sum Amount</Text>
+              <View style={styles.inputWrap}>
+                <Text style={styles.prefixText}>{moneySymbol}</Text>
+                <TextInput
+                  keyboardType="decimal-pad"
+                  value={lumpSumAmount}
+                  onChangeText={(value) => setLumpSumAmount(formatGroupedNumberInput(value))}
+                  style={styles.input}
+                  placeholder="e.g. 10,000"
+                />
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Enable Offset Savings</Text>
+            <Switch value={offsetEnabled} onValueChange={setOffsetEnabled} />
+          </View>
+          {offsetEnabled ? (
+            <View>
+              <Text style={styles.label}>Offset Savings Amount</Text>
+              <View style={styles.inputWrap}>
+                <Text style={styles.prefixText}>{moneySymbol}</Text>
+                <TextInput
+                  keyboardType="decimal-pad"
+                  value={offsetAmount}
+                  onChangeText={(value) => setOffsetAmount(formatGroupedNumberInput(value))}
+                  style={styles.input}
+                  placeholder="e.g. 5,000"
+                />
               </View>
             </View>
           ) : null}

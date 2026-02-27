@@ -19,9 +19,7 @@ export const CardHeader = ({
         <Text style={styles.title}>{title}</Text>
         {onToggleCollapse ? (
           <Pressable onPress={onToggleCollapse} style={styles.toggleButton}>
-            <Text style={styles.toggleText}>
-              {collapsed ? "Expand +" : "Collapse -"}
-            </Text>
+            <Text style={styles.toggleText}>{collapsed ? "+" : "-"}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -56,15 +54,18 @@ const styles = StyleSheet.create({
   toggleButton: {
     borderWidth: 1,
     borderColor: "#bfdbfe",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#dbeafe",
   },
   toggleText: {
     color: "#1d4ed8",
-    fontWeight: "700",
-    fontSize: 12,
+    fontWeight: "800",
+    fontSize: 20,
+    lineHeight: 22,
   },
   subtitle: {
     marginTop: 2,

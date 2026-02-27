@@ -4,10 +4,10 @@
     "slug": "loan-calculator",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/loan-calculator.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/loan-calculator.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },

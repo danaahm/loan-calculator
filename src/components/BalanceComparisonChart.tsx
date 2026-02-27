@@ -21,6 +21,7 @@ import {
   formatCurrency,
   formatDurationLabel,
   formatYearsAndPeriods,
+  getCurrencySymbol,
 } from "../utils/format";
 import { CardHeader } from "./CardHeader";
 
@@ -92,6 +93,7 @@ export const BalanceComparisonChart = ({
   );
 
   const periodsPerYear = periodsByFrequency[repaymentFrequency];
+  const currencySymbol = getCurrencySymbol(currencyCode);
   const savedTime = formatYearsAndPeriods(
     result.savings.yearsSaved,
     result.savings.periodsSaved,
@@ -104,8 +106,8 @@ export const BalanceComparisonChart = ({
         periodsPerYear
       )
     : formatDurationLabel(loanLengthYears);
-  const baseWidth = Math.min(Dimensions.get("window").width - 48, 380);
-  const chartWidth = baseWidth;
+  const baseWidth = Math.max(260, Dimensions.get("window").width - 64);
+  const chartWidth = baseWidth - 12;
 
   const visiblePoints = useMemo(() => {
     const total = baselineSeries.length;
@@ -294,10 +296,10 @@ export const BalanceComparisonChart = ({
                       withOuterLines
                       withHorizontalLines
                       withVerticalLines
+                      withShadow
                       verticalLabelRotation={0}
                       formatXLabel={(value) => value}
                       formatYLabel={(value) => formatCompactThousands(Number(value))}
-                      bezier
                       onDataPointClick={({ index }) => {
                         const absoluteIndex = visiblePoints.startIndex + index;
                         setFocusedYearIndex(absoluteIndex);
@@ -310,6 +312,10 @@ export const BalanceComparisonChart = ({
                         labelColor: (opacityValue = 1) =>
                           `rgba(75,85,99,${opacityValue})`,
                         decimalPlaces: 0,
+                        useShadowColorFromDataset: true,
+                        fillShadowGradientOpacity: 0.22,
+                        fillShadowGradientFromOpacity: 0.24,
+                        fillShadowGradientToOpacity: 0.04,
                         propsForDots: {
                           r: "2",
                           strokeWidth: "1",
@@ -360,7 +366,8 @@ export const BalanceComparisonChart = ({
                 <View style={styles.savingsCard}>
                   <Text style={styles.savingsCardLabel}>Interest saved:</Text>
                   <Text style={styles.savingsCardValue}>
-                    {formatCurrency(result.savings.moneySaved, currencyCode)}
+                {currencySymbol}
+                {Math.round(result.savings.moneySaved).toLocaleString()}
                   </Text>
                 </View>
                 <View style={styles.savingsCard}>
@@ -410,6 +417,8 @@ const styles = StyleSheet.create({
   },
   chart: {
     borderRadius: 12,
+    marginLeft: 0,
+    marginRight: 4,
   },
   chartArea: {
     width: "100%",
@@ -459,7 +468,9 @@ const styles = StyleSheet.create({
   },
   savingsCard: {
     flex: 1,
-    backgroundColor: "rgba(34, 197, 94, 0.5)",
+    backgroundColor: "rgba(139, 228, 172, 0.5)",
+    borderColor: "rgba(92, 228, 141, 0.5)",
+    borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 10,
@@ -467,7 +478,9 @@ const styles = StyleSheet.create({
   savingsCardWide: {
     marginTop: 10,
     width: "100%",
-    backgroundColor: "rgba(34, 197, 94, 0.5)",
+    backgroundColor: "rgba(139, 228, 172, 0.5)",
+    borderColor: "rgba(92, 228, 141, 0.5)",
+    borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 10,

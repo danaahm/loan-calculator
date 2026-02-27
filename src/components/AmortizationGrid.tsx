@@ -16,7 +16,7 @@ export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) 
   return (
     <View style={styles.card}>
       <CardHeader
-        title="Yearly Loan Grid"
+        title="Yearly Loan Plan"
         subtitle="Opening balance, yearly payments, and closing balance."
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((prev) => !prev)}

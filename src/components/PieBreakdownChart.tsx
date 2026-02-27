@@ -9,7 +9,10 @@ import {
 } from "react-native";
 import { PieChart } from "react-native-chart-kit";
 
-import { formatCurrency, formatDurationLabel } from "../utils/format";
+import {
+  formatDurationLabel,
+  getCurrencySymbol,
+} from "../utils/format";
 import { CardHeader } from "./CardHeader";
 
 interface PieBreakdownChartProps {
@@ -33,6 +36,17 @@ export const PieBreakdownChart = ({
   currencyCode,
   loanLengthYears,
 }: PieBreakdownChartProps) => {
+  const currencySymbol = getCurrencySymbol(currencyCode);
+  const formatCurrencyTwoDecimals = (value: number): string => {
+    const safe = Number.isFinite(value) ? value : 0;
+    const absFormatted = Math.abs(safe).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    return safe < 0
+      ? `-${currencySymbol}${absFormatted}`
+      : `${currencySymbol}${absFormatted}`;
+  };
   const [collapsed, setCollapsed] = useState(false);
   const [visibleSeries, setVisibleSeries] = useState({
     principal: true,
@@ -158,13 +172,13 @@ export const PieBreakdownChart = ({
                 <View style={[styles.dot, { backgroundColor: item.color }]} />
                 <Text style={styles.legendLabel}>{item.name}</Text>
                 <Text style={styles.legendValue}>
-                  {formatCurrency(item.population, currencyCode)}
+                  {formatCurrencyTwoDecimals(item.population)}
                 </Text>
               </Pressable>
             ))}
             <View style={[styles.legendRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total Paid</Text>
-              <Text style={styles.totalValue}>{formatCurrency(total, currencyCode)}</Text>
+              <Text style={styles.totalValue}>{formatCurrencyTwoDecimals(total)}</Text>
             </View>
           </View>
         </View>

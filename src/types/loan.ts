@@ -14,6 +14,11 @@ export interface ExtraRepaymentConfig {
   startAfterUnit: ExtraRepaymentStartUnit;
 }
 
+export interface OptionalAmountConfig {
+  enabled: boolean;
+  amount: number;
+}
+
 export interface LoanInput {
   currencyCode: string;
   amountBorrowed: number;
@@ -23,6 +28,8 @@ export interface LoanInput {
   accountFee: number;
   accountFeeFrequency: RepaymentFrequency;
   extraRepayment: ExtraRepaymentConfig;
+  lumpSum: OptionalAmountConfig;
+  offsetSavings: OptionalAmountConfig;
 }
 
 export interface PeriodRow {
@@ -77,6 +84,14 @@ export interface LoanCalculationResult {
     periodsSaved: number;
     yearsSaved: number;
   };
+}
+
+export interface SavedLoanProfile {
+  id: string;
+  name: string;
+  input: LoanInput;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const FREQUENCIES: RepaymentFrequency[] = [

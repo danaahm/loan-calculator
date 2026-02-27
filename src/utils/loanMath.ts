@@ -72,12 +72,22 @@ const computeSchedule = (
   const periodRate =
     input.annualInterestRatePercent / 100 / Math.max(1, periodsPerYear);
   const scheduledRepayment = calculateBaseRepayment(
-    input.amountBorrowed,
+    Math.max(
+      0,
+      input.amountBorrowed -
+        (input.lumpSum.enabled ? input.lumpSum.amount : 0) -
+        (input.offsetSavings.enabled ? input.offsetSavings.amount : 0)
+    ),
     periodRate,
     totalPeriods
   );
 
-  let balance = input.amountBorrowed;
+  let balance = Math.max(
+    0,
+    input.amountBorrowed -
+      (input.lumpSum.enabled ? input.lumpSum.amount : 0) -
+      (input.offsetSavings.enabled ? input.offsetSavings.amount : 0)
+  );
   let feeEventCarry = 0;
   let extraEventCarry = 0;
   const periodRows: PeriodRow[] = [];
@@ -258,6 +268,14 @@ export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
         Math.floor(input.extraRepayment?.startAfterValue ?? legacyMonths)
       ),
       startAfterUnit: input.extraRepayment?.startAfterUnit ?? "months",
+    },
+    lumpSum: {
+      enabled: Boolean(input.lumpSum?.enabled),
+      amount: Math.max(0, input.lumpSum?.amount ?? 0),
+    },
+    offsetSavings: {
+      enabled: Boolean(input.offsetSavings?.enabled),
+      amount: Math.max(0, input.offsetSavings?.amount ?? 0),
     },
   };
 };
