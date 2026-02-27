@@ -371,6 +371,14 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             value={currencySearch}
             onChangeText={setCurrencySearch}
           />
+          {currencySearch.trim().length > 0 ? (
+            <Pressable
+              style={styles.clearSearchButton}
+              onPress={() => setCurrencySearch("")}
+            >
+              <Text style={styles.clearSearchButtonText}>Clear filter</Text>
+            </Pressable>
+          ) : null}
           <FlatList
             data={filteredCurrencies}
             keyExtractor={(item) => item.code}
@@ -548,6 +556,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
+  },
+  clearSearchButton: {
+    alignSelf: "flex-end",
+    marginTop: -4,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: "#f9fafb",
+  },
+  clearSearchButtonText: {
+    color: "#374151",
+    fontWeight: "700",
+    fontSize: 12,
   },
   currencyList: {
     paddingBottom: 16,
