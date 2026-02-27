@@ -1,6 +1,6 @@
-# Loan Calculator (Expo React Native)
+# Simple Loan Calculator (Expo React Native)
 
-A cross-platform loan calculator app built with Expo + React Native (TypeScript).
+A cross-platform Simple loan calculator app built with Expo + React Native (TypeScript).
 
 It runs on Android and iOS, works fully offline, and stores user data locally on device (no backend, no authentication).
 

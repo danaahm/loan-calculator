@@ -294,7 +294,7 @@ export default function App() {
         <View style={styles.stickyHeader}>
           <View style={styles.brandRow}>
             <Image source={require("./assets/loan-calculator.png")} style={styles.logo} />
-            <Text style={styles.heading}>Loan Calculator</Text>
+            <Text style={styles.heading}>Simple Loan Calculator</Text>
           </View>
         </View>
 

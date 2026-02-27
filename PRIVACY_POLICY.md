@@ -1,8 +1,8 @@
-# Privacy Policy for Loan Calculator
+# Privacy Policy for Simple Loan Calculator
 
 Effective date: 2026-02-27
 
-Loan Calculator ("the App") is designed to work fully on your device.
+Simple Loan Calculator ("the App") is designed to work fully on your device.
 
 ## Financial Disclaimer
 
