@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "loan-calculator",
+    "name": "SLC",
     "slug": "loan-calculator",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/loan-calculator.png",
     "userInterfaceStyle": "light",
@@ -19,14 +19,12 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/loan-calculator.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/loan-calculator.png"
     },
     "extra": {
       "eas": {
