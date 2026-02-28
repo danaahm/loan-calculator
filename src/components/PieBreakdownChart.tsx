@@ -19,20 +19,25 @@ interface PieBreakdownChartProps {
   principal: number;
   interest: number;
   fees: number;
+  extraRepayment: number;
   currencyCode: string;
   loanLengthYears: number;
 }
+
+type SeriesId = "principal" | "interest" | "fees" | "extra";
 
 const COLORS = {
   principal: "#2563eb",
   interest: "#f59e0b",
   fees: "#14b8a6",
+  extra: "#22c55e",
 };
 
 export const PieBreakdownChart = ({
   principal,
   interest,
   fees,
+  extraRepayment,
   currencyCode,
   loanLengthYears,
 }: PieBreakdownChartProps) => {
@@ -52,11 +57,13 @@ export const PieBreakdownChart = ({
     principal: true,
     interest: true,
     fees: true,
+    extra: true,
   });
   const [animatedValues, setAnimatedValues] = useState({
     principal,
     interest,
     fees,
+    extra: extraRepayment,
   });
   const opacity = useRef(new Animated.Value(1)).current;
 
@@ -71,6 +78,7 @@ export const PieBreakdownChart = ({
         principal: previous.principal + (principal - previous.principal) * progress,
         interest: previous.interest + (interest - previous.interest) * progress,
         fees: previous.fees + (fees - previous.fees) * progress,
+        extra: previous.extra + (extraRepayment - previous.extra) * progress,
       });
       if (progress >= 1) {
         clearInterval(timer);
@@ -91,9 +99,16 @@ export const PieBreakdownChart = ({
     ]).start();
 
     return () => clearInterval(timer);
-  }, [principal, interest, fees]);
+  }, [principal, interest, fees, extraRepayment]);
 
-  const rawData = [
+  const rawData: Array<{
+    id: SeriesId;
+    name: string;
+    population: number;
+    color: string;
+    legendFontColor: string;
+    legendFontSize: number;
+  }> = [
     {
       id: "principal",
       name: "Principal",
@@ -118,11 +133,19 @@ export const PieBreakdownChart = ({
       legendFontColor: "#111827",
       legendFontSize: 12,
     },
-  ] as const;
+    {
+      id: "extra",
+      name: "Extra Repayment",
+      population: Math.max(0, animatedValues.extra),
+      color: COLORS.extra,
+      legendFontColor: "#111827",
+      legendFontSize: 12,
+    },
+  ];
   const data = rawData.filter((item) => visibleSeries[item.id]);
   const total = useMemo(
-    () => data.reduce((sum, item) => sum + item.population, 0),
-    [data]
+    () => rawData.reduce((sum, item) => sum + item.population, 0),
+    [rawData]
   );
   const chartWidth = Math.min(Dimensions.get("window").width - 96, 300);
 

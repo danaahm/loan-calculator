@@ -105,6 +105,17 @@ export default function App() {
     const monthlyEquivalent = (principalAndInterestPerPeriod * periodsPerYear) / 12;
     return Math.round(monthlyEquivalent * 100) / 100;
   })();
+  const extraMonthlyRepayment = (() => {
+    if (!result || !input.extraRepayment.enabled) {
+      return 0;
+    }
+    const extraEventsPerYear = REPAYMENT_PERIODS_PER_YEAR[input.extraRepayment.frequency];
+    const monthlyEquivalent = (input.extraRepayment.amount * extraEventsPerYear) / 12;
+    return Math.round(monthlyEquivalent * 100) / 100;
+  })();
+  const totalMonthlyPayment = Math.round(
+    (minimumMonthlyRepayment + extraMonthlyRepayment) * 100
+  ) / 100;
 
   const ignoreCurrentCalculationSavePrompt = () => {
     setLastSavedHash(lastCalculatedHash);
@@ -358,12 +369,33 @@ export default function App() {
                   <Text style={styles.minimumRepaymentValue}>
                     {formatCurrency(minimumMonthlyRepayment, input.currencyCode)}
                   </Text>
+                  {input.extraRepayment.enabled ? (
+                    <View style={styles.monthlyBreakdownWrap}>
+                      <View style={styles.monthlyBreakdownRow}>
+                        <Text style={styles.monthlyBreakdownLabel}>
+                          Extra Repayment (Monthly)
+                        </Text>
+                        <Text style={styles.monthlyBreakdownValue}>
+                          {formatCurrency(extraMonthlyRepayment, input.currencyCode)}
+                        </Text>
+                      </View>
+                      <View style={[styles.monthlyBreakdownRow, styles.monthlyBreakdownTotalRow]}>
+                        <Text style={styles.monthlyBreakdownTotalLabel}>
+                          Total Monthly Payment
+                        </Text>
+                        <Text style={styles.monthlyBreakdownTotalValue}>
+                          {formatCurrency(totalMonthlyPayment, input.currencyCode)}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
 
                 <PieBreakdownChart
                   principal={result.activeSchedule.summary.totalPrincipalPaid}
                   interest={result.activeSchedule.summary.totalInterestPaid}
                   fees={result.activeSchedule.summary.totalFeesPaid}
+                  extraRepayment={result.activeSchedule.summary.totalExtraPaid}
                   currencyCode={input.currencyCode}
                   loanLengthYears={input.loanLengthYears}
                 />
@@ -753,6 +785,39 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontWeight: "800",
     fontSize: 28,
+  },
+  monthlyBreakdownWrap: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+    paddingTop: 10,
+    gap: 8,
+  },
+  monthlyBreakdownRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  monthlyBreakdownLabel: {
+    color: "#374151",
+    fontWeight: "600",
+  },
+  monthlyBreakdownValue: {
+    color: "#111827",
+    fontWeight: "700",
+  },
+  monthlyBreakdownTotalRow: {
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+    paddingTop: 8,
+  },
+  monthlyBreakdownTotalLabel: {
+    color: "#111827",
+    fontWeight: "800",
+  },
+  monthlyBreakdownTotalValue: {
+    color: "#111827",
+    fontWeight: "800",
   },
   topActionRow: {
     flexDirection: "row",
