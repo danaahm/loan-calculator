@@ -19,6 +19,29 @@
     }
   },
   "submit": {
-    "production": {}
+    "internal": {
+      "android": {
+        "serviceAccountKeyPath": "./service-account.json",
+        "track": "internal"
+      }
+    },
+    "alpha": {
+      "android": {
+        "serviceAccountKeyPath": "./service-account.json",
+        "track": "alpha"
+      }
+    },
+    "beta": {
+      "android": {
+        "serviceAccountKeyPath": "./service-account.json",
+        "track": "beta"
+      }
+    },
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./service-account.json",
+        "track": "production"
+      }
+    }
   }
 }
