@@ -1,0 +1,5 @@
+# Require review from the repository owner for all changes.
+# Combined with a branch protection rule / ruleset on `main` that has
+# "Require review from Code Owners" enabled, this makes @danaahm's
+# approval compulsory before any pull request can be merged into main.
+* @danaahm
