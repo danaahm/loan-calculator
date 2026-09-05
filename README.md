@@ -21,8 +21,8 @@ It runs on Android and iOS, works fully offline, and stores user data locally on
 
 ## Tech Stack
 
-- Expo SDK 54
-- React Native 0.81
+- Expo SDK 57
+- React Native 0.86
 - TypeScript
 - AsyncStorage for local persistence
 - `react-native-chart-kit` for charts
@@ -44,7 +44,7 @@ It runs on Android and iOS, works fully offline, and stores user data locally on
 
 ### Prerequisites
 
-- Node.js 18+ (recommended)
+- Node.js 22.13+ (recommended)
 - npm
 - Expo Go on your phone (Android/iOS) or Android/iOS simulator
 

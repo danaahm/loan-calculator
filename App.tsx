@@ -6,17 +6,19 @@ import {
   FlatList,
   Image,
   Modal,
-  Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
-  StatusBar as NativeStatusBar,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import { AmortizationGrid } from "./src/components/AmortizationGrid";
 import { BalanceComparisonChart } from "./src/components/BalanceComparisonChart";
@@ -71,6 +73,14 @@ const REPAYMENT_PERIODS_PER_YEAR: Record<RepaymentFrequency, number> = {
 };
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
+  );
+}
+
+function AppContent() {
   const [screen, setScreen] = useState<"home" | "calculator" | "saved">("home");
   const [input, setInput] = useState<LoanInput>(DEFAULT_INPUT);
   const [result, setResult] = useState<LoanCalculationResult | null>(null);
@@ -87,6 +97,7 @@ export default function App() {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [loadingState, setLoadingState] = useState(true);
   const snackbarTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const insets = useSafeAreaInsets();
 
   const inputHash = JSON.stringify(input);
   const canSaveCalculatedProfile =
@@ -302,7 +313,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
         <StatusBar style="dark" />
         <View style={styles.stickyHeader}>
           <View style={styles.brandRow}>
@@ -328,6 +339,7 @@ export default function App() {
           </View>
         ) : null}
 
+        <View style={styles.screenBody}>
         {screen === "home" ? (
           <View style={styles.pageContent}>
             <View style={styles.dashboardGrid}>
@@ -352,6 +364,7 @@ export default function App() {
 
         {screen === "calculator" ? (
           <ScrollView
+            style={styles.screenBody}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
@@ -483,7 +496,14 @@ export default function App() {
           </View>
         ) : null}
 
-        <View style={styles.bottomNav}>
+        {snackbarVisible ? (
+          <View style={styles.snackbarWrap}>
+            <Text style={styles.snackbarText}>Your loan calculation is ready</Text>
+          </View>
+        ) : null}
+        </View>
+
+        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <Pressable
             style={[styles.bottomNavButton, screen === "home" && styles.bottomNavButtonActive]}
             onPress={() => setScreen("home")}
@@ -612,11 +632,6 @@ export default function App() {
           </View>
         </Modal>
 
-        {snackbarVisible ? (
-          <View style={styles.snackbarWrap}>
-            <Text style={styles.snackbarText}>Your loan calculation is ready</Text>
-          </View>
-        ) : null}
       </SafeAreaView>
     </GestureHandlerRootView>
   );
@@ -633,21 +648,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#f3f4f6",
   },
+  screenBody: {
+    flex: 1,
+  },
   scrollContent: {
     padding: 16,
-    paddingBottom: 96,
+    paddingBottom: 24,
   },
   pageContent: {
     flex: 1,
     padding: 16,
-    paddingBottom: 96,
   },
   stickyHeader: {
     marginHorizontal: 0,
     marginTop: 0,
     paddingHorizontal: 16,
-    paddingTop:
-      Platform.OS === "android" ? (NativeStatusBar.currentHeight ?? 0) + 10 : 10,
+    paddingTop: 10,
     paddingBottom: 12,
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
@@ -681,17 +697,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
   },
   bottomNav: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
     flexDirection: "row",
     borderTopWidth: 1,
     borderTopColor: "#d1d5db",
     backgroundColor: "#ffffff",
     paddingHorizontal: 14,
     paddingTop: 8,
-    paddingBottom: 20,
     gap: 8,
   },
   bottomNavButton: {
@@ -874,7 +885,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   savedListWrap: {
-    paddingBottom: 120,
+    paddingBottom: 24,
   },
   emptyText: {
     color: "#6b7280",
@@ -985,7 +996,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 16,
     right: 16,
-    bottom: 86,
+    bottom: 16,
     backgroundColor: "rgba(17,24,39,0.9)",
     borderRadius: 10,
     paddingVertical: 12,
