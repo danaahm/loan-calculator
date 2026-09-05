@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
@@ -7,13 +8,12 @@ import {
   Image,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { GestureHandlerRootView, ScrollView } from "react-native-gesture-handler";
 import {
   SafeAreaProvider,
   SafeAreaView,
@@ -24,12 +24,16 @@ import { AmortizationGrid } from "./src/components/AmortizationGrid";
 import { BalanceComparisonChart } from "./src/components/BalanceComparisonChart";
 import { LoanForm } from "./src/components/LoanForm";
 import { PieBreakdownChart } from "./src/components/PieBreakdownChart";
+import { BasicCalculatorScreen } from "./src/screens/BasicCalculatorScreen";
+import { SettingsScreen } from "./src/screens/SettingsScreen";
 import {
   loadLoanInput,
   loadSavedLoanProfiles,
   saveLoanInput,
   saveSavedLoanProfiles,
 } from "./src/storage/localState";
+import { ThemeProvider, useTheme } from "./src/theme/ThemeProvider";
+import { type ThemeColors } from "./src/theme/tokens";
 import {
   type LoanCalculationResult,
   type LoanInput,
@@ -38,6 +42,20 @@ import {
 } from "./src/types/loan";
 import { calculateLoan, normalizeInput } from "./src/utils/loanMath";
 import { formatCurrency } from "./src/utils/format";
+
+type AppScreen = "home" | "calculator" | "basic" | "saved" | "settings";
+
+const NAV_TABS: {
+  id: Exclude<AppScreen, "settings">;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconActive: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { id: "home", label: "Home", icon: "home-outline", iconActive: "home" },
+  { id: "calculator", label: "Loan", icon: "cash-outline", iconActive: "cash" },
+  { id: "basic", label: "Calc", icon: "calculator-outline", iconActive: "calculator" },
+  { id: "saved", label: "Saved", icon: "document-text-outline", iconActive: "document-text" },
+];
 
 const DEFAULT_INPUT: LoanInput = {
   currencyCode: "AUD",
@@ -75,13 +93,18 @@ const REPAYMENT_PERIODS_PER_YEAR: Record<RepaymentFrequency, number> = {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AppContent />
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
 
 function AppContent() {
-  const [screen, setScreen] = useState<"home" | "calculator" | "saved">("home");
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const [screen, setScreen] = useState<AppScreen>("home");
+  const previousScreenRef = useRef<Exclude<AppScreen, "settings">>("home");
   const [input, setInput] = useState<LoanInput>(DEFAULT_INPUT);
   const [result, setResult] = useState<LoanCalculationResult | null>(null);
   const [savedProfiles, setSavedProfiles] = useState<SavedLoanProfile[]>([]);
@@ -130,6 +153,13 @@ function AppContent() {
 
   const ignoreCurrentCalculationSavePrompt = () => {
     setLastSavedHash(lastCalculatedHash);
+  };
+
+  const openSettings = () => {
+    if (screen !== "settings") {
+      previousScreenRef.current = screen;
+    }
+    setScreen("settings");
   };
 
   useEffect(() => {
@@ -306,7 +336,7 @@ function AppContent() {
   if (loadingState) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </SafeAreaView>
     );
   }
@@ -314,11 +344,27 @@ function AppContent() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? "light" : "dark"} />
         <View style={styles.stickyHeader}>
-          <View style={styles.brandRow}>
-            <Image source={require("./assets/loan-calculator.png")} style={styles.logo} />
-            <Text style={styles.heading}>Simple Loan Calculator</Text>
+          <View style={styles.headerRow}>
+            <View style={styles.brandRow}>
+              <Image source={require("./assets/loan-calculator.png")} style={styles.logo} />
+              <Text style={styles.heading} numberOfLines={1}>
+                Simple Loan Calculator
+              </Text>
+            </View>
+            <Pressable
+              onPress={openSettings}
+              style={styles.settingsButton}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+            >
+              <Ionicons
+                name={screen === "settings" ? "settings" : "settings-outline"}
+                size={22}
+                color={screen === "settings" ? colors.accentTextStrong : colors.text}
+              />
+            </Pressable>
           </View>
         </View>
 
@@ -348,8 +394,13 @@ function AppContent() {
                 onPress={() => setScreen("calculator")}
               >
                 <Text style={styles.dashboardIcon}>🧮</Text>
-                <Text style={styles.dashboardTitle}>Calculate</Text>
+                <Text style={styles.dashboardTitle}>Loan calculator</Text>
                 <Text style={styles.dashboardHint}>Open loan calculator</Text>
+              </Pressable>
+              <Pressable style={styles.dashboardCard} onPress={() => setScreen("basic")}>
+                <Text style={styles.dashboardIcon}>🔢</Text>
+                <Text style={styles.dashboardTitle}>Calculator</Text>
+                <Text style={styles.dashboardHint}>Basic calculator</Text>
               </Pressable>
               <Pressable style={styles.dashboardCard} onPress={() => setScreen("saved")}>
                 <Text style={styles.dashboardIcon}>📄</Text>
@@ -367,6 +418,7 @@ function AppContent() {
             style={styles.screenBody}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
           >
             <LoanForm initialValue={input} onSubmit={handleSubmit} />
 
@@ -427,6 +479,12 @@ function AppContent() {
               </View>
             ) : null}
           </ScrollView>
+        ) : null}
+
+        {screen === "basic" ? <BasicCalculatorScreen /> : null}
+
+        {screen === "settings" ? (
+          <SettingsScreen onBack={() => setScreen(previousScreenRef.current)} />
         ) : null}
 
         {screen === "saved" ? (
@@ -503,44 +561,33 @@ function AppContent() {
         ) : null}
         </View>
 
-        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-          <Pressable
-            style={[styles.bottomNavButton, screen === "home" && styles.bottomNavButtonActive]}
-            onPress={() => setScreen("home")}
-          >
-            <Text
-              style={[styles.bottomNavText, screen === "home" && styles.bottomNavTextActive]}
-            >
-              Home
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.bottomNavButton,
-              screen === "calculator" && styles.bottomNavButtonActive,
-            ]}
-            onPress={() => setScreen("calculator")}
-          >
-            <Text
-              style={[
-                styles.bottomNavText,
-                screen === "calculator" && styles.bottomNavTextActive,
-              ]}
-            >
-              Calculator
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.bottomNavButton, screen === "saved" && styles.bottomNavButtonActive]}
-            onPress={() => setScreen("saved")}
-          >
-            <Text
-              style={[styles.bottomNavText, screen === "saved" && styles.bottomNavTextActive]}
-            >
-              Saved Loans
-            </Text>
-          </Pressable>
-        </View>
+        {screen !== "settings" ? (
+          <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+            {NAV_TABS.map((tab) => {
+              const active = screen === tab.id;
+              return (
+                <Pressable
+                  key={tab.id}
+                  style={[styles.bottomNavButton, active && styles.bottomNavButtonActive]}
+                  onPress={() => setScreen(tab.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={tab.label}
+                >
+                  <Ionicons
+                    name={active ? tab.iconActive : tab.icon}
+                    size={20}
+                    color={active ? colors.accentTextStrong : colors.textSecondary}
+                  />
+                  <Text
+                    style={[styles.bottomNavText, active && styles.bottomNavTextActive]}
+                  >
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
 
         <Modal
           visible={renameDialogVisible}
@@ -556,6 +603,7 @@ function AppContent() {
                 value={renameProfileName}
                 onChangeText={setRenameProfileName}
                 placeholder="Profile name"
+                placeholderTextColor={colors.textMuted}
               />
               <View style={styles.topActionRow}>
                 <Pressable
@@ -591,6 +639,7 @@ function AppContent() {
                 value={profileName}
                 onChangeText={setProfileName}
                 placeholder="Profile name"
+                placeholderTextColor={colors.textMuted}
               />
               <View style={styles.topActionRow}>
                 <Pressable
@@ -626,7 +675,7 @@ function AppContent() {
         <Modal visible={isCalculating} transparent animationType="fade">
           <View style={styles.calculatingBackdrop}>
             <View style={styles.calculatingCard}>
-              <ActivityIndicator size="large" color="#2563eb" />
+              <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.calculatingText}>Calculating your loan...</Text>
             </View>
           </View>
@@ -637,374 +686,379 @@ function AppContent() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f3f4f6",
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f3f4f6",
-  },
-  screenBody: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 24,
-  },
-  pageContent: {
-    flex: 1,
-    padding: 16,
-  },
-  stickyHeader: {
-    marginHorizontal: 0,
-    marginTop: 0,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 12,
-    backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-  },
-  saveStickyBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    backgroundColor: "#f8fafc",
-    flexDirection: "row",
-    gap: 8,
-  },
-  saveStickyPrimaryButton: {
-    flex: 1,
-    backgroundColor: "#2563eb",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-  },
-  saveStickySecondaryButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    backgroundColor: "#ffffff",
-  },
-  bottomNav: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: "#d1d5db",
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    gap: 8,
-  },
-  bottomNavButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    backgroundColor: "#f9fafb",
-  },
-  bottomNavButtonActive: {
-    borderColor: "#2563eb",
-    backgroundColor: "#dbeafe",
-  },
-  bottomNavText: {
-    color: "#374151",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  bottomNavTextActive: {
-    color: "#1d4ed8",
-  },
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    marginLeft: 10,
-  },
-  heading: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  dashboardCard: {
-    width: "48%",
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#dbeafe",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-  },
-  dashboardGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  dashboardIcon: {
-    fontSize: 30,
-    color: "#1d4ed8",
-    fontWeight: "900",
-  },
-  dashboardTitle: {
-    marginTop: 6,
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  dashboardHint: {
-    marginTop: 4,
-    color: "#4b5563",
-    fontWeight: "600",
-  },
-  minimumRepaymentCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#dbeafe",
-    padding: 14,
-    marginBottom: 12,
-  },
-  minimumRepaymentTitle: {
-    color: "#1e3a8a",
-    fontWeight: "800",
-    fontSize: 18,
-  },
-  minimumRepaymentSubtitle: {
-    color: "#4b5563",
-    marginTop: 2,
-    fontWeight: "600",
-  },
-  minimumRepaymentValue: {
-    marginTop: 8,
-    color: "#111827",
-    fontWeight: "800",
-    fontSize: 28,
-  },
-  monthlyBreakdownWrap: {
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    paddingTop: 10,
-    gap: 8,
-  },
-  monthlyBreakdownRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  monthlyBreakdownLabel: {
-    color: "#374151",
-    fontWeight: "600",
-  },
-  monthlyBreakdownValue: {
-    color: "#111827",
-    fontWeight: "700",
-  },
-  monthlyBreakdownTotalRow: {
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    paddingTop: 8,
-  },
-  monthlyBreakdownTotalLabel: {
-    color: "#111827",
-    fontWeight: "800",
-  },
-  monthlyBreakdownTotalValue: {
-    color: "#111827",
-    fontWeight: "800",
-  },
-  topActionRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
-  },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: "#2563eb",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    color: "#ffffff",
-    fontWeight: "700",
-  },
-  secondaryButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    backgroundColor: "#ffffff",
-  },
-  secondaryButtonText: {
-    color: "#374151",
-    fontWeight: "700",
-  },
-  saveProfileCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#dbeafe",
-    padding: 14,
-    marginBottom: 12,
-  },
-  saveProfileTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#1e3a8a",
-    marginBottom: 8,
-  },
-  saveProfileInput: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#f9fafb",
-    marginBottom: 10,
-  },
-  savedListWrap: {
-    paddingBottom: 24,
-  },
-  emptyText: {
-    color: "#6b7280",
-    textAlign: "center",
-    marginTop: 24,
-    fontWeight: "600",
-  },
-  savedCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    padding: 12,
-    marginBottom: 10,
-  },
-  savedCardTitle: {
-    color: "#111827",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  savedCardMeta: {
-    color: "#4b5563",
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  savedActionRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
-  secondaryButtonSmall: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#f9fafb",
-  },
-  secondaryButtonSmallText: {
-    color: "#374151",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  deleteButtonSmall: {
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#fef2f2",
-  },
-  deleteButtonSmallText: {
-    color: "#b91c1c",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(17,24,39,0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 420,
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-    marginBottom: 10,
-  },
-  cancelButton: {
-    marginTop: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-  },
-  cancelButtonText: {
-    color: "#374151",
-    fontWeight: "700",
-  },
-  calculatingBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(17,24,39,0.28)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  calculatingCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    alignItems: "center",
-    minWidth: 220,
-  },
-  calculatingText: {
-    marginTop: 10,
-    color: "#111827",
-    fontWeight: "700",
-  },
-  snackbarWrap: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    bottom: 16,
-    backgroundColor: "rgba(17,24,39,0.9)",
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    alignItems: "center",
-  },
-  snackbarText: {
-    color: "#ffffff",
-    fontWeight: "700",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.page,
+    },
+    loadingContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.page,
+    },
+    screenBody: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: 16,
+      paddingBottom: 24,
+    },
+    pageContent: {
+      flex: 1,
+      padding: 16,
+    },
+    stickyHeader: {
+      marginHorizontal: 0,
+      marginTop: 0,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 12,
+      backgroundColor: colors.header,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.headerBorder,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    settingsButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    saveStickyBar: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.headerBorder,
+      backgroundColor: colors.saveBarBg,
+      flexDirection: "row",
+      gap: 8,
+    },
+    saveStickyPrimaryButton: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+    },
+    saveStickySecondaryButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+      backgroundColor: colors.card,
+    },
+    bottomNav: {
+      flexDirection: "row",
+      borderTopWidth: 1,
+      borderTopColor: colors.borderStrong,
+      backgroundColor: colors.header,
+      paddingHorizontal: 10,
+      paddingTop: 8,
+      gap: 6,
+    },
+    bottomNavButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 8,
+      backgroundColor: colors.navButtonBg,
+      gap: 2,
+    },
+    bottomNavButtonActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+    },
+    bottomNavText: {
+      color: colors.textSecondary,
+      fontWeight: "700",
+      fontSize: 10,
+    },
+    bottomNavTextActive: {
+      color: colors.accentTextStrong,
+    },
+    brandRow: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      minWidth: 0,
+    },
+    logo: {
+      width: 40,
+      height: 40,
+      borderRadius: 8,
+      marginLeft: 10,
+    },
+    heading: {
+      flexShrink: 1,
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    dashboardCard: {
+      width: "48%",
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 10,
+    },
+    dashboardGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+    },
+    dashboardIcon: {
+      fontSize: 30,
+      color: colors.accentTextStrong,
+      fontWeight: "900",
+    },
+    dashboardTitle: {
+      marginTop: 6,
+      fontSize: 18,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    dashboardHint: {
+      marginTop: 4,
+      color: colors.textMuted,
+      fontWeight: "600",
+    },
+    minimumRepaymentCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      padding: 14,
+      marginBottom: 12,
+    },
+    minimumRepaymentTitle: {
+      color: colors.accentText,
+      fontWeight: "800",
+      fontSize: 18,
+    },
+    minimumRepaymentSubtitle: {
+      color: colors.textMuted,
+      marginTop: 2,
+      fontWeight: "600",
+    },
+    minimumRepaymentValue: {
+      marginTop: 8,
+      color: colors.text,
+      fontWeight: "800",
+      fontSize: 28,
+    },
+    monthlyBreakdownWrap: {
+      marginTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 10,
+      gap: 8,
+    },
+    monthlyBreakdownRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    monthlyBreakdownLabel: {
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+    monthlyBreakdownValue: {
+      color: colors.text,
+      fontWeight: "700",
+    },
+    monthlyBreakdownTotalRow: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 8,
+    },
+    monthlyBreakdownTotalLabel: {
+      color: colors.text,
+      fontWeight: "800",
+    },
+    monthlyBreakdownTotalValue: {
+      color: colors.text,
+      fontWeight: "800",
+    },
+    topActionRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 12,
+    },
+    primaryButton: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+    },
+    primaryButtonText: {
+      color: colors.textInverse,
+      fontWeight: "700",
+    },
+    secondaryButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+      backgroundColor: colors.card,
+    },
+    secondaryButtonText: {
+      color: colors.textSecondary,
+      fontWeight: "700",
+    },
+    saveProfileInput: {
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      backgroundColor: colors.inputBg,
+      color: colors.text,
+      marginBottom: 10,
+    },
+    savedListWrap: {
+      paddingBottom: 24,
+    },
+    emptyText: {
+      color: colors.textMuted,
+      textAlign: "center",
+      marginTop: 24,
+      fontWeight: "600",
+    },
+    savedCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12,
+      marginBottom: 10,
+    },
+    savedCardTitle: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: "800",
+    },
+    savedCardMeta: {
+      color: colors.textMuted,
+      marginTop: 4,
+      marginBottom: 10,
+    },
+    savedActionRow: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: 8,
+    },
+    secondaryButtonSmall: {
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: colors.inputBg,
+    },
+    secondaryButtonSmallText: {
+      color: colors.textSecondary,
+      fontWeight: "700",
+      fontSize: 12,
+    },
+    deleteButtonSmall: {
+      borderWidth: 1,
+      borderColor: colors.dangerBorder,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: colors.dangerBg,
+    },
+    deleteButtonSmallText: {
+      color: colors.danger,
+      fontWeight: "700",
+      fontSize: 12,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: colors.modalBackdrop,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+    },
+    modalCard: {
+      width: "100%",
+      maxWidth: 420,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 16,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: colors.text,
+      marginBottom: 10,
+    },
+    cancelButton: {
+      marginTop: 6,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+    },
+    cancelButtonText: {
+      color: colors.textSecondary,
+      fontWeight: "700",
+    },
+    calculatingBackdrop: {
+      flex: 1,
+      backgroundColor: colors.calculatingBackdrop,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20,
+    },
+    calculatingCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      alignItems: "center",
+      minWidth: 220,
+    },
+    calculatingText: {
+      marginTop: 10,
+      color: colors.text,
+      fontWeight: "700",
+    },
+    snackbarWrap: {
+      position: "absolute",
+      left: 16,
+      right: 16,
+      bottom: 16,
+      backgroundColor: colors.snackbarBg,
+      borderRadius: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      alignItems: "center",
+    },
+    snackbarText: {
+      color: colors.textInverse,
+      fontWeight: "700",
+    },
+  });

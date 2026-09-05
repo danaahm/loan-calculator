@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { useTheme } from "../theme/ThemeProvider";
+import { type ThemeColors } from "../theme/tokens";
 import { type YearlyRow } from "../types/loan";
 import { formatCurrency } from "../utils/format";
 import { CardHeader } from "./CardHeader";
@@ -11,6 +13,8 @@ interface AmortizationGridProps {
 }
 
 export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -79,62 +83,63 @@ export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) 
   );
 };
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 24,
-  },
-  gridShell: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 12,
-    overflow: "hidden",
-    flexDirection: "row",
-    backgroundColor: "#ffffff",
-  },
-  stickyYearColumn: {
-    width: 72,
-    borderRightWidth: 1,
-    borderRightColor: "#d1d5db",
-    backgroundColor: "#ffffff",
-  },
-  row: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    alignItems: "center",
-    minHeight: 40,
-  },
-  headerRow: {
-    backgroundColor: "#f3f4f6",
-  },
-  yearHeaderCellWrap: {
-    justifyContent: "center",
-  },
-  evenRow: {
-    backgroundColor: "#ffffff",
-  },
-  oddRow: {
-    backgroundColor: "#f9fafb",
-  },
-  cell: {
-    width: 120,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    fontSize: 12,
-    color: "#1f2937",
-  },
-  yearCell: {
-    width: 72,
-    textAlign: "center",
-    paddingHorizontal: 8,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  headerCell: {
-    fontWeight: "700",
-    color: "#111827",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 24,
+    },
+    gridShell: {
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 12,
+      overflow: "hidden",
+      flexDirection: "row",
+      backgroundColor: colors.card,
+    },
+    stickyYearColumn: {
+      width: 72,
+      borderRightWidth: 1,
+      borderRightColor: colors.borderStrong,
+      backgroundColor: colors.card,
+    },
+    row: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      alignItems: "center",
+      minHeight: 40,
+    },
+    headerRow: {
+      backgroundColor: colors.gridHeaderBg,
+    },
+    yearHeaderCellWrap: {
+      justifyContent: "center",
+    },
+    evenRow: {
+      backgroundColor: colors.card,
+    },
+    oddRow: {
+      backgroundColor: colors.gridOddRow,
+    },
+    cell: {
+      width: 120,
+      paddingHorizontal: 8,
+      paddingVertical: 8,
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    yearCell: {
+      width: 72,
+      textAlign: "center",
+      paddingHorizontal: 8,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    headerCell: {
+      fontWeight: "700",
+      color: colors.text,
+    },
+  });

@@ -1,4 +1,8 @@
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+
+import { useTheme } from "../theme/ThemeProvider";
+import { type ThemeColors } from "../theme/tokens";
 
 interface CardHeaderProps {
   title: string;
@@ -13,6 +17,9 @@ export const CardHeader = ({
   collapsed,
   onToggleCollapse,
 }: CardHeaderProps) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.wrap}>
       <View style={styles.topRow}>
@@ -28,48 +35,49 @@ export const CardHeader = ({
   );
 };
 
-const styles = StyleSheet.create({
-  wrap: {
-    marginHorizontal: -16,
-    marginTop: -16,
-    marginBottom: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#eff6ff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#dbeafe",
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1e3a8a",
-  },
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  toggleButton: {
-    borderWidth: 1,
-    borderColor: "#bfdbfe",
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#dbeafe",
-  },
-  toggleText: {
-    color: "#1d4ed8",
-    fontWeight: "800",
-    fontSize: 20,
-    lineHeight: 22,
-  },
-  subtitle: {
-    marginTop: 2,
-    color: "#374151",
-    fontWeight: "600",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    wrap: {
+      marginHorizontal: -16,
+      marginTop: -16,
+      marginBottom: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: colors.headerTint,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.headerTintBorder,
+      borderTopLeftRadius: 14,
+      borderTopRightRadius: 14,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: colors.accentText,
+    },
+    topRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    toggleButton: {
+      borderWidth: 1,
+      borderColor: colors.headerToggleBorder,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.primarySoft,
+    },
+    toggleText: {
+      color: colors.accentTextStrong,
+      fontWeight: "800",
+      fontSize: 20,
+      lineHeight: 22,
+    },
+    subtitle: {
+      marginTop: 2,
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+  });

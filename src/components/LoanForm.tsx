@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 
+import { useTheme } from "../theme/ThemeProvider";
+import { type ThemeColors } from "../theme/tokens";
 import {
   FREQUENCIES,
   type ExtraRepaymentStartUnit,
@@ -23,6 +25,8 @@ import {
   formatFrequencyLabel,
 } from "../utils/format";
 import { CardHeader } from "./CardHeader";
+
+type FormStyles = ReturnType<typeof createStyles>;
 
 interface LoanFormProps {
   initialValue: LoanInput;
@@ -69,9 +73,11 @@ const formatGroupedNumberInput = (value: string): string => {
 const FrequencySelector = ({
   value,
   onChange,
+  styles,
 }: {
   value: RepaymentFrequency;
   onChange: (next: RepaymentFrequency) => void;
+  styles: FormStyles;
 }) => {
   return (
     <View style={styles.frequencyWrap}>
@@ -94,6 +100,8 @@ const FrequencySelector = ({
 };
 
 export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [collapsed, setCollapsed] = useState(false);
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
   const [currencySearch, setCurrencySearch] = useState("");
@@ -291,6 +299,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
           onChangeText={(value) => setAmountBorrowed(formatGroupedNumberInput(value))}
               style={styles.input}
               placeholder="e.g. 500000"
+              placeholderTextColor={colors.textMuted}
             />
           </View>
 
@@ -301,10 +310,15 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             onChangeText={setInterestRate}
             style={styles.simpleInput}
             placeholder="e.g. 6.25%"
+            placeholderTextColor={colors.textMuted}
           />
 
           <Text style={styles.label}>Repayment Frequency</Text>
-          <FrequencySelector value={repaymentFrequency} onChange={setRepaymentFrequency} />
+          <FrequencySelector
+            value={repaymentFrequency}
+            onChange={setRepaymentFrequency}
+            styles={styles}
+          />
 
           <Text style={styles.label}>Loan Length (years)</Text>
           <TextInput
@@ -313,6 +327,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             onChangeText={setLoanLengthYears}
             style={styles.simpleInput}
             placeholder="e.g. 30"
+            placeholderTextColor={colors.textMuted}
           />
 
           <Text style={styles.label}>Account Fee (per fee event)</Text>
@@ -324,15 +339,25 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
               onChangeText={setAccountFee}
               style={styles.input}
               placeholder="e.g. 10"
+              placeholderTextColor={colors.textMuted}
             />
           </View>
 
           <Text style={styles.label}>Account Fee Frequency</Text>
-          <FrequencySelector value={accountFeeFrequency} onChange={setAccountFeeFrequency} />
+          <FrequencySelector
+            value={accountFeeFrequency}
+            onChange={setAccountFeeFrequency}
+            styles={styles}
+          />
 
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Enable Extra Repayment</Text>
-            <Switch value={extraEnabled} onValueChange={setExtraEnabled} />
+            <Switch
+              value={extraEnabled}
+              onValueChange={setExtraEnabled}
+              trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
+              thumbColor={colors.switchThumb}
+            />
           </View>
 
           {extraEnabled ? (
@@ -346,11 +371,16 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                   onChangeText={(value) => setExtraAmount(formatGroupedNumberInput(value))}
                   style={styles.input}
                   placeholder="e.g. 250"
+                  placeholderTextColor={colors.textMuted}
                 />
               </View>
 
               <Text style={styles.label}>Extra Repayment Frequency</Text>
-              <FrequencySelector value={extraFrequency} onChange={setExtraFrequency} />
+              <FrequencySelector
+                value={extraFrequency}
+                onChange={setExtraFrequency}
+                styles={styles}
+              />
 
               <Text style={styles.label}>Start Extra After</Text>
               <View style={styles.startAfterRow}>
@@ -361,6 +391,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                     onChangeText={setExtraStartAfter}
                     style={styles.simpleInput}
                     placeholder="e.g. 12"
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
                 <View style={styles.startAfterToggle}>
@@ -407,7 +438,12 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
 
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Enable Lump Sum (final payment)</Text>
-            <Switch value={lumpSumEnabled} onValueChange={setLumpSumEnabled} />
+            <Switch
+              value={lumpSumEnabled}
+              onValueChange={setLumpSumEnabled}
+              trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
+              thumbColor={colors.switchThumb}
+            />
           </View>
           {lumpSumEnabled ? (
             <View>
@@ -420,6 +456,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                   onChangeText={(value) => setLumpSumAmount(formatGroupedNumberInput(value))}
                   style={styles.input}
                   placeholder="e.g. 10,000"
+                  placeholderTextColor={colors.textMuted}
                 />
               </View>
             </View>
@@ -427,7 +464,12 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
 
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Enable Offset Savings</Text>
-            <Switch value={offsetEnabled} onValueChange={setOffsetEnabled} />
+            <Switch
+              value={offsetEnabled}
+              onValueChange={setOffsetEnabled}
+              trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
+              thumbColor={colors.switchThumb}
+            />
           </View>
           {offsetEnabled ? (
             <View>
@@ -440,6 +482,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                   onChangeText={(value) => setOffsetAmount(formatGroupedNumberInput(value))}
                   style={styles.input}
                   placeholder="e.g. 5,000"
+                  placeholderTextColor={colors.textMuted}
                 />
               </View>
             </View>
@@ -463,6 +506,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
           <TextInput
             style={styles.modalSearch}
             placeholder="Search currency code or symbol"
+            placeholderTextColor={colors.textMuted}
             value={currencySearch}
             onChangeText={setCurrencySearch}
           />
@@ -492,217 +536,222 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
   );
 };
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-  },
-  label: {
-    marginBottom: 6,
-    marginTop: 10,
-    color: "#374151",
-    fontWeight: "600",
-  },
-  input: {
-    flex: 1,
-    borderWidth: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    backgroundColor: "#f9fafb",
-  },
-  simpleInput: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    backgroundColor: "#f9fafb",
-  },
-  inputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    backgroundColor: "#f9fafb",
-  },
-  prefixText: {
-    paddingLeft: 12,
-    fontSize: 15,
-    color: "#111827",
-    fontWeight: "700",
-  },
-  currencySelectButton: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#f9fafb",
-  },
-  currencySelectText: {
-    color: "#111827",
-    fontWeight: "600",
-  },
-  frequencyWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  frequencyButton: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "#f9fafb",
-  },
-  frequencyButtonActive: {
-    borderColor: "#2563eb",
-    backgroundColor: "#dbeafe",
-  },
-  frequencyText: {
-    fontSize: 13,
-    color: "#374151",
-  },
-  frequencyTextActive: {
-    color: "#1e40af",
-    fontWeight: "700",
-  },
-  switchRow: {
-    marginTop: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  switchLabel: {
-    fontSize: 15,
-    color: "#111827",
-    fontWeight: "600",
-  },
-  startAfterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  startAfterInputWrap: {
-    flex: 1,
-  },
-  startAfterToggle: {
-    flexDirection: "row",
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  startAfterToggleButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: "#f9fafb",
-  },
-  startAfterToggleButtonActive: {
-    backgroundColor: "#dbeafe",
-  },
-  startAfterToggleText: {
-    color: "#374151",
-    fontWeight: "600",
-  },
-  startAfterToggleTextActive: {
-    color: "#1e40af",
-    fontWeight: "700",
-  },
-  errorText: {
-    color: "#dc2626",
-    marginTop: 12,
-    fontWeight: "600",
-  },
-  calculateButton: {
-    marginTop: 16,
-    borderRadius: 10,
-    backgroundColor: "#2563eb",
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  calculateButtonText: {
-    color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-    padding: 16,
-    paddingTop: 56,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 12,
-  },
-  modalSearch: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  clearSearchButton: {
-    alignSelf: "flex-end",
-    marginTop: -4,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: "#f9fafb",
-  },
-  clearSearchButtonText: {
-    color: "#374151",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  currencyList: {
-    paddingBottom: 16,
-  },
-  currencyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  currencyRowActive: {
-    borderColor: "#2563eb",
-    backgroundColor: "#dbeafe",
-  },
-  currencyRowCode: {
-    width: 56,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  currencyRowLabel: {
-    color: "#374151",
-    flex: 1,
-  },
-  modalCloseButton: {
-    borderRadius: 10,
-    backgroundColor: "#2563eb",
-    paddingVertical: 12,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  modalCloseText: {
-    color: "#ffffff",
-    fontWeight: "700",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 16,
+    },
+    label: {
+      marginBottom: 6,
+      marginTop: 10,
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+    input: {
+      flex: 1,
+      borderWidth: 0,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 15,
+      backgroundColor: colors.inputBg,
+      color: colors.text,
+    },
+    simpleInput: {
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 15,
+      backgroundColor: colors.inputBg,
+      color: colors.text,
+    },
+    inputWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      backgroundColor: colors.inputBg,
+    },
+    prefixText: {
+      paddingLeft: 12,
+      fontSize: 15,
+      color: colors.text,
+      fontWeight: "700",
+    },
+    currencySelectButton: {
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      backgroundColor: colors.inputBg,
+    },
+    currencySelectText: {
+      color: colors.text,
+      fontWeight: "600",
+    },
+    frequencyWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    frequencyButton: {
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 999,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      backgroundColor: colors.inputBg,
+    },
+    frequencyButtonActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+    },
+    frequencyText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+    frequencyTextActive: {
+      color: colors.accentTextDeep,
+      fontWeight: "700",
+    },
+    switchRow: {
+      marginTop: 16,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    switchLabel: {
+      fontSize: 15,
+      color: colors.text,
+      fontWeight: "600",
+    },
+    startAfterRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    startAfterInputWrap: {
+      flex: 1,
+    },
+    startAfterToggle: {
+      flexDirection: "row",
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      overflow: "hidden",
+    },
+    startAfterToggleButton: {
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      backgroundColor: colors.inputBg,
+    },
+    startAfterToggleButtonActive: {
+      backgroundColor: colors.primarySoft,
+    },
+    startAfterToggleText: {
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+    startAfterToggleTextActive: {
+      color: colors.accentTextDeep,
+      fontWeight: "700",
+    },
+    errorText: {
+      color: colors.errorText,
+      marginTop: 12,
+      fontWeight: "600",
+    },
+    calculateButton: {
+      marginTop: 16,
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    calculateButtonText: {
+      color: colors.textInverse,
+      fontWeight: "700",
+      fontSize: 16,
+    },
+    modalContainer: {
+      flex: 1,
+      backgroundColor: colors.card,
+      padding: 16,
+      paddingTop: 56,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 12,
+    },
+    modalSearch: {
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 12,
+      color: colors.text,
+      backgroundColor: colors.inputBg,
+    },
+    clearSearchButton: {
+      alignSelf: "flex-end",
+      marginTop: -4,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      backgroundColor: colors.inputBg,
+    },
+    clearSearchButtonText: {
+      color: colors.textSecondary,
+      fontWeight: "700",
+      fontSize: 12,
+    },
+    currencyList: {
+      paddingBottom: 16,
+    },
+    currencyRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 8,
+    },
+    currencyRowActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+    },
+    currencyRowCode: {
+      width: 56,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    currencyRowLabel: {
+      color: colors.textSecondary,
+      flex: 1,
+    },
+    modalCloseButton: {
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+      paddingVertical: 12,
+      alignItems: "center",
+      marginTop: 8,
+    },
+    modalCloseText: {
+      color: colors.textInverse,
+      fontWeight: "700",
+    },
+  });

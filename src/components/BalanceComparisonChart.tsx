@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -10,22 +8,92 @@ import {
   type StyleProp,
   type TextStyle,
 } from "react-native";
-import { LineChart } from "react-native-chart-kit";
 import {
-  PinchGestureHandler,
-  type PinchGestureHandlerGestureEvent,
-  type PinchGestureHandlerStateChangeEvent,
-  State,
-} from "react-native-gesture-handler";
+  Circle,
+  Line as SkiaLine,
+  matchFont,
+  multiply4,
+  scale,
+  translate,
+  vec,
+  type Matrix4,
+} from "@shopify/react-native-skia";
+import { Gesture } from "react-native-gesture-handler";
+import {
+  runOnJS,
+  useAnimatedReaction,
+  useDerivedValue,
+  useSharedValue,
+  type SharedValue,
+} from "react-native-reanimated";
+import {
+  Area,
+  CartesianChart,
+  Line,
+  getTransformComponents,
+  setScale,
+  setTranslate,
+  useChartPressState,
+  useChartTransformState,
+  type ChartBounds,
+} from "victory-native";
 
 import { type LoanCalculationResult, type RepaymentFrequency } from "../types/loan";
 import {
-  formatCurrency,
   formatDurationLabel,
   formatYearsAndPeriods,
   getCurrencySymbol,
 } from "../utils/format";
+import {
+  buildBalanceChartPoints,
+  formatChartTimeDetail,
+  formatChartTimeLabel,
+  getBalanceChartDomain,
+} from "../utils/chartData";
 import { CardHeader } from "./CardHeader";
+import { useTheme } from "../theme/ThemeProvider";
+import { type ThemeColors } from "../theme/tokens";
+
+const MIN_CHART_ZOOM = 1;
+const MAX_CHART_ZOOM = 10;
+
+const clampChartTransformToData = (
+  matrix: Matrix4,
+  plotLeft: number,
+  plotRight: number
+): Matrix4 => {
+  "worklet";
+
+  const { scaleX, scaleY, translateX, translateY } = getTransformComponents(matrix);
+  const plotWidth = plotRight - plotLeft;
+  if (!(plotWidth > 1) || !Number.isFinite(plotWidth)) {
+    return matrix;
+  }
+
+  const nextScaleX = Math.min(
+    MAX_CHART_ZOOM,
+    Math.max(MIN_CHART_ZOOM, Number.isFinite(scaleX) ? scaleX : MIN_CHART_ZOOM)
+  );
+  const nextScaleY = 1;
+  const minTranslateX = plotRight * (1 - nextScaleX);
+  const maxTranslateX = plotLeft * (1 - nextScaleX);
+  const nextTranslateX = Math.min(
+    maxTranslateX,
+    Math.max(minTranslateX, Number.isFinite(translateX) ? translateX : 0)
+  );
+  const nextTranslateY = 0;
+
+  if (
+    Math.abs(nextScaleX - scaleX) < 0.0001 &&
+    Math.abs(nextScaleY - scaleY) < 0.0001 &&
+    Math.abs(nextTranslateX - translateX) < 0.05 &&
+    Math.abs(nextTranslateY - translateY) < 0.05
+  ) {
+    return matrix;
+  }
+
+  return setScale(setTranslate(matrix, nextTranslateX, nextTranslateY), nextScaleX, nextScaleY);
+};
 
 const FitOneLineText = ({
   value,
@@ -50,7 +118,7 @@ const FitOneLineText = ({
 
   return (
     <View
-      style={styles.savingsValueWrap}
+      style={fitStyles.savingsValueWrap}
       onLayout={(event) => {
         const nextWidth = Math.floor(event.nativeEvent.layout.width);
         if (nextWidth > 0 && nextWidth !== containerWidth) {
@@ -77,7 +145,7 @@ interface BalanceComparisonChartProps {
   loanLengthYears: number;
 }
 
-const periodsByFrequency: Record<RepaymentFrequency, number> = {
+const PERIODS_PER_YEAR: Record<RepaymentFrequency, number> = {
   yearly: 1,
   quarterly: 4,
   monthly: 12,
@@ -96,49 +164,129 @@ const formatCompactThousands = (value: number): string => {
   return `${Math.round(value)}`;
 };
 
+const axisFont = matchFont({
+  fontFamily: Platform.select({
+    ios: "Helvetica",
+    android: "sans-serif",
+    default: "sans-serif",
+  }) as string,
+  fontSize: 11,
+  fontWeight: "500",
+});
+
+type ActivePoint = {
+  year: number;
+  baseline: number;
+  extra: number | null;
+};
+
+const ChartTooltipMarkers = ({
+  x,
+  baselineY,
+  extraY,
+  extraValue,
+  top,
+  bottom,
+  showExtra,
+  lineColor,
+}: {
+  x: SharedValue<number>;
+  baselineY: SharedValue<number>;
+  extraY: SharedValue<number>;
+  extraValue: SharedValue<number>;
+  top: number;
+  bottom: number;
+  showExtra: boolean;
+  lineColor: string;
+}) => {
+  const p1 = useDerivedValue(() => vec(x.value, top));
+  const p2 = useDerivedValue(() => vec(x.value, bottom));
+  const extraOpacity = useDerivedValue(() =>
+    showExtra && Number.isFinite(extraValue.value) ? 1 : 0
+  );
+
+  return (
+    <>
+      <SkiaLine p1={p1} p2={p2} color={lineColor} strokeWidth={1} />
+      <Circle cx={x} cy={baselineY} r={5} color="#2563eb" />
+      {showExtra ? (
+        <Circle cx={x} cy={extraY} r={5} color="#10b981" opacity={extraOpacity} />
+      ) : null}
+    </>
+  );
+};
+
 export const BalanceComparisonChart = ({
   result,
   repaymentFrequency,
   currencyCode,
   loanLengthYears,
 }: BalanceComparisonChartProps) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [collapsed, setCollapsed] = useState(false);
   const [showBaseline, setShowBaseline] = useState(true);
   const [showExtra, setShowExtra] = useState(true);
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [focusedYearIndex, setFocusedYearIndex] = useState<number | null>(null);
-  const opacity = useRef(new Animated.Value(1)).current;
-  const pinchStartZoom = useRef(1);
+  const [activePoint, setActivePoint] = useState<ActivePoint | null>(null);
+  const [chartWidth, setChartWidth] = useState(0);
 
-  useEffect(() => {
-    Animated.sequence([
-      Animated.timing(opacity, {
-        toValue: 0.7,
-        duration: 120,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [result]);
-
-  const baselineData = result.baseline.yearlyBalancePoints;
-  const extraData = result.withExtra?.yearlyBalancePoints;
-  const openingBalance = result.baseline.yearlyRows[0]?.openingBalance ?? 0;
-  const baselineSeries = useMemo(
-    () => [{ year: 0, balance: openingBalance }, ...baselineData],
-    [baselineData, openingBalance]
-  );
-  const extraSeries = useMemo(
-    () => (extraData ? [{ year: 0, balance: openingBalance }, ...extraData] : []),
-    [extraData, openingBalance]
-  );
-
-  const periodsPerYear = periodsByFrequency[repaymentFrequency];
+  const periodsPerYear = PERIODS_PER_YEAR[repaymentFrequency];
+  const hasExtraSeries = Boolean(result.withExtra);
+  const useMonthAxis = loanLengthYears <= 2;
   const currencySymbol = getCurrencySymbol(currencyCode);
+  const chartData = useMemo(
+    () => buildBalanceChartPoints(result, periodsPerYear),
+    [periodsPerYear, result]
+  );
+  const chartDomain = useMemo(() => getBalanceChartDomain(chartData), [chartData]);
+  const { state: pressState, isActive } = useChartPressState({
+    x: 0,
+    y: { baseline: 0, extra: 0 },
+  });
+  const { state: transformState } = useChartTransformState();
+  const plotLeft = useSharedValue(0);
+  const plotRight = useSharedValue(0);
+  const chartTransformGestures = useMemo(
+    () =>
+      Gesture.Simultaneous(
+        Gesture.Pinch()
+          .shouldCancelWhenOutside(false)
+          .onBegin((event) => {
+            transformState.offset.value = transformState.matrix.value;
+            transformState.origin.value = {
+              x: event.focalX,
+              y: event.focalY,
+            };
+            transformState.zoomActive.value = true;
+          })
+          .onChange((event) => {
+            transformState.matrix.value = multiply4(
+              transformState.offset.value,
+              scale(event.scale, 1, 1, transformState.origin.value)
+            );
+          })
+          .onFinalize(() => {
+            transformState.zoomActive.value = false;
+          }),
+        Gesture.Pan()
+          .activeOffsetX([-16, 16])
+          .failOffsetY([-12, 12])
+          .onStart(() => {
+            transformState.panActive.value = true;
+          })
+          .onChange((event) => {
+            transformState.matrix.value = multiply4(
+              translate(event.changeX, 0, 0),
+              transformState.matrix.value
+            );
+          })
+          .onFinalize(() => {
+            transformState.panActive.value = false;
+          })
+      ),
+    [transformState]
+  );
+
   const savedTime = formatYearsAndPeriods(
     result.savings.yearsSaved,
     result.savings.periodsSaved,
@@ -151,129 +299,74 @@ export const BalanceComparisonChart = ({
         periodsPerYear
       )
     : formatDurationLabel(loanLengthYears);
-  const baseWidth = Math.max(260, Dimensions.get("window").width - 64);
-  const chartWidth = baseWidth - 12;
 
-  const visiblePoints = useMemo(() => {
-    const total = baselineSeries.length;
-    const windowSize = Math.max(4, Math.ceil(total / zoomLevel));
-    const safeFocus = focusedYearIndex ?? 0;
-    const half = Math.floor(windowSize / 2);
-    const startIndex = Math.max(
-      0,
-      Math.min(total - windowSize, Math.max(0, safeFocus - half))
-    );
-    const endIndex = Math.min(total, startIndex + windowSize);
-
-    return {
-      startIndex,
-      baseline: baselineSeries.slice(startIndex, endIndex),
-      extra: extraSeries.slice(startIndex, endIndex),
-    };
-  }, [baselineSeries, extraSeries, focusedYearIndex, zoomLevel]);
-
-  const labels = useMemo(() => {
-    const years = visiblePoints.baseline.map((point) => point.year);
-    const step = zoomLevel <= 1.25 ? 5 : zoomLevel <= 2.2 ? 2 : 1;
-    return years.map((year, index) => {
-      const isFirst = index === 0;
-      const isLast = index === years.length - 1;
-      return year % step === 0 || isFirst || isLast ? `${year}` : "";
-    });
-  }, [visiblePoints.baseline, zoomLevel]);
-  const datasetMeta: Array<{
-    name: string;
-    visible: boolean;
-    data: number[];
-    color: () => string;
-  }> = [
-    {
-      name: "Original repayment path",
-      visible: showBaseline,
-      data: visiblePoints.baseline.map((point) => point.balance),
-      color: () => "#2563eb",
+  const formatMoney = useCallback(
+    (value: number): string => {
+      return `${currencySymbol}${Math.round(value).toLocaleString()}`;
     },
-    {
-      name: "With extra repayment",
-      visible: showExtra && Boolean(extraData),
-      data: visiblePoints.extra.map((point) => point.balance),
-      color: () => "#10b981",
-    },
-  ];
-  const datasets = datasetMeta
-    .filter((dataset) => dataset.visible)
-    .map((dataset) => ({
-      data: dataset.data,
-      color: dataset.color,
-      strokeWidth: 3,
-      seriesName: dataset.name,
-    }));
-
-  const clampZoom = (value: number): number => {
-    return Math.max(1, Math.min(4, value));
-  };
-  const clampFocusIndex = (index: number): number => {
-    return Math.max(0, Math.min(baselineSeries.length - 1, index));
-  };
-
-  const handlePinchStateChange = (event: PinchGestureHandlerStateChangeEvent) => {
-    if (event.nativeEvent.state === State.BEGAN) {
-      pinchStartZoom.current = zoomLevel;
-      return;
-    }
-
-    if (event.nativeEvent.state === State.ACTIVE) {
-      const nextZoom = clampZoom(pinchStartZoom.current * event.nativeEvent.scale);
-      setZoomLevel(nextZoom);
-      if (focusedYearIndex === null) {
-        setFocusedYearIndex(Math.floor(baselineSeries.length / 2));
-      }
-      return;
-    }
-
-    if (
-      event.nativeEvent.state === State.END ||
-      event.nativeEvent.state === State.CANCELLED ||
-      event.nativeEvent.state === State.FAILED
-    ) {
-      const nextZoom = clampZoom(pinchStartZoom.current * event.nativeEvent.scale);
-      setZoomLevel(nextZoom);
-      pinchStartZoom.current = nextZoom;
-      if (focusedYearIndex === null) {
-        setFocusedYearIndex(Math.floor(baselineSeries.length / 2));
-      }
-    }
-  };
-
-  const handlePinchGestureEvent = (event: PinchGestureHandlerGestureEvent) => {
-    const nextZoom = clampZoom(pinchStartZoom.current * event.nativeEvent.scale);
-    setZoomLevel(nextZoom);
-    if (focusedYearIndex === null) {
-      setFocusedYearIndex(Math.floor(baselineSeries.length / 2));
-    }
-  };
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) => {
-          return zoomLevel > 1 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          if (zoomLevel <= 1) {
-            return;
-          }
-
-          const baseIndex =
-            focusedYearIndex ?? Math.floor(baselineSeries.length / 2);
-          const pointsPerSwipe = Math.max(1, Math.round(zoomLevel * 2));
-          const steps = Math.round(gestureState.dx / 35);
-          const next = clampFocusIndex(baseIndex - steps * pointsPerSwipe);
-          setFocusedYearIndex(next);
-        },
-      }),
-    [baselineSeries.length, focusedYearIndex, zoomLevel]
+    [currencySymbol]
   );
+
+  const applyActivePoint = useCallback((next: ActivePoint | null) => {
+    setActivePoint(next);
+  }, []);
+
+  useAnimatedReaction(
+    () => ({
+      active: pressState.isActive.value,
+      year: Number(pressState.x.value.value),
+      baseline: pressState.y.baseline.value.value,
+      extra: pressState.y.extra.value.value,
+    }),
+    (current) => {
+      if (!current.active) {
+        runOnJS(applyActivePoint)(null);
+        return;
+      }
+      runOnJS(applyActivePoint)({
+        year: current.year,
+        baseline: current.baseline,
+        extra: Number.isFinite(current.extra) ? current.extra : null,
+      });
+    }
+  );
+
+  useAnimatedReaction(
+    () => ({
+      matrix: transformState.matrix.value,
+      left: plotLeft.value,
+      right: plotRight.value,
+    }),
+    ({ matrix, left, right }) => {
+      const nextMatrix = clampChartTransformToData(matrix, left, right);
+      if (nextMatrix !== matrix) {
+        transformState.matrix.value = nextMatrix;
+      }
+    }
+  );
+
+  useEffect(() => {
+    transformState.matrix.value = setScale(
+      setTranslate(transformState.matrix.value, 0, 0),
+      1,
+      1
+    );
+  }, [chartData, transformState.matrix]);
+
+  const handleChartBoundsChange = useCallback(
+    (bounds: ChartBounds) => {
+      plotLeft.value = bounds.left;
+      plotRight.value = bounds.right;
+    },
+    [plotLeft, plotRight]
+  );
+
+  const releaseChartTouches = useCallback(() => {
+    transformState.panActive.value = false;
+    transformState.zoomActive.value = false;
+  }, [transformState]);
+
+  const visibleSeriesCount = Number(showBaseline) + Number(showExtra && hasExtraSeries);
 
   return (
     <View style={styles.card}>
@@ -286,106 +379,164 @@ export const BalanceComparisonChart = ({
 
       {!collapsed ? (
         <View>
-          <View style={styles.toolbar}>
-            <View style={styles.zoomButtons}>
-              <Pressable
-                style={styles.toolButton}
-                onPress={() => {
-                  setZoomLevel((prev) => Math.min(4, prev + 0.5));
-                  if (focusedYearIndex === null) {
-                    setFocusedYearIndex(Math.floor(baselineSeries.length / 2));
-                  }
+          <View
+            style={styles.chartArea}
+            onLayout={(event) => {
+              const nextWidth = Math.round(event.nativeEvent.layout.width);
+              if (nextWidth > 0 && nextWidth !== chartWidth) {
+                setChartWidth(nextWidth);
+              }
+            }}
+            onTouchEnd={(event) => {
+              if (event.nativeEvent.touches.length === 0) {
+                releaseChartTouches();
+              }
+            }}
+            onTouchCancel={releaseChartTouches}
+          >
+            {visibleSeriesCount > 0 && chartWidth > 0 ? (
+              <CartesianChart
+                data={chartData}
+                xKey="year"
+                yKeys={["baseline", "extra"]}
+                explicitSize={{ width: chartWidth, height: 260 }}
+                domain={{
+                  x: [chartDomain.xMin, chartDomain.xMax],
+                  y: [chartDomain.yMin, chartDomain.yMax],
                 }}
+                padding={{ left: 8, right: 8, top: 12, bottom: 4 }}
+                domainPadding={{ top: 12 }}
+                chartPressState={pressState}
+                chartPressConfig={{
+                  pan: {
+                    activateAfterLongPress: 120,
+                  },
+                }}
+                transformState={transformState}
+                transformConfig={{
+                  pan: { enabled: false },
+                  pinch: { enabled: false },
+                }}
+                customGestures={chartTransformGestures}
+                onChartBoundsChange={handleChartBoundsChange}
+                xAxis={{
+                  font: axisFont,
+                  tickCount: useMonthAxis ? 7 : 6,
+                  lineColor: colors.chartLine,
+                  labelColor: colors.textMuted,
+                  enableRescaling: true,
+                  formatXLabel: (value) => {
+                    const year = Number(value);
+                    if (
+                      !Number.isFinite(year) ||
+                      year < -0.001 ||
+                      year > chartDomain.xMax + 0.001
+                    ) {
+                      return "";
+                    }
+                    return formatChartTimeLabel(year, useMonthAxis);
+                  },
+                }}
+                yAxis={[
+                  {
+                    font: axisFont,
+                    tickCount: 6,
+                    lineColor: colors.chartLine,
+                    labelColor: colors.textMuted,
+                    enableRescaling: true,
+                    domain: [chartDomain.yMin, chartDomain.yMax],
+                    formatYLabel: (value) => {
+                      const amount = Number(value);
+                      if (!Number.isFinite(amount) || amount < 0) {
+                        return "";
+                      }
+                      return formatCompactThousands(amount);
+                    },
+                  },
+                ]}
+                frame={{ lineColor: colors.chartLine }}
               >
-                <Text style={styles.toolButtonText}>Zoom In</Text>
-              </Pressable>
-              <Pressable
-                style={styles.toolButton}
-                onPress={() => setZoomLevel((prev) => Math.max(1, prev - 0.5))}
-              >
-                <Text style={styles.toolButtonText}>Zoom Out</Text>
-              </Pressable>
-              {zoomLevel > 1 ? (
-                <Pressable
-                  style={styles.toolButton}
-                  onPress={() => {
-                    setZoomLevel(1);
-                    setFocusedYearIndex(null);
-                  }}
-                >
-                  <Text style={styles.toolButtonText}>Reset</Text>
-                </Pressable>
+                {({ points, chartBounds, yScale }) => {
+                  const zeroY = yScale(0);
+                  return (
+                    <>
+                      {showBaseline ? (
+                        <>
+                          <Area
+                            points={points.baseline}
+                            y0={zeroY}
+                            color="rgba(37,99,235,0.16)"
+                            curveType="linear"
+                          />
+                          <Line
+                            points={points.baseline}
+                            color="#2563eb"
+                            strokeWidth={3}
+                            curveType="linear"
+                          />
+                        </>
+                      ) : null}
+                      {hasExtraSeries && showExtra ? (
+                        <>
+                          <Area
+                            points={points.extra}
+                            y0={zeroY}
+                            color="rgba(16,185,129,0.14)"
+                            curveType="linear"
+                          />
+                          <Line
+                            points={points.extra}
+                            color="#10b981"
+                            strokeWidth={3}
+                            curveType="linear"
+                          />
+                        </>
+                      ) : null}
+                      {isActive ? (
+                        <ChartTooltipMarkers
+                          x={pressState.x.position}
+                          baselineY={pressState.y.baseline.position}
+                          extraY={pressState.y.extra.position}
+                          extraValue={pressState.y.extra.value}
+                          top={chartBounds.top}
+                          bottom={zeroY}
+                          showExtra={hasExtraSeries && showExtra}
+                          lineColor={colors.chartTooltipLine}
+                        />
+                      ) : null}
+                    </>
+                  );
+                }}
+              </CartesianChart>
+            ) : (
+              <Text style={styles.chartFallbackText}>Enable at least one series.</Text>
+            )}
+          </View>
+          <Text style={styles.xAxisTitle}>{useMonthAxis ? "Months" : "Years"}</Text>
+          <Text style={styles.chartHint}>
+            Hold a point for details. Pinch to zoom.
+          </Text>
+
+          {activePoint ? (
+            <View style={styles.tooltipCard}>
+              <Text style={styles.tooltipTime}>
+                {formatChartTimeDetail(activePoint.year, useMonthAxis)}
+              </Text>
+              {showBaseline ? (
+                <Text style={styles.tooltipBaseline}>
+                  Original: {formatMoney(activePoint.baseline)}
+                </Text>
+              ) : null}
+              {hasExtraSeries && showExtra ? (
+                <Text style={styles.tooltipExtra}>
+                  With extra:{" "}
+                  {activePoint.extra === null
+                    ? "Paid off"
+                    : formatMoney(activePoint.extra)}
+                </Text>
               ) : null}
             </View>
-          </View>
-
-          <View style={styles.chartArea}>
-            <PinchGestureHandler
-              onGestureEvent={handlePinchGestureEvent}
-              onHandlerStateChange={handlePinchStateChange}
-            >
-              <View style={styles.chartCanvasWrap} {...panResponder.panHandlers}>
-                <Animated.View style={{ opacity }}>
-                  {datasets.length > 0 ? (
-                    <LineChart
-                      data={{
-                        labels,
-                        datasets,
-                      }}
-                      width={chartWidth}
-                      height={260}
-                      yAxisLabel=""
-                      withHorizontalLabels
-                      withVerticalLabels
-                      withInnerLines
-                      withOuterLines
-                      withHorizontalLines
-                      withVerticalLines
-                      withShadow
-                      verticalLabelRotation={0}
-                      formatXLabel={(value) => value}
-                      formatYLabel={(value) => formatCompactThousands(Number(value))}
-                      onDataPointClick={({ index }) => {
-                        const absoluteIndex = visiblePoints.startIndex + index;
-                        setFocusedYearIndex(absoluteIndex);
-                      }}
-                      chartConfig={{
-                        backgroundGradientFrom: "#ffffff",
-                        backgroundGradientTo: "#ffffff",
-                        color: (opacityValue = 1) =>
-                          `rgba(17,24,39,${opacityValue})`,
-                        labelColor: (opacityValue = 1) =>
-                          `rgba(75,85,99,${opacityValue})`,
-                        decimalPlaces: 0,
-                        useShadowColorFromDataset: true,
-                        fillShadowGradientOpacity: 0.22,
-                        fillShadowGradientFromOpacity: 0.24,
-                        fillShadowGradientToOpacity: 0.04,
-                        propsForDots: {
-                          r: "2",
-                          strokeWidth: "1",
-                          stroke: "#ffffff",
-                        },
-                        propsForBackgroundLines: {
-                          stroke: "#d1d5db",
-                          strokeDasharray: "0",
-                          strokeWidth: 1,
-                        },
-                      }}
-                      style={styles.chart}
-                      fromZero
-                      segments={6}
-                    />
-                  ) : (
-                    <Text style={styles.chartFallbackText}>
-                      Enable at least one series.
-                    </Text>
-                  )}
-                </Animated.View>
-                <Text style={styles.xAxisTitle}>Years</Text>
-              </View>
-            </PinchGestureHandler>
-          </View>
+          ) : null}
 
           <Pressable
             style={[styles.legendRow, !showBaseline && styles.legendRowMuted]}
@@ -394,7 +545,7 @@ export const BalanceComparisonChart = ({
             <View style={[styles.dot, { backgroundColor: "#2563eb" }]} />
             <Text style={styles.legendText}>Original repayment</Text>
           </Pressable>
-          {extraData ? (
+          {hasExtraSeries ? (
             <Pressable
               style={[styles.legendRow, !showExtra && styles.legendRowMuted]}
               onPress={() => setShowExtra((prev) => !prev)}
@@ -404,7 +555,7 @@ export const BalanceComparisonChart = ({
             </Pressable>
           ) : null}
 
-          {extraData ? (
+          {hasExtraSeries ? (
             <View style={styles.savingsWrap}>
               <Text style={styles.savingsTitle}>Extra Repayment Benefit</Text>
               <View style={styles.savingsCardsRow}>
@@ -432,125 +583,132 @@ export const BalanceComparisonChart = ({
   );
 };
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-  },
-  toolbar: {
-    marginBottom: 8,
-  },
-  zoomButtons: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  toolButton: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#f9fafb",
-  },
-  toolButtonText: {
-    color: "#111827",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  chart: {
-    borderRadius: 12,
-    marginLeft: 0,
-    marginRight: 4,
-  },
-  chartArea: {
-    width: "100%",
-  },
-  chartCanvasWrap: {
-    flex: 1,
-  },
-  xAxisTitle: {
-    textAlign: "center",
-    color: "#111827",
-    fontWeight: "700",
-    marginTop: 4,
-  },
-  legendRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-    paddingVertical: 4,
-  },
-  legendRowMuted: {
-    opacity: 0.45,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
-  },
-  legendText: {
-    color: "#374151",
-    fontWeight: "600",
-  },
-  savingsWrap: {
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-  },
-  savingsTitle: {
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 10,
-  },
-  savingsCardsRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  savingsCard: {
-    flex: 1,
-    minWidth: 0,
-    backgroundColor: "rgba(139, 228, 172, 0.5)",
-    borderColor: "rgba(92, 228, 141, 0.5)",
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-  },
+const fitStyles = StyleSheet.create({
   savingsValueWrap: {
     width: "100%",
   },
-  savingsCardWide: {
-    marginTop: 10,
-    width: "100%",
-    backgroundColor: "rgba(139, 228, 172, 0.5)",
-    borderColor: "rgba(92, 228, 141, 0.5)",
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-  },
-  savingsCardLabel: {
-    color: "#14532d",
-    fontWeight: "600",
-    marginBottom: 6,
-    textAlign: "center",
-
-  },
-  savingsCardValue: {
-    color: "#14532d",
-    fontWeight: "500",
-    fontSize: 30,
-    textAlign: "center",
-  },
-  chartFallbackText: {
-    color: "#6b7280",
-    fontWeight: "600",
-    marginTop: 24,
-  },
 });
 
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 16,
+    },
+    chartArea: {
+      width: "100%",
+      height: 260,
+      overflow: "hidden",
+    },
+    xAxisTitle: {
+      textAlign: "center",
+      color: colors.text,
+      fontWeight: "700",
+      marginTop: 4,
+    },
+    chartHint: {
+      textAlign: "center",
+      color: colors.textMuted,
+      fontWeight: "600",
+      fontSize: 12,
+      marginTop: 4,
+      marginBottom: 4,
+    },
+    tooltipCard: {
+      marginTop: 8,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      backgroundColor: colors.tooltipBg,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    tooltipTime: {
+      color: colors.text,
+      fontWeight: "800",
+      marginBottom: 4,
+    },
+    tooltipBaseline: {
+      color: colors.accentTextStrong,
+      fontWeight: "700",
+    },
+    tooltipExtra: {
+      color: colors.extraText,
+      fontWeight: "700",
+      marginTop: 2,
+    },
+    legendRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 6,
+      paddingVertical: 4,
+    },
+    legendRowMuted: {
+      opacity: 0.45,
+    },
+    dot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      marginRight: 8,
+    },
+    legendText: {
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+    savingsWrap: {
+      marginTop: 12,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    savingsTitle: {
+      fontWeight: "700",
+      color: colors.text,
+      marginBottom: 10,
+    },
+    savingsCardsRow: {
+      flexDirection: "row",
+      gap: 10,
+    },
+    savingsCard: {
+      flex: 1,
+      minWidth: 0,
+      backgroundColor: colors.savingsBg,
+      borderColor: colors.savingsBorder,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 10,
+    },
+    savingsCardWide: {
+      marginTop: 10,
+      width: "100%",
+      backgroundColor: colors.savingsBg,
+      borderColor: colors.savingsBorder,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 10,
+    },
+    savingsCardLabel: {
+      color: colors.savingsText,
+      fontWeight: "600",
+      marginBottom: 6,
+      textAlign: "center",
+    },
+    savingsCardValue: {
+      color: colors.savingsText,
+      fontWeight: "500",
+      fontSize: 30,
+      textAlign: "center",
+    },
+    chartFallbackText: {
+      color: colors.textMuted,
+      fontWeight: "600",
+      marginTop: 24,
+      textAlign: "center",
+    },
+  });
