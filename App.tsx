@@ -1,41 +1,103 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   FlatList,
   Image,
   Modal,
-  Platform,
   Pressable,
-  SafeAreaView,
-  ScrollView,
-  StatusBar as NativeStatusBar,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { GestureHandlerRootView, ScrollView } from "react-native-gesture-handler";
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import { AmortizationGrid } from "./src/components/AmortizationGrid";
 import { BalanceComparisonChart } from "./src/components/BalanceComparisonChart";
 import { LoanForm } from "./src/components/LoanForm";
 import { PieBreakdownChart } from "./src/components/PieBreakdownChart";
+import { SwipeBackView } from "./src/components/SwipeBackView";
+import { BasicCalculatorScreen } from "./src/screens/BasicCalculatorScreen";
+import { CompareProfilesScreen } from "./src/screens/CompareProfilesScreen";
+import { HomeScreen } from "./src/screens/HomeScreen";
+import { ReminderDetailScreen } from "./src/screens/ReminderDetailScreen";
+import { ReminderEditorScreen } from "./src/screens/ReminderEditorScreen";
+import { RemindersScreen } from "./src/screens/RemindersScreen";
+import { SettingsScreen } from "./src/screens/SettingsScreen";
 import {
+  loadAppSettings,
   loadLoanInput,
+  loadLoanReminders,
   loadSavedLoanProfiles,
+  patchAppSettings,
   saveLoanInput,
+  saveLoanReminders,
   saveSavedLoanProfiles,
 } from "./src/storage/localState";
+import { ThemeProvider, useTheme } from "./src/theme/ThemeProvider";
+import { type ThemeColors } from "./src/theme/tokens";
 import {
   type LoanCalculationResult,
   type LoanInput,
   type RepaymentFrequency,
   type SavedLoanProfile,
 } from "./src/types/loan";
+import { type LoanReminder } from "./src/types/reminder";
+import { DEFAULT_APP_SETTINGS, type AppSettings } from "./src/types/settings";
 import { calculateLoan, normalizeInput } from "./src/utils/loanMath";
-import { formatCurrency } from "./src/utils/format";
+import { formatCurrency, formatFrequencyLabel } from "./src/utils/format";
+import { buildSavedProfileCardSummary } from "./src/utils/profileSummary";
+import { todayLocalIso } from "./src/utils/dateIso";
+import {
+  addRateChange,
+  applyExtraPayment,
+  catchUpReminders,
+  createEmptyReminder,
+  draftFromSavedProfile,
+  refreshTermsFromProfile,
+  removeRateChange,
+  setReminderStatus,
+  undoLastPayment,
+} from "./src/utils/reminderMath";
+import {
+  getOsPermissionStatus,
+  notificationUnavailableHint,
+  openPhoneNotificationSettings,
+  refillReminderNotifications,
+  reminderNotificationsSupported,
+  requestReminderPermissions,
+  type OsPermissionStatus,
+} from "./src/notifications/reminderNotifications";
+
+type TabScreen = "home" | "calculator" | "basic" | "saved";
+type AppScreen =
+  | TabScreen
+  | "settings"
+  | "reminders"
+  | "reminder-edit"
+  | "reminder-detail"
+  | "compare";
+
+const NAV_TABS: {
+  id: TabScreen;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconActive: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { id: "home", label: "Home", icon: "home-outline", iconActive: "home" },
+  { id: "calculator", label: "Loan", icon: "cash-outline", iconActive: "cash" },
+  { id: "basic", label: "Calc", icon: "calculator-outline", iconActive: "calculator" },
+  { id: "saved", label: "Saved", icon: "document-text-outline", iconActive: "document-text" },
+];
 
 const DEFAULT_INPUT: LoanInput = {
   currencyCode: "AUD",
@@ -59,6 +121,11 @@ const DEFAULT_INPUT: LoanInput = {
   offsetSavings: {
     enabled: false,
     amount: 0,
+    contribution: {
+      enabled: false,
+      amount: 200,
+      frequency: "monthly",
+    },
   },
 };
 
@@ -71,10 +138,32 @@ const REPAYMENT_PERIODS_PER_YEAR: Record<RepaymentFrequency, number> = {
 };
 
 export default function App() {
-  const [screen, setScreen] = useState<"home" | "calculator" | "saved">("home");
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
+    </SafeAreaProvider>
+  );
+}
+
+function AppContent() {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const [screen, setScreen] = useState<AppScreen>("home");
+  const previousScreenRef = useRef<Exclude<AppScreen, "settings">>("home");
   const [input, setInput] = useState<LoanInput>(DEFAULT_INPUT);
   const [result, setResult] = useState<LoanCalculationResult | null>(null);
   const [savedProfiles, setSavedProfiles] = useState<SavedLoanProfile[]>([]);
+  const [reminders, setReminders] = useState<LoanReminder[]>([]);
+  const [reminderSettings, setReminderSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [osPermissionStatus, setOsPermissionStatus] =
+    useState<OsPermissionStatus>("undetermined");
+  const [editingReminder, setEditingReminder] = useState<LoanReminder | null>(null);
+  const [detailReminderId, setDetailReminderId] = useState<string | null>(null);
+  const [showArchivedReminders, setShowArchivedReminders] = useState(false);
+  const [compareSelectMode, setCompareSelectMode] = useState(false);
+  const [compareSelection, setCompareSelection] = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("My Loan Profile");
   const [saveDialogVisible, setSaveDialogVisible] = useState(false);
@@ -85,8 +174,16 @@ export default function App() {
   const [lastSavedHash, setLastSavedHash] = useState("");
   const [isCalculating, setIsCalculating] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarText, setSnackbarText] = useState("");
   const [loadingState, setLoadingState] = useState(true);
   const snackbarTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reminderSettingsRef = useRef(reminderSettings);
+  reminderSettingsRef.current = reminderSettings;
+  const remindersRef = useRef(reminders);
+  remindersRef.current = reminders;
+  const editorBackRef = useRef<AppScreen>("reminders");
+  const remindersReturnRef = useRef<TabScreen>("home");
+  const insets = useSafeAreaInsets();
 
   const inputHash = JSON.stringify(input);
   const canSaveCalculatedProfile =
@@ -116,17 +213,85 @@ export default function App() {
   const totalMonthlyPayment = Math.round(
     (minimumMonthlyRepayment + extraMonthlyRepayment) * 100
   ) / 100;
+  const activeReminders = reminders.filter((item) => item.status === "active");
+  const nextDueReminder = [...activeReminders].sort((a, b) =>
+    a.nextPaymentDate.localeCompare(b.nextPaymentDate)
+  )[0];
+  const detailReminder =
+    reminders.find((item) => item.id === detailReminderId) ?? null;
+  const compareLeftProfile =
+    savedProfiles.find((item) => item.id === compareSelection[0]) ?? null;
+  const compareRightProfile =
+    savedProfiles.find((item) => item.id === compareSelection[1]) ?? null;
+
+  const showSnackbar = (text: string) => {
+    setSnackbarText(text);
+    setSnackbarVisible(true);
+    if (snackbarTimeoutRef.current) {
+      clearTimeout(snackbarTimeoutRef.current);
+    }
+    snackbarTimeoutRef.current = setTimeout(() => {
+      setSnackbarVisible(false);
+    }, 4000);
+  };
 
   const ignoreCurrentCalculationSavePrompt = () => {
     setLastSavedHash(lastCalculatedHash);
   };
 
+  const openSettings = () => {
+    if (screen !== "settings") {
+      previousScreenRef.current = screen;
+    }
+    setScreen("settings");
+  };
+
+  const isTabScreen = (value: AppScreen): value is TabScreen =>
+    value === "home" || value === "calculator" || value === "basic" || value === "saved";
+
+  const openReminders = () => {
+    if (screen === "reminders") {
+      setScreen(remindersReturnRef.current);
+      return;
+    }
+    if (isTabScreen(screen)) {
+      remindersReturnRef.current = screen;
+    }
+    setScreen("reminders");
+  };
+
+  const refillAndPersist = async (next: LoanReminder[]) => {
+    const settings = reminderSettingsRef.current;
+    const refilled = await refillReminderNotifications(next, {
+      masterEnabled: settings.reminderNotificationsEnabled,
+      notifyHour: settings.defaultNotifyHour,
+    });
+    setReminders(refilled);
+    await saveLoanReminders(refilled);
+    return refilled;
+  };
+
+  const runCatchUp = async (list: LoanReminder[]) => {
+    const { reminders: caught, summaries } = catchUpReminders(list, todayLocalIso());
+    await refillAndPersist(caught);
+    if (summaries.length > 0) {
+      showSnackbar(
+        summaries
+          .map((item) => `Applied ${item.appliedCount} payment(s) on ${item.name}`)
+          .join(" · ")
+      );
+    }
+  };
+
   useEffect(() => {
     const bootstrap = async () => {
-      const [savedInput, loadedProfiles] = await Promise.all([
-        loadLoanInput(),
-        loadSavedLoanProfiles(),
-      ]);
+      const [savedInput, loadedProfiles, loadedReminders, loadedSettings] =
+        await Promise.all([
+          loadLoanInput(),
+          loadSavedLoanProfiles(),
+          loadLoanReminders(),
+          loadAppSettings(),
+        ]);
       const initial = normalizeInput(savedInput ?? DEFAULT_INPUT);
       const initialHash = JSON.stringify(initial);
       setInput(initial);
@@ -134,7 +299,28 @@ export default function App() {
       setLastCalculatedHash(initialHash);
       setLastSavedHash(initialHash);
       setSavedProfiles(loadedProfiles);
+      setReminderSettings(loadedSettings);
+      reminderSettingsRef.current = loadedSettings;
+      const osStatus = await getOsPermissionStatus();
+      setOsPermissionStatus(osStatus);
+      const { reminders: caught, summaries } = catchUpReminders(
+        loadedReminders,
+        todayLocalIso()
+      );
+      const refilled = await refillReminderNotifications(caught, {
+        masterEnabled: loadedSettings.reminderNotificationsEnabled,
+        notifyHour: loadedSettings.defaultNotifyHour,
+      });
+      setReminders(refilled);
+      await saveLoanReminders(refilled);
       setLoadingState(false);
+      if (summaries.length > 0) {
+        showSnackbar(
+          summaries
+            .map((item) => `Applied ${item.appliedCount} payment(s) on ${item.name}`)
+            .join(" · ")
+        );
+      }
     };
 
     bootstrap().catch(() => {
@@ -156,13 +342,7 @@ export default function App() {
     setLastCalculatedHash(JSON.stringify(normalized));
     await saveLoanInput(normalized);
     setIsCalculating(false);
-    setSnackbarVisible(true);
-    if (snackbarTimeoutRef.current) {
-      clearTimeout(snackbarTimeoutRef.current);
-    }
-    snackbarTimeoutRef.current = setTimeout(() => {
-      setSnackbarVisible(false);
-    }, 3000);
+    showSnackbar("Your loan calculation is ready");
   };
 
   useEffect(() => {
@@ -171,6 +351,18 @@ export default function App() {
         clearTimeout(snackbarTimeoutRef.current);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        getOsPermissionStatus()
+          .then(setOsPermissionStatus)
+          .catch(() => {});
+        runCatchUp(remindersRef.current).catch(() => {});
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const persistProfiles = async (profiles: SavedLoanProfile[]) => {
@@ -207,7 +399,18 @@ export default function App() {
       await persistProfiles(updated);
       setLastSavedHash(inputHash);
       setSaveDialogVisible(false);
-      Alert.alert("Updated", "Loan profile updated.");
+      Alert.alert("Updated", "Loan profile updated.", [
+        { text: "OK" },
+        {
+          text: "Create reminder",
+          onPress: () => {
+            const profile = updated.find((item) => item.id === selectedProfileId);
+            if (profile) {
+              openReminderFromProfile(profile);
+            }
+          },
+        },
+      ]);
       return;
     }
 
@@ -222,7 +425,13 @@ export default function App() {
     setSelectedProfileId(newProfile.id);
     setLastSavedHash(inputHash);
     setSaveDialogVisible(false);
-    Alert.alert("Saved", "Loan profile saved.");
+    Alert.alert("Saved", "Loan profile saved.", [
+      { text: "OK" },
+      {
+        text: "Create reminder",
+        onPress: () => openReminderFromProfile(newProfile),
+      },
+    ]);
   };
 
   const deleteProfile = async (id: string) => {
@@ -292,22 +501,207 @@ export default function App() {
     await persistProfiles(clone);
   };
 
+  const openReminderEditor = (reminder: LoanReminder, backScreen: AppScreen = "reminders") => {
+    editorBackRef.current = backScreen;
+    setEditingReminder(reminder);
+    setScreen("reminder-edit");
+  };
+
+  const openReminderFromProfile = (profile: SavedLoanProfile) => {
+    openReminderEditor(draftFromSavedProfile(profile), "saved");
+  };
+
+  const exitCompareSelectMode = () => {
+    setCompareSelectMode(false);
+    setCompareSelection([]);
+  };
+
+  const toggleCompareSelection = (id: string) => {
+    setCompareSelection((current) => {
+      if (current.includes(id)) {
+        return current.filter((item) => item !== id);
+      }
+      if (current.length >= 2) {
+        return current;
+      }
+      return [...current, id];
+    });
+  };
+
+  const openCompareScreen = () => {
+    if (compareSelection.length !== 2) {
+      return;
+    }
+    setScreen("compare");
+  };
+
+  const openReminderDetail = (reminder: LoanReminder) => {
+    setDetailReminderId(reminder.id);
+    setScreen("reminder-detail");
+  };
+
+  const enableMasterNotifications = async (): Promise<boolean> => {
+    if (!reminderNotificationsSupported) {
+      return false;
+    }
+    const status = await requestReminderPermissions();
+    setOsPermissionStatus(status);
+    if (status !== "granted") {
+      return false;
+    }
+    const next = await patchAppSettings({ reminderNotificationsEnabled: true });
+    setReminderSettings(next);
+    reminderSettingsRef.current = next;
+    return true;
+  };
+
+  const updateReminder = async (nextReminder: LoanReminder) => {
+    const current = remindersRef.current;
+    const exists = current.some((item) => item.id === nextReminder.id);
+    const next = exists
+      ? current.map((item) => (item.id === nextReminder.id ? nextReminder : item))
+      : [nextReminder, ...current];
+    await refillAndPersist(next);
+  };
+
+  const toggleReminderNotifications = async (
+    reminder: LoanReminder,
+    enabled: boolean
+  ) => {
+    if (enabled) {
+      const allowed = await enableMasterNotifications();
+      if (!allowed) {
+        Alert.alert(
+          "Notifications are off",
+          reminderNotificationsSupported
+            ? "Allow notifications in your phone settings to get repayment reminders."
+            : notificationUnavailableHint
+        );
+        return;
+      }
+    }
+    await updateReminder({
+      ...reminder,
+      notificationsEnabled: enabled,
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  const confirmDeleteReminder = (reminder: LoanReminder) => {
+    Alert.alert("Delete reminder", `Delete "${reminder.name}"? This cannot be undone.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          const next = remindersRef.current.filter((item) => item.id !== reminder.id);
+          refillAndPersist(next).catch(() => {});
+          if (detailReminderId === reminder.id) {
+            setDetailReminderId(null);
+            setScreen("reminders");
+          }
+        },
+      },
+    ]);
+  };
+
+  const archiveReminder = async (reminder: LoanReminder) => {
+    await updateReminder(setReminderStatus(reminder, "archived"));
+    if (screen === "reminder-detail") {
+      setScreen("reminders");
+    }
+  };
+
+  const handleMasterNotificationToggle = async (enabled: boolean) => {
+    if (enabled) {
+      const allowed = await enableMasterNotifications();
+      if (!allowed) {
+        Alert.alert(
+          "Notifications are off",
+          reminderNotificationsSupported
+            ? "Allow notifications in your phone settings, then turn them on here."
+            : notificationUnavailableHint
+        );
+        return;
+      }
+      await refillAndPersist(remindersRef.current);
+      return;
+    }
+    const next = await patchAppSettings({ reminderNotificationsEnabled: false });
+    setReminderSettings(next);
+    reminderSettingsRef.current = next;
+    await refillAndPersist(remindersRef.current);
+  };
+
+  const handleNotifyHourChange = async (hour: number) => {
+    const next = await patchAppSettings({ defaultNotifyHour: hour });
+    setReminderSettings(next);
+    reminderSettingsRef.current = next;
+    await refillAndPersist(remindersRef.current);
+  };
+
+  const overlayScreen =
+    screen === "settings" ||
+    screen === "reminders" ||
+    screen === "reminder-edit" ||
+    screen === "reminder-detail" ||
+    screen === "compare";
+  const remindersSectionActive =
+    screen === "reminders" || screen === "reminder-edit" || screen === "reminder-detail";
+
   if (loadingState) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </SafeAreaView>
     );
   }
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="dark" />
+      <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+        <StatusBar style={isDark ? "light" : "dark"} />
         <View style={styles.stickyHeader}>
-          <View style={styles.brandRow}>
-            <Image source={require("./assets/loan-calculator.png")} style={styles.logo} />
-            <Text style={styles.heading}>Simple Loan Calculator</Text>
+          <View style={styles.headerRow}>
+            <View style={styles.brandRow}>
+              <Image source={require("./assets/loan-calculator.png")} style={styles.logo} />
+              <Text style={styles.heading} numberOfLines={1}>
+                Simple Loan Calculator
+              </Text>
+            </View>
+            <View style={styles.headerActions}>
+              <Pressable
+                onPress={openReminders}
+                style={styles.settingsButton}
+                accessibilityRole="button"
+                accessibilityLabel="Repayment reminders"
+              >
+                <Ionicons
+                  name={remindersSectionActive ? "notifications" : "notifications-outline"}
+                  size={22}
+                  color={remindersSectionActive ? colors.accentTextStrong : colors.text}
+                />
+                {activeReminders.length > 0 ? (
+                  <View style={styles.headerBadge}>
+                    <Text style={styles.headerBadgeText}>
+                      {activeReminders.length > 9 ? "9+" : String(activeReminders.length)}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+              <Pressable
+                onPress={openSettings}
+                style={styles.settingsButton}
+                accessibilityRole="button"
+                accessibilityLabel="Settings"
+              >
+                <Ionicons
+                  name={screen === "settings" ? "settings" : "settings-outline"}
+                  size={22}
+                  color={screen === "settings" ? colors.accentTextStrong : colors.text}
+                />
+              </Pressable>
+            </View>
           </View>
         </View>
 
@@ -328,32 +722,29 @@ export default function App() {
           </View>
         ) : null}
 
+        <View style={styles.screenBody}>
         {screen === "home" ? (
-          <View style={styles.pageContent}>
-            <View style={styles.dashboardGrid}>
-              <Pressable
-                style={styles.dashboardCard}
-                onPress={() => setScreen("calculator")}
-              >
-                <Text style={styles.dashboardIcon}>🧮</Text>
-                <Text style={styles.dashboardTitle}>Calculate</Text>
-                <Text style={styles.dashboardHint}>Open loan calculator</Text>
-              </Pressable>
-              <Pressable style={styles.dashboardCard} onPress={() => setScreen("saved")}>
-                <Text style={styles.dashboardIcon}>📄</Text>
-                <Text style={styles.dashboardTitle}>My Saved Loans</Text>
-                <Text style={styles.dashboardHint}>
-                  {savedProfiles.length} profile{savedProfiles.length === 1 ? "" : "s"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
+          <HomeScreen
+            nextReminder={nextDueReminder ?? null}
+            activeReminderCount={activeReminders.length}
+            input={input}
+            result={result}
+            minimumMonthlyRepayment={minimumMonthlyRepayment}
+            savedProfileCount={savedProfiles.length}
+            onOpenCalculator={() => setScreen("calculator")}
+            onOpenBasic={() => setScreen("basic")}
+            onOpenSaved={() => setScreen("saved")}
+            onOpenReminders={openReminders}
+            onOpenReminder={openReminderDetail}
+          />
         ) : null}
 
         {screen === "calculator" ? (
           <ScrollView
+            style={styles.screenBody}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
           >
             <LoanForm initialValue={input} onSubmit={handleSubmit} />
 
@@ -369,6 +760,27 @@ export default function App() {
                   <Text style={styles.minimumRepaymentValue}>
                     {formatCurrency(minimumMonthlyRepayment, input.currencyCode)}
                   </Text>
+                  {input.lumpSum.enabled ? (
+                    <Text style={styles.minimumRepaymentNote}>
+                      Excludes the final lump sum of{" "}
+                      {formatCurrency(input.lumpSum.amount, input.currencyCode)}
+                    </Text>
+                  ) : null}
+                  {input.offsetSavings.enabled ? (
+                    <Text style={styles.minimumRepaymentNote}>
+                      Interest is calculated on the balance minus{" "}
+                      {formatCurrency(input.offsetSavings.amount, input.currencyCode)}{" "}
+                      offset
+                      {input.offsetSavings.contribution?.enabled
+                        ? `, plus ${formatCurrency(
+                            input.offsetSavings.contribution.amount,
+                            input.currencyCode
+                          )} ${formatFrequencyLabel(
+                            input.offsetSavings.contribution.frequency
+                          ).toLowerCase()} deposits`
+                        : ""}
+                    </Text>
+                  ) : null}
                   {input.extraRepayment.enabled ? (
                     <View style={styles.monthlyBreakdownWrap}>
                       <View style={styles.monthlyBreakdownRow}>
@@ -416,8 +828,194 @@ export default function App() {
           </ScrollView>
         ) : null}
 
+        {screen === "basic" ? <BasicCalculatorScreen /> : null}
+
+        {screen === "settings" ? (
+          <SwipeBackView onBack={() => setScreen(previousScreenRef.current)}>
+            <SettingsScreen
+              onBack={() => setScreen(previousScreenRef.current)}
+              reminderNotificationsEnabled={reminderSettings.reminderNotificationsEnabled}
+              defaultNotifyHour={reminderSettings.defaultNotifyHour}
+              osPermissionStatus={osPermissionStatus}
+              notificationsSupported={reminderNotificationsSupported}
+              onToggleReminderNotifications={(enabled) => {
+                handleMasterNotificationToggle(enabled).catch(() => {});
+              }}
+              onChangeNotifyHour={(hour) => {
+                handleNotifyHourChange(hour).catch(() => {});
+              }}
+              onOpenPhoneSettings={() => {
+                openPhoneNotificationSettings().catch(() => {});
+              }}
+            />
+          </SwipeBackView>
+        ) : null}
+
+        {screen === "reminders" ? (
+          <SwipeBackView onBack={() => setScreen(remindersReturnRef.current)}>
+            <RemindersScreen
+              reminders={reminders}
+              showArchived={showArchivedReminders}
+              onToggleArchived={() => setShowArchivedReminders((value) => !value)}
+              notificationsAvailable={
+                reminderNotificationsSupported &&
+                reminderSettings.reminderNotificationsEnabled &&
+                osPermissionStatus === "granted"
+              }
+              onBack={() => setScreen(remindersReturnRef.current)}
+              onAdd={() => openReminderEditor(createEmptyReminder(), "reminders")}
+              onOpen={openReminderDetail}
+              onToggleNotifications={(reminder, enabled) => {
+                toggleReminderNotifications(reminder, enabled).catch(() => {});
+              }}
+              onArchive={(reminder) => {
+                archiveReminder(reminder).catch(() => {});
+              }}
+              onDelete={confirmDeleteReminder}
+            />
+          </SwipeBackView>
+        ) : null}
+
+        {screen === "reminder-edit" && editingReminder ? (
+          <SwipeBackView onBack={() => setScreen(editorBackRef.current)}>
+            <ReminderEditorScreen
+              initialReminder={editingReminder}
+              savedProfiles={savedProfiles}
+              notificationsSupported={reminderNotificationsSupported}
+              onBack={() => setScreen(editorBackRef.current)}
+              onSave={(reminder) => {
+                updateReminder(reminder)
+                  .then(() => {
+                    setEditingReminder(null);
+                    setDetailReminderId(reminder.id);
+                    setScreen("reminder-detail");
+                  })
+                  .catch(() => {});
+              }}
+              onRequestEnableNotifications={enableMasterNotifications}
+            />
+          </SwipeBackView>
+        ) : null}
+
+        {screen === "reminder-detail" && detailReminder ? (
+          <SwipeBackView onBack={() => setScreen("reminders")}>
+            <ReminderDetailScreen
+            reminder={detailReminder}
+            linkedProfile={
+              savedProfiles.find((item) => item.id === detailReminder.linkedProfileId) ??
+              null
+            }
+            notificationsSupported={reminderNotificationsSupported}
+            onBack={() => setScreen("reminders")}
+            onEdit={() => openReminderEditor(detailReminder, "reminder-detail")}
+            onToggleNotifications={(enabled) => {
+              toggleReminderNotifications(detailReminder, enabled).catch(() => {});
+            }}
+            onExtraPayment={(amount) => {
+              updateReminder(applyExtraPayment(detailReminder, amount)).catch(() => {});
+            }}
+            onUndoLast={() => {
+              updateReminder(undoLastPayment(detailReminder)).catch(() => {});
+            }}
+            onAddRateChange={(effectiveDate, rate) => {
+              updateReminder(addRateChange(detailReminder, effectiveDate, rate)).catch(
+                () => {}
+              );
+            }}
+            onRemoveRateChange={(id) => {
+              updateReminder(removeRateChange(detailReminder, id)).catch(() => {});
+            }}
+            onArchive={() => {
+              archiveReminder(detailReminder).catch(() => {});
+            }}
+            onUnarchive={() => {
+              updateReminder(setReminderStatus(detailReminder, "active")).catch(() => {});
+            }}
+            onDelete={() => confirmDeleteReminder(detailReminder)}
+            onRefreshFromProfile={() => {
+              const profile = savedProfiles.find(
+                (item) => item.id === detailReminder.linkedProfileId
+              );
+              if (!profile) {
+                Alert.alert("Profile missing", "The linked saved loan is no longer available.");
+                return;
+              }
+              updateReminder(refreshTermsFromProfile(detailReminder, profile)).catch(
+                () => {}
+              );
+            }}
+          />
+          </SwipeBackView>
+        ) : null}
+
+        {screen === "compare" && compareLeftProfile && compareRightProfile ? (
+          <SwipeBackView
+            onBack={() => {
+              setScreen("saved");
+            }}
+          >
+            <CompareProfilesScreen
+              leftProfile={compareLeftProfile}
+              rightProfile={compareRightProfile}
+              onBack={() => setScreen("saved")}
+              onOpenProfile={(profile) => {
+                exitCompareSelectMode();
+                openProfile(profile);
+              }}
+            />
+          </SwipeBackView>
+        ) : null}
+
         {screen === "saved" ? (
           <View style={styles.pageContent}>
+            <View style={styles.compareBar}>
+              {compareSelectMode ? (
+                <>
+                  <Text style={styles.compareHint}>
+                    {compareSelection.length === 2
+                      ? "Two loans selected"
+                      : "Select two saved loans"}
+                  </Text>
+                  <View style={styles.compareBarActions}>
+                    <Pressable
+                      style={[
+                        styles.compareActionButton,
+                        { flex: 1 },
+                        compareSelection.length !== 2 && styles.buttonDisabled,
+                      ]}
+                      onPress={openCompareScreen}
+                      disabled={compareSelection.length !== 2}
+                    >
+                      <Text style={styles.primaryButtonText}>Compare</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.secondaryButton, { flex: 1 }]}
+                      onPress={exitCompareSelectMode}
+                    >
+                      <Text style={styles.secondaryButtonText}>Cancel</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.compareHint}>
+                    {savedProfiles.length < 2
+                      ? "Save at least two loans to compare offers."
+                      : "Compare two saved loans side by side."}
+                  </Text>
+                  <Pressable
+                    style={[
+                      styles.compareActionButton,
+                      savedProfiles.length < 2 && styles.buttonDisabled,
+                    ]}
+                    onPress={() => setCompareSelectMode(true)}
+                    disabled={savedProfiles.length < 2}
+                  >
+                    <Text style={styles.primaryButtonText}>Compare</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
             <FlatList
               data={savedProfiles}
               keyExtractor={(item) => item.id}
@@ -426,19 +1024,56 @@ export default function App() {
               ListEmptyComponent={
                 <Text style={styles.emptyText}>No saved loan profiles yet.</Text>
               }
-              renderItem={({ item, index }) => (
+              renderItem={({ item, index }) => {
+                const selectedIndex = compareSelection.indexOf(item.id);
+                const selected = selectedIndex >= 0;
+                const summary = buildSavedProfileCardSummary(item);
+                return (
                 <Pressable
-                  style={styles.savedCard}
-                  onPress={() => openProfile(item)}
-                  onLongPress={() =>
-                    confirmDeleteProfile(item)
-                  }
+                  style={[
+                    styles.savedCard,
+                    selected && styles.savedCardSelected,
+                  ]}
+                  onPress={() => {
+                    if (compareSelectMode) {
+                      toggleCompareSelection(item.id);
+                      return;
+                    }
+                    openProfile(item);
+                  }}
+                  onLongPress={() => {
+                    if (!compareSelectMode) {
+                      confirmDeleteProfile(item);
+                    }
+                  }}
                 >
-                  <Text style={styles.savedCardTitle}>{item.name}</Text>
+                  <View style={styles.savedCardHeader}>
+                    <Text style={styles.savedCardTitle}>{item.name}</Text>
+                    {compareSelectMode && selected ? (
+                      <Text style={styles.savedCardBadge}>
+                        {selectedIndex === 0 ? "A" : "B"}
+                      </Text>
+                    ) : null}
+                  </View>
                   <Text style={styles.savedCardMeta}>
-                    {item.input.currencyCode} {item.input.amountBorrowed.toLocaleString()} |{" "}
-                    {item.input.loanLengthYears} years
+                    {summary.amountLabel} | {summary.termLabel} |{" "}
+                    <Text style={styles.savedCardRate}>{summary.rateLabel}</Text>
                   </Text>
+                  {summary.tags.length > 0 ? (
+                    <View
+                      style={[
+                        styles.savedCardTags,
+                        compareSelectMode && styles.savedCardTagsCompare,
+                      ]}
+                    >
+                      {summary.tags.map((tag) => (
+                        <View key={tag} style={styles.savedCardTag}>
+                          <Text style={styles.savedCardTagText}>{tag}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  {compareSelectMode ? null : (
                   <View style={styles.savedActionRow}>
                   <Pressable
   style={styles.secondaryButtonSmall}
@@ -469,6 +1104,14 @@ export default function App() {
                     </Pressable>
 
                     <Pressable
+                      style={styles.secondaryButtonSmall}
+                      onPress={() => {
+                        openReminderFromProfile(item);
+                      }}
+                    >
+                      <Text style={styles.secondaryButtonSmallText}>Remind</Text>
+                    </Pressable>
+                    <Pressable
                       style={styles.deleteButtonSmall}
                       onPress={() => {
                         confirmDeleteProfile(item);
@@ -477,50 +1120,53 @@ export default function App() {
                       <Text style={styles.deleteButtonSmallText}>Delete</Text>
                     </Pressable>
                   </View>
+                  )}
                 </Pressable>
-              )}
+                );
+              }}
             />
           </View>
         ) : null}
 
-        <View style={styles.bottomNav}>
-          <Pressable
-            style={[styles.bottomNavButton, screen === "home" && styles.bottomNavButtonActive]}
-            onPress={() => setScreen("home")}
-          >
-            <Text
-              style={[styles.bottomNavText, screen === "home" && styles.bottomNavTextActive]}
-            >
-              Home
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.bottomNavButton,
-              screen === "calculator" && styles.bottomNavButtonActive,
-            ]}
-            onPress={() => setScreen("calculator")}
-          >
-            <Text
-              style={[
-                styles.bottomNavText,
-                screen === "calculator" && styles.bottomNavTextActive,
-              ]}
-            >
-              Calculator
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.bottomNavButton, screen === "saved" && styles.bottomNavButtonActive]}
-            onPress={() => setScreen("saved")}
-          >
-            <Text
-              style={[styles.bottomNavText, screen === "saved" && styles.bottomNavTextActive]}
-            >
-              Saved Loans
-            </Text>
-          </Pressable>
+        {snackbarVisible ? (
+          <View style={styles.snackbarWrap}>
+            <Text style={styles.snackbarText}>{snackbarText}</Text>
+          </View>
+        ) : null}
         </View>
+
+        {!overlayScreen ? (
+          <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+            {NAV_TABS.map((tab) => {
+              const active = screen === tab.id;
+              return (
+                <Pressable
+                  key={tab.id}
+                  style={[styles.bottomNavButton, active && styles.bottomNavButtonActive]}
+                  onPress={() => {
+                    if (tab.id !== "saved") {
+                      exitCompareSelectMode();
+                    }
+                    setScreen(tab.id);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={tab.label}
+                >
+                  <Ionicons
+                    name={active ? tab.iconActive : tab.icon}
+                    size={20}
+                    color={active ? colors.accentTextStrong : colors.textSecondary}
+                  />
+                  <Text
+                    style={[styles.bottomNavText, active && styles.bottomNavTextActive]}
+                  >
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
 
         <Modal
           visible={renameDialogVisible}
@@ -536,6 +1182,7 @@ export default function App() {
                 value={renameProfileName}
                 onChangeText={setRenameProfileName}
                 placeholder="Profile name"
+                placeholderTextColor={colors.textMuted}
               />
               <View style={styles.topActionRow}>
                 <Pressable
@@ -571,6 +1218,7 @@ export default function App() {
                 value={profileName}
                 onChangeText={setProfileName}
                 placeholder="Profile name"
+                placeholderTextColor={colors.textMuted}
               />
               <View style={styles.topActionRow}>
                 <Pressable
@@ -606,394 +1254,455 @@ export default function App() {
         <Modal visible={isCalculating} transparent animationType="fade">
           <View style={styles.calculatingBackdrop}>
             <View style={styles.calculatingCard}>
-              <ActivityIndicator size="large" color="#2563eb" />
+              <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.calculatingText}>Calculating your loan...</Text>
             </View>
           </View>
         </Modal>
 
-        {snackbarVisible ? (
-          <View style={styles.snackbarWrap}>
-            <Text style={styles.snackbarText}>Your loan calculation is ready</Text>
-          </View>
-        ) : null}
       </SafeAreaView>
     </GestureHandlerRootView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f3f4f6",
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f3f4f6",
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 96,
-  },
-  pageContent: {
-    flex: 1,
-    padding: 16,
-    paddingBottom: 96,
-  },
-  stickyHeader: {
-    marginHorizontal: 0,
-    marginTop: 0,
-    paddingHorizontal: 16,
-    paddingTop:
-      Platform.OS === "android" ? (NativeStatusBar.currentHeight ?? 0) + 10 : 10,
-    paddingBottom: 12,
-    backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-  },
-  saveStickyBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    backgroundColor: "#f8fafc",
-    flexDirection: "row",
-    gap: 8,
-  },
-  saveStickyPrimaryButton: {
-    flex: 1,
-    backgroundColor: "#2563eb",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-  },
-  saveStickySecondaryButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    backgroundColor: "#ffffff",
-  },
-  bottomNav: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: "#d1d5db",
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    paddingBottom: 20,
-    gap: 8,
-  },
-  bottomNavButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    backgroundColor: "#f9fafb",
-  },
-  bottomNavButtonActive: {
-    borderColor: "#2563eb",
-    backgroundColor: "#dbeafe",
-  },
-  bottomNavText: {
-    color: "#374151",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  bottomNavTextActive: {
-    color: "#1d4ed8",
-  },
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    marginLeft: 10,
-  },
-  heading: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  dashboardCard: {
-    width: "48%",
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#dbeafe",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-  },
-  dashboardGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  dashboardIcon: {
-    fontSize: 30,
-    color: "#1d4ed8",
-    fontWeight: "900",
-  },
-  dashboardTitle: {
-    marginTop: 6,
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  dashboardHint: {
-    marginTop: 4,
-    color: "#4b5563",
-    fontWeight: "600",
-  },
-  minimumRepaymentCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#dbeafe",
-    padding: 14,
-    marginBottom: 12,
-  },
-  minimumRepaymentTitle: {
-    color: "#1e3a8a",
-    fontWeight: "800",
-    fontSize: 18,
-  },
-  minimumRepaymentSubtitle: {
-    color: "#4b5563",
-    marginTop: 2,
-    fontWeight: "600",
-  },
-  minimumRepaymentValue: {
-    marginTop: 8,
-    color: "#111827",
-    fontWeight: "800",
-    fontSize: 28,
-  },
-  monthlyBreakdownWrap: {
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    paddingTop: 10,
-    gap: 8,
-  },
-  monthlyBreakdownRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  monthlyBreakdownLabel: {
-    color: "#374151",
-    fontWeight: "600",
-  },
-  monthlyBreakdownValue: {
-    color: "#111827",
-    fontWeight: "700",
-  },
-  monthlyBreakdownTotalRow: {
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    paddingTop: 8,
-  },
-  monthlyBreakdownTotalLabel: {
-    color: "#111827",
-    fontWeight: "800",
-  },
-  monthlyBreakdownTotalValue: {
-    color: "#111827",
-    fontWeight: "800",
-  },
-  topActionRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
-  },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: "#2563eb",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    color: "#ffffff",
-    fontWeight: "700",
-  },
-  secondaryButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    backgroundColor: "#ffffff",
-  },
-  secondaryButtonText: {
-    color: "#374151",
-    fontWeight: "700",
-  },
-  saveProfileCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#dbeafe",
-    padding: 14,
-    marginBottom: 12,
-  },
-  saveProfileTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#1e3a8a",
-    marginBottom: 8,
-  },
-  saveProfileInput: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#f9fafb",
-    marginBottom: 10,
-  },
-  savedListWrap: {
-    paddingBottom: 120,
-  },
-  emptyText: {
-    color: "#6b7280",
-    textAlign: "center",
-    marginTop: 24,
-    fontWeight: "600",
-  },
-  savedCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    padding: 12,
-    marginBottom: 10,
-  },
-  savedCardTitle: {
-    color: "#111827",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  savedCardMeta: {
-    color: "#4b5563",
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  savedActionRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
-  secondaryButtonSmall: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#f9fafb",
-  },
-  secondaryButtonSmallText: {
-    color: "#374151",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  deleteButtonSmall: {
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#fef2f2",
-  },
-  deleteButtonSmallText: {
-    color: "#b91c1c",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(17,24,39,0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 420,
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-    marginBottom: 10,
-  },
-  cancelButton: {
-    marginTop: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-  },
-  cancelButtonText: {
-    color: "#374151",
-    fontWeight: "700",
-  },
-  calculatingBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(17,24,39,0.28)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  calculatingCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    alignItems: "center",
-    minWidth: 220,
-  },
-  calculatingText: {
-    marginTop: 10,
-    color: "#111827",
-    fontWeight: "700",
-  },
-  snackbarWrap: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    bottom: 86,
-    backgroundColor: "rgba(17,24,39,0.9)",
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    alignItems: "center",
-  },
-  snackbarText: {
-    color: "#ffffff",
-    fontWeight: "700",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.page,
+    },
+    loadingContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.page,
+    },
+    screenBody: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: 16,
+      paddingBottom: 24,
+    },
+    pageContent: {
+      flex: 1,
+      padding: 16,
+    },
+    stickyHeader: {
+      marginHorizontal: 0,
+      marginTop: 0,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 12,
+      backgroundColor: colors.header,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.headerBorder,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    settingsButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      position: "relative",
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    headerBadge: {
+      position: "absolute",
+      top: 4,
+      right: 2,
+      minWidth: 16,
+      height: 16,
+      paddingHorizontal: 4,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerBadgeText: {
+      color: colors.textInverse,
+      fontSize: 9,
+      fontWeight: "800",
+    },
+    saveStickyBar: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.headerBorder,
+      backgroundColor: colors.saveBarBg,
+      flexDirection: "row",
+      gap: 8,
+    },
+    saveStickyPrimaryButton: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+    },
+    saveStickySecondaryButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+      backgroundColor: colors.card,
+    },
+    bottomNav: {
+      flexDirection: "row",
+      borderTopWidth: 1,
+      borderTopColor: colors.borderStrong,
+      backgroundColor: colors.header,
+      paddingHorizontal: 10,
+      paddingTop: 8,
+      gap: 6,
+    },
+    bottomNavButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 8,
+      backgroundColor: colors.navButtonBg,
+      gap: 2,
+    },
+    bottomNavButtonActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+    },
+    bottomNavText: {
+      color: colors.textSecondary,
+      fontWeight: "700",
+      fontSize: 10,
+    },
+    bottomNavTextActive: {
+      color: colors.accentTextStrong,
+    },
+    brandRow: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      minWidth: 0,
+    },
+    logo: {
+      width: 40,
+      height: 40,
+      borderRadius: 10,
+      overflow: "hidden",
+      marginLeft: 10,
+    },
+    heading: {
+      flexShrink: 1,
+      fontSize: 17,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    minimumRepaymentCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      padding: 14,
+      marginBottom: 12,
+    },
+    minimumRepaymentTitle: {
+      color: colors.accentText,
+      fontWeight: "800",
+      fontSize: 18,
+    },
+    minimumRepaymentSubtitle: {
+      color: colors.textMuted,
+      marginTop: 2,
+      fontWeight: "600",
+    },
+    minimumRepaymentValue: {
+      marginTop: 8,
+      color: colors.text,
+      fontWeight: "800",
+      fontSize: 28,
+    },
+    minimumRepaymentNote: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontWeight: "600",
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    monthlyBreakdownWrap: {
+      marginTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 10,
+      gap: 8,
+    },
+    monthlyBreakdownRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    monthlyBreakdownLabel: {
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+    monthlyBreakdownValue: {
+      color: colors.text,
+      fontWeight: "700",
+    },
+    monthlyBreakdownTotalRow: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 8,
+    },
+    monthlyBreakdownTotalLabel: {
+      color: colors.text,
+      fontWeight: "800",
+    },
+    monthlyBreakdownTotalValue: {
+      color: colors.text,
+      fontWeight: "800",
+    },
+    topActionRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 12,
+    },
+    primaryButton: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+    },
+    primaryButtonText: {
+      color: colors.textInverse,
+      fontWeight: "700",
+    },
+    secondaryButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+      backgroundColor: colors.card,
+    },
+    secondaryButtonText: {
+      color: colors.textSecondary,
+      fontWeight: "700",
+    },
+    saveProfileInput: {
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      backgroundColor: colors.inputBg,
+      color: colors.text,
+      marginBottom: 10,
+    },
+    savedListWrap: {
+      paddingBottom: 24,
+    },
+    compareBar: {
+      marginBottom: 12,
+      gap: 8,
+    },
+    compareBarActions: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    compareHint: {
+      color: colors.textMuted,
+      fontWeight: "600",
+      marginBottom: 2,
+    },
+    compareActionButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+    },
+    buttonDisabled: {
+      opacity: 0.45,
+    },
+    savedCardSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+    },
+    savedCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    savedCardBadge: {
+      color: colors.accentTextDeep,
+      fontWeight: "800",
+      fontSize: 13,
+    },
+    emptyText: {
+      color: colors.textMuted,
+      textAlign: "center",
+      marginTop: 24,
+      fontWeight: "600",
+    },
+    savedCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12,
+      marginBottom: 10,
+    },
+    savedCardTitle: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: "800",
+    },
+    savedCardMeta: {
+      color: colors.textMuted,
+      marginTop: 4,
+    },
+    savedCardRate: {
+      color: colors.textSecondary,
+      fontWeight: "800",
+    },
+    savedCardTags: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 8,
+      marginBottom: 10,
+    },
+    savedCardTagsCompare: {
+      marginBottom: 0,
+    },
+    savedCardTag: {
+      backgroundColor: colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+    },
+    savedCardTagText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    savedActionRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "flex-end",
+      gap: 8,
+    },
+    secondaryButtonSmall: {
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: colors.inputBg,
+    },
+    secondaryButtonSmallText: {
+      color: colors.textSecondary,
+      fontWeight: "700",
+      fontSize: 12,
+    },
+    deleteButtonSmall: {
+      borderWidth: 1,
+      borderColor: colors.dangerBorder,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: colors.dangerBg,
+    },
+    deleteButtonSmallText: {
+      color: colors.danger,
+      fontWeight: "700",
+      fontSize: 12,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: colors.modalBackdrop,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+    },
+    modalCard: {
+      width: "100%",
+      maxWidth: 420,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 16,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: colors.text,
+      marginBottom: 10,
+    },
+    cancelButton: {
+      marginTop: 6,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+    },
+    cancelButtonText: {
+      color: colors.textSecondary,
+      fontWeight: "700",
+    },
+    calculatingBackdrop: {
+      flex: 1,
+      backgroundColor: colors.calculatingBackdrop,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20,
+    },
+    calculatingCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      alignItems: "center",
+      minWidth: 220,
+    },
+    calculatingText: {
+      marginTop: 10,
+      color: colors.text,
+      fontWeight: "700",
+    },
+    snackbarWrap: {
+      position: "absolute",
+      left: 16,
+      right: 16,
+      bottom: 16,
+      backgroundColor: colors.snackbarBg,
+      borderRadius: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      alignItems: "center",
+    },
+    snackbarText: {
+      color: colors.textInverse,
+      fontWeight: "700",
+    },
+  });

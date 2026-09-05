@@ -1,7 +1,9 @@
 import {
+  FREQUENCIES,
   type LoanCalculationResult,
   type LoanInput,
   type LoanSchedule,
+  type OffsetContributionConfig,
   type PeriodRow,
   type RepaymentFrequency,
   type YearlyRow,
@@ -28,18 +30,46 @@ const getPeriodsPerYear = (frequency: RepaymentFrequency): number => {
 const calculateBaseRepayment = (
   principal: number,
   periodRate: number,
-  numberOfPeriods: number
+  numberOfPeriods: number,
+  futureValue = 0
 ): number => {
   if (numberOfPeriods <= 0) {
     return 0;
   }
 
+  const presentValue = Math.max(0, principal);
+  const residual = Math.max(0, Math.min(futureValue, presentValue));
+
   if (periodRate <= ZERO_EPSILON) {
-    return principal / numberOfPeriods;
+    return (presentValue - residual) / numberOfPeriods;
   }
 
   const factor = Math.pow(1 + periodRate, numberOfPeriods);
-  return (principal * periodRate * factor) / (factor - 1);
+  return (presentValue * periodRate * factor - residual * periodRate) / (factor - 1);
+};
+
+const getOffsetAmount = (input: LoanInput): number => {
+  if (!input.offsetSavings.enabled) {
+    return 0;
+  }
+  return Math.max(0, input.offsetSavings.amount);
+};
+
+const getOffsetContribution = (input: LoanInput): OffsetContributionConfig | null => {
+  if (!input.offsetSavings.enabled || !input.offsetSavings.contribution.enabled) {
+    return null;
+  }
+  if (input.offsetSavings.contribution.amount <= ZERO_EPSILON) {
+    return null;
+  }
+  return input.offsetSavings.contribution;
+};
+
+const getBalloonAmount = (input: LoanInput, principal: number): number => {
+  if (!input.lumpSum.enabled) {
+    return 0;
+  }
+  return Math.max(0, Math.min(input.lumpSum.amount, principal));
 };
 
 const getExtraRepaymentStartAfterPeriods = (
@@ -65,33 +95,38 @@ const computeSchedule = (
     input.extraRepayment.startAfterUnit,
     periodsPerYear
   );
+  const offsetContribution = getOffsetContribution(input);
+  const offsetEventsPerYear = offsetContribution
+    ? getPeriodsPerYear(offsetContribution.frequency)
+    : 0;
   const totalPeriods = Math.max(
     1,
     Math.round(input.loanLengthYears * periodsPerYear)
   );
   const periodRate =
     input.annualInterestRatePercent / 100 / Math.max(1, periodsPerYear);
+  const principal = Math.max(0, input.amountBorrowed);
+  const balloonAmount = getBalloonAmount(input, principal);
   const scheduledRepayment = calculateBaseRepayment(
-    Math.max(
-      0,
-      input.amountBorrowed -
-        (input.lumpSum.enabled ? input.lumpSum.amount : 0) -
-        (input.offsetSavings.enabled ? input.offsetSavings.amount : 0)
-    ),
+    principal,
     periodRate,
-    totalPeriods
+    totalPeriods,
+    balloonAmount
   );
 
-  let balance = Math.max(
-    0,
-    input.amountBorrowed -
-      (input.lumpSum.enabled ? input.lumpSum.amount : 0) -
-      (input.offsetSavings.enabled ? input.offsetSavings.amount : 0)
-  );
+  let balance = principal;
+  let offsetBalance = getOffsetAmount(input);
   let feeEventCarry = 0;
   let extraEventCarry = 0;
+  let offsetEventCarry = 0;
   const periodRows: PeriodRow[] = [];
+  const yearlyMap = new Map<number, YearlyRow>();
   let periodIndex = 0;
+  let totalPrincipalPaid = 0;
+  let totalInterestPaid = 0;
+  let totalFeesPaid = 0;
+  let totalExtraPaid = 0;
+  let totalPaid = 0;
 
   // Keep a safety cap for unusual values where tiny rates can create long tails.
   const maxSimulationPeriods = totalPeriods * 3;
@@ -100,7 +135,7 @@ const computeSchedule = (
     periodIndex += 1;
     const yearIndex = Math.ceil(periodIndex / periodsPerYear);
     const openingBalance = balance;
-    const interestPaid = openingBalance * periodRate;
+    const interestPaid = Math.max(0, openingBalance - offsetBalance) * periodRate;
 
     let principalPaid = Math.max(0, scheduledRepayment - interestPaid);
     principalPaid = Math.min(principalPaid, balance);
@@ -130,7 +165,51 @@ const computeSchedule = (
       }
     }
 
-    const row: PeriodRow = {
+    if (balloonAmount > 0 && periodIndex >= totalPeriods && balance > ZERO_EPSILON) {
+      principalPaid += balance;
+      balance = 0;
+    }
+
+    if (offsetContribution) {
+      offsetEventCarry += offsetEventsPerYear / periodsPerYear;
+      const offsetEventsThisPeriod = Math.floor(offsetEventCarry + ZERO_EPSILON);
+      if (offsetEventsThisPeriod > 0) {
+        offsetBalance += offsetContribution.amount * offsetEventsThisPeriod;
+        offsetEventCarry -= offsetEventsThisPeriod;
+      }
+    }
+
+    const periodTotalPaid = interestPaid + feePaid + principalPaid + extraPaid;
+    totalPrincipalPaid += principalPaid;
+    totalInterestPaid += interestPaid;
+    totalFeesPaid += feePaid;
+    totalExtraPaid += extraPaid;
+    totalPaid += periodTotalPaid;
+
+    const existingYear = yearlyMap.get(yearIndex);
+    if (!existingYear) {
+      yearlyMap.set(yearIndex, {
+        year: yearIndex,
+        openingBalance,
+        principalPaid,
+        interestPaid,
+        feesPaid: feePaid,
+        extraPaid,
+        totalPaid: periodTotalPaid,
+        closingBalance: balance,
+        offsetBalance,
+      });
+    } else {
+      existingYear.principalPaid += principalPaid;
+      existingYear.interestPaid += interestPaid;
+      existingYear.feesPaid += feePaid;
+      existingYear.extraPaid += extraPaid;
+      existingYear.totalPaid += periodTotalPaid;
+      existingYear.closingBalance = balance;
+      existingYear.offsetBalance = offsetBalance;
+    }
+
+    periodRows.push({
       periodIndex,
       yearIndex,
       openingBalance: safeRound(openingBalance),
@@ -138,38 +217,24 @@ const computeSchedule = (
       feePaid: safeRound(feePaid),
       principalPaid: safeRound(principalPaid),
       extraPaid: safeRound(extraPaid),
-      totalPaid: safeRound(interestPaid + feePaid + principalPaid + extraPaid),
+      totalPaid: safeRound(periodTotalPaid),
       closingBalance: safeRound(balance),
-    };
-    periodRows.push(row);
+    });
   }
 
-  const yearlyMap = new Map<number, YearlyRow>();
-  for (const row of periodRows) {
-    const existing = yearlyMap.get(row.yearIndex);
-    if (!existing) {
-      yearlyMap.set(row.yearIndex, {
-        year: row.yearIndex,
-        openingBalance: row.openingBalance,
-        principalPaid: row.principalPaid,
-        interestPaid: row.interestPaid,
-        feesPaid: row.feePaid,
-        extraPaid: row.extraPaid,
-        totalPaid: row.totalPaid,
-        closingBalance: row.closingBalance,
-      });
-      continue;
-    }
-
-    existing.principalPaid = safeRound(existing.principalPaid + row.principalPaid);
-    existing.interestPaid = safeRound(existing.interestPaid + row.interestPaid);
-    existing.feesPaid = safeRound(existing.feesPaid + row.feePaid);
-    existing.extraPaid = safeRound(existing.extraPaid + row.extraPaid);
-    existing.totalPaid = safeRound(existing.totalPaid + row.totalPaid);
-    existing.closingBalance = row.closingBalance;
-  }
-
-  const yearlyRows = Array.from(yearlyMap.values()).sort((a, b) => a.year - b.year);
+  const yearlyRows = Array.from(yearlyMap.values())
+    .sort((a, b) => a.year - b.year)
+    .map((row) => ({
+      year: row.year,
+      openingBalance: safeRound(row.openingBalance),
+      principalPaid: safeRound(row.principalPaid),
+      interestPaid: safeRound(row.interestPaid),
+      feesPaid: safeRound(row.feesPaid),
+      extraPaid: safeRound(row.extraPaid),
+      totalPaid: safeRound(row.totalPaid),
+      closingBalance: safeRound(row.closingBalance),
+      offsetBalance: safeRound(row.offsetBalance),
+    }));
 
   const lastReportedYear = Math.max(1, Math.ceil(input.loanLengthYears));
   const yearlyBalancePoints: Array<{ year: number; balance: number }> = [];
@@ -179,7 +244,7 @@ const computeSchedule = (
       matching?.closingBalance ??
       (yearlyBalancePoints.length > 0
         ? yearlyBalancePoints[yearlyBalancePoints.length - 1].balance
-        : input.amountBorrowed);
+        : principal);
     yearlyBalancePoints.push({
       year,
       balance: safeRound(lastKnownBalance),
@@ -187,17 +252,11 @@ const computeSchedule = (
   }
 
   const summary = {
-    totalPrincipalPaid: safeRound(
-      periodRows.reduce((sum, row) => sum + row.principalPaid, 0)
-    ),
-    totalInterestPaid: safeRound(
-      periodRows.reduce((sum, row) => sum + row.interestPaid, 0)
-    ),
-    totalFeesPaid: safeRound(periodRows.reduce((sum, row) => sum + row.feePaid, 0)),
-    totalExtraPaid: safeRound(
-      periodRows.reduce((sum, row) => sum + row.extraPaid, 0)
-    ),
-    totalPaid: safeRound(periodRows.reduce((sum, row) => sum + row.totalPaid, 0)),
+    totalPrincipalPaid: safeRound(totalPrincipalPaid),
+    totalInterestPaid: safeRound(totalInterestPaid),
+    totalFeesPaid: safeRound(totalFeesPaid),
+    totalExtraPaid: safeRound(totalExtraPaid),
+    totalPaid: safeRound(totalPaid),
     payoffPeriods: periodRows.length,
     payoffYears: periodRows.length / periodsPerYear,
   };
@@ -276,6 +335,15 @@ export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
     offsetSavings: {
       enabled: Boolean(input.offsetSavings?.enabled),
       amount: Math.max(0, input.offsetSavings?.amount ?? 0),
+      contribution: {
+        enabled: Boolean(input.offsetSavings?.contribution?.enabled),
+        amount: Math.max(0, input.offsetSavings?.contribution?.amount ?? 0),
+        frequency: FREQUENCIES.includes(
+          input.offsetSavings?.contribution?.frequency as RepaymentFrequency
+        )
+          ? (input.offsetSavings?.contribution?.frequency as RepaymentFrequency)
+          : "monthly",
+      },
     },
   };
 };
