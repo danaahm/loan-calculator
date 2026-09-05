@@ -4,7 +4,7 @@
     "slug": "loan-calculator",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/loan-calculator.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
@@ -16,13 +16,13 @@
       "package": "com.danaa.loancalculator",
       "versionCode": 2,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/loan-calculator.png"
+        "backgroundColor": "#149ca3",
+        "foregroundImage": "./assets/icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/loan-calculator.png"
+      "favicon": "./assets/icon.png"
     },
     "extra": {
       "eas": {
