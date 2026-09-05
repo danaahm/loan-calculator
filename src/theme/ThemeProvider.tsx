@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useColorScheme } from "react-native";
 
-import { loadAppSettings, saveAppSettings } from "../storage/localState";
+import { loadAppSettings, patchAppSettings } from "../storage/localState";
 import { type ThemeMode } from "../types/settings";
 import { darkColors, lightColors, type ThemeColors } from "./tokens";
 
@@ -43,7 +43,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   const setThemeMode = useCallback((next: ThemeMode) => {
     setMode(next);
-    saveAppSettings({ themeMode: next }).catch(() => {});
+    patchAppSettings({ themeMode: next }).catch(() => {});
   }, []);
 
   const value = useMemo(

@@ -7,7 +7,10 @@
     "icon": "./assets/loan-calculator.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSUserNotificationsUsageDescription": "SLC uses notifications to remind you about upcoming loan repayments at the times you choose."
+      }
     },
     "android": {
       "package": "com.danaa.loancalculator",
@@ -36,7 +39,16 @@
           "imageWidth": 200,
           "resizeMode": "contain"
         }
-      ]
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#2563eb",
+          "defaultChannel": "loan-reminders",
+          "enableBackgroundRemoteNotifications": false
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }

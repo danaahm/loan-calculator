@@ -445,6 +445,10 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
               thumbColor={colors.switchThumb}
             />
           </View>
+          <Text style={styles.hintText}>
+            Lowers regular repayments. The lump sum is due as a residual at the end of
+            the term.
+          </Text>
           {lumpSumEnabled ? (
             <View>
               <Text style={styles.label}>Lump Sum Amount</Text>
@@ -471,6 +475,10 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
               thumbColor={colors.switchThumb}
             />
           </View>
+          <Text style={styles.hintText}>
+            Interest is charged on the loan balance minus this amount. It does not
+            reduce how much you owe.
+          </Text>
           {offsetEnabled ? (
             <View>
               <Text style={styles.label}>Offset Savings Amount</Text>
@@ -629,6 +637,15 @@ const createStyles = (colors: ThemeColors) =>
     switchLabel: {
       fontSize: 15,
       color: colors.text,
+      fontWeight: "600",
+      flex: 1,
+      paddingRight: 12,
+    },
+    hintText: {
+      marginTop: 6,
+      fontSize: 12,
+      lineHeight: 16,
+      color: colors.textMuted,
       fontWeight: "600",
     },
     startAfterRow: {

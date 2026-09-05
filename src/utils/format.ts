@@ -106,6 +106,19 @@ export const formatYearsAndPeriods = (
   return `${wholeYears} year${wholeYears === 1 ? "" : "s"} and ${remainingMonths} month${remainingMonths === 1 ? "" : "s"}`;
 };
 
+export const formatMonthAnchorLabel = (
+  anchor: "onDate" | "startOfMonth" | "endOfMonth"
+): string => {
+  switch (anchor) {
+    case "startOfMonth":
+      return "Start of month";
+    case "endOfMonth":
+      return "End of month";
+    default:
+      return "Same day each month";
+  }
+};
+
 export const formatDurationLabel = (loanLengthYears: number): string => {
   if (!Number.isFinite(loanLengthYears) || loanLengthYears <= 0) {
     return "over loan term";

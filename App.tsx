@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   FlatList,
   Image,
   Modal,
@@ -24,12 +25,20 @@ import { AmortizationGrid } from "./src/components/AmortizationGrid";
 import { BalanceComparisonChart } from "./src/components/BalanceComparisonChart";
 import { LoanForm } from "./src/components/LoanForm";
 import { PieBreakdownChart } from "./src/components/PieBreakdownChart";
+import { SwipeBackView } from "./src/components/SwipeBackView";
 import { BasicCalculatorScreen } from "./src/screens/BasicCalculatorScreen";
+import { ReminderDetailScreen } from "./src/screens/ReminderDetailScreen";
+import { ReminderEditorScreen } from "./src/screens/ReminderEditorScreen";
+import { RemindersScreen } from "./src/screens/RemindersScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import {
+  loadAppSettings,
   loadLoanInput,
+  loadLoanReminders,
   loadSavedLoanProfiles,
+  patchAppSettings,
   saveLoanInput,
+  saveLoanReminders,
   saveSavedLoanProfiles,
 } from "./src/storage/localState";
 import { ThemeProvider, useTheme } from "./src/theme/ThemeProvider";
@@ -40,13 +49,35 @@ import {
   type RepaymentFrequency,
   type SavedLoanProfile,
 } from "./src/types/loan";
+import { type LoanReminder } from "./src/types/reminder";
+import { DEFAULT_APP_SETTINGS, type AppSettings } from "./src/types/settings";
 import { calculateLoan, normalizeInput } from "./src/utils/loanMath";
 import { formatCurrency } from "./src/utils/format";
+import { formatDisplayDate, todayLocalIso } from "./src/utils/dateIso";
+import {
+  applyExtraPayment,
+  catchUpReminders,
+  createEmptyReminder,
+  draftFromSavedProfile,
+  refreshTermsFromProfile,
+  setReminderStatus,
+  undoLastPayment,
+} from "./src/utils/reminderMath";
+import {
+  getOsPermissionStatus,
+  notificationUnavailableHint,
+  openPhoneNotificationSettings,
+  refillReminderNotifications,
+  reminderNotificationsSupported,
+  requestReminderPermissions,
+  type OsPermissionStatus,
+} from "./src/notifications/reminderNotifications";
 
-type AppScreen = "home" | "calculator" | "basic" | "saved" | "settings";
+type TabScreen = "home" | "calculator" | "basic" | "saved";
+type AppScreen = TabScreen | "settings" | "reminders" | "reminder-edit" | "reminder-detail";
 
 const NAV_TABS: {
-  id: Exclude<AppScreen, "settings">;
+  id: TabScreen;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   iconActive: keyof typeof Ionicons.glyphMap;
@@ -108,6 +139,13 @@ function AppContent() {
   const [input, setInput] = useState<LoanInput>(DEFAULT_INPUT);
   const [result, setResult] = useState<LoanCalculationResult | null>(null);
   const [savedProfiles, setSavedProfiles] = useState<SavedLoanProfile[]>([]);
+  const [reminders, setReminders] = useState<LoanReminder[]>([]);
+  const [reminderSettings, setReminderSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [osPermissionStatus, setOsPermissionStatus] =
+    useState<OsPermissionStatus>("undetermined");
+  const [editingReminder, setEditingReminder] = useState<LoanReminder | null>(null);
+  const [detailReminderId, setDetailReminderId] = useState<string | null>(null);
+  const [showArchivedReminders, setShowArchivedReminders] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("My Loan Profile");
   const [saveDialogVisible, setSaveDialogVisible] = useState(false);
@@ -118,8 +156,15 @@ function AppContent() {
   const [lastSavedHash, setLastSavedHash] = useState("");
   const [isCalculating, setIsCalculating] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarText, setSnackbarText] = useState("");
   const [loadingState, setLoadingState] = useState(true);
   const snackbarTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reminderSettingsRef = useRef(reminderSettings);
+  reminderSettingsRef.current = reminderSettings;
+  const remindersRef = useRef(reminders);
+  remindersRef.current = reminders;
+  const editorBackRef = useRef<AppScreen>("reminders");
+  const remindersReturnRef = useRef<TabScreen>("home");
   const insets = useSafeAreaInsets();
 
   const inputHash = JSON.stringify(input);
@@ -150,6 +195,23 @@ function AppContent() {
   const totalMonthlyPayment = Math.round(
     (minimumMonthlyRepayment + extraMonthlyRepayment) * 100
   ) / 100;
+  const activeReminders = reminders.filter((item) => item.status === "active");
+  const nextDueReminder = [...activeReminders].sort((a, b) =>
+    a.nextPaymentDate.localeCompare(b.nextPaymentDate)
+  )[0];
+  const detailReminder =
+    reminders.find((item) => item.id === detailReminderId) ?? null;
+
+  const showSnackbar = (text: string) => {
+    setSnackbarText(text);
+    setSnackbarVisible(true);
+    if (snackbarTimeoutRef.current) {
+      clearTimeout(snackbarTimeoutRef.current);
+    }
+    snackbarTimeoutRef.current = setTimeout(() => {
+      setSnackbarVisible(false);
+    }, 4000);
+  };
 
   const ignoreCurrentCalculationSavePrompt = () => {
     setLastSavedHash(lastCalculatedHash);
@@ -162,12 +224,52 @@ function AppContent() {
     setScreen("settings");
   };
 
+  const isTabScreen = (value: AppScreen): value is TabScreen =>
+    value === "home" || value === "calculator" || value === "basic" || value === "saved";
+
+  const openReminders = () => {
+    if (screen === "reminders") {
+      setScreen(remindersReturnRef.current);
+      return;
+    }
+    if (isTabScreen(screen)) {
+      remindersReturnRef.current = screen;
+    }
+    setScreen("reminders");
+  };
+
+  const refillAndPersist = async (next: LoanReminder[]) => {
+    const settings = reminderSettingsRef.current;
+    const refilled = await refillReminderNotifications(next, {
+      masterEnabled: settings.reminderNotificationsEnabled,
+      notifyHour: settings.defaultNotifyHour,
+    });
+    setReminders(refilled);
+    await saveLoanReminders(refilled);
+    return refilled;
+  };
+
+  const runCatchUp = async (list: LoanReminder[]) => {
+    const { reminders: caught, summaries } = catchUpReminders(list, todayLocalIso());
+    await refillAndPersist(caught);
+    if (summaries.length > 0) {
+      showSnackbar(
+        summaries
+          .map((item) => `Applied ${item.appliedCount} payment(s) on ${item.name}`)
+          .join(" · ")
+      );
+    }
+  };
+
   useEffect(() => {
     const bootstrap = async () => {
-      const [savedInput, loadedProfiles] = await Promise.all([
-        loadLoanInput(),
-        loadSavedLoanProfiles(),
-      ]);
+      const [savedInput, loadedProfiles, loadedReminders, loadedSettings] =
+        await Promise.all([
+          loadLoanInput(),
+          loadSavedLoanProfiles(),
+          loadLoanReminders(),
+          loadAppSettings(),
+        ]);
       const initial = normalizeInput(savedInput ?? DEFAULT_INPUT);
       const initialHash = JSON.stringify(initial);
       setInput(initial);
@@ -175,7 +277,28 @@ function AppContent() {
       setLastCalculatedHash(initialHash);
       setLastSavedHash(initialHash);
       setSavedProfiles(loadedProfiles);
+      setReminderSettings(loadedSettings);
+      reminderSettingsRef.current = loadedSettings;
+      const osStatus = await getOsPermissionStatus();
+      setOsPermissionStatus(osStatus);
+      const { reminders: caught, summaries } = catchUpReminders(
+        loadedReminders,
+        todayLocalIso()
+      );
+      const refilled = await refillReminderNotifications(caught, {
+        masterEnabled: loadedSettings.reminderNotificationsEnabled,
+        notifyHour: loadedSettings.defaultNotifyHour,
+      });
+      setReminders(refilled);
+      await saveLoanReminders(refilled);
       setLoadingState(false);
+      if (summaries.length > 0) {
+        showSnackbar(
+          summaries
+            .map((item) => `Applied ${item.appliedCount} payment(s) on ${item.name}`)
+            .join(" · ")
+        );
+      }
     };
 
     bootstrap().catch(() => {
@@ -197,13 +320,7 @@ function AppContent() {
     setLastCalculatedHash(JSON.stringify(normalized));
     await saveLoanInput(normalized);
     setIsCalculating(false);
-    setSnackbarVisible(true);
-    if (snackbarTimeoutRef.current) {
-      clearTimeout(snackbarTimeoutRef.current);
-    }
-    snackbarTimeoutRef.current = setTimeout(() => {
-      setSnackbarVisible(false);
-    }, 3000);
+    showSnackbar("Your loan calculation is ready");
   };
 
   useEffect(() => {
@@ -212,6 +329,18 @@ function AppContent() {
         clearTimeout(snackbarTimeoutRef.current);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        getOsPermissionStatus()
+          .then(setOsPermissionStatus)
+          .catch(() => {});
+        runCatchUp(remindersRef.current).catch(() => {});
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const persistProfiles = async (profiles: SavedLoanProfile[]) => {
@@ -248,7 +377,18 @@ function AppContent() {
       await persistProfiles(updated);
       setLastSavedHash(inputHash);
       setSaveDialogVisible(false);
-      Alert.alert("Updated", "Loan profile updated.");
+      Alert.alert("Updated", "Loan profile updated.", [
+        { text: "OK" },
+        {
+          text: "Create reminder",
+          onPress: () => {
+            const profile = updated.find((item) => item.id === selectedProfileId);
+            if (profile) {
+              openReminderFromProfile(profile);
+            }
+          },
+        },
+      ]);
       return;
     }
 
@@ -263,7 +403,13 @@ function AppContent() {
     setSelectedProfileId(newProfile.id);
     setLastSavedHash(inputHash);
     setSaveDialogVisible(false);
-    Alert.alert("Saved", "Loan profile saved.");
+    Alert.alert("Saved", "Loan profile saved.", [
+      { text: "OK" },
+      {
+        text: "Create reminder",
+        onPress: () => openReminderFromProfile(newProfile),
+      },
+    ]);
   };
 
   const deleteProfile = async (id: string) => {
@@ -333,6 +479,129 @@ function AppContent() {
     await persistProfiles(clone);
   };
 
+  const openReminderEditor = (reminder: LoanReminder, backScreen: AppScreen = "reminders") => {
+    editorBackRef.current = backScreen;
+    setEditingReminder(reminder);
+    setScreen("reminder-edit");
+  };
+
+  const openReminderFromProfile = (profile: SavedLoanProfile) => {
+    openReminderEditor(draftFromSavedProfile(profile), "saved");
+  };
+
+  const openReminderDetail = (reminder: LoanReminder) => {
+    setDetailReminderId(reminder.id);
+    setScreen("reminder-detail");
+  };
+
+  const enableMasterNotifications = async (): Promise<boolean> => {
+    if (!reminderNotificationsSupported) {
+      return false;
+    }
+    const status = await requestReminderPermissions();
+    setOsPermissionStatus(status);
+    if (status !== "granted") {
+      return false;
+    }
+    const next = await patchAppSettings({ reminderNotificationsEnabled: true });
+    setReminderSettings(next);
+    reminderSettingsRef.current = next;
+    return true;
+  };
+
+  const updateReminder = async (nextReminder: LoanReminder) => {
+    const current = remindersRef.current;
+    const exists = current.some((item) => item.id === nextReminder.id);
+    const next = exists
+      ? current.map((item) => (item.id === nextReminder.id ? nextReminder : item))
+      : [nextReminder, ...current];
+    await refillAndPersist(next);
+  };
+
+  const toggleReminderNotifications = async (
+    reminder: LoanReminder,
+    enabled: boolean
+  ) => {
+    if (enabled) {
+      const allowed = await enableMasterNotifications();
+      if (!allowed) {
+        Alert.alert(
+          "Notifications are off",
+          reminderNotificationsSupported
+            ? "Allow notifications in your phone settings to get repayment reminders."
+            : notificationUnavailableHint
+        );
+        return;
+      }
+    }
+    await updateReminder({
+      ...reminder,
+      notificationsEnabled: enabled,
+      updatedAt: new Date().toISOString(),
+    });
+  };
+
+  const confirmDeleteReminder = (reminder: LoanReminder) => {
+    Alert.alert("Delete reminder", `Delete "${reminder.name}"? This cannot be undone.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          const next = remindersRef.current.filter((item) => item.id !== reminder.id);
+          refillAndPersist(next).catch(() => {});
+          if (detailReminderId === reminder.id) {
+            setDetailReminderId(null);
+            setScreen("reminders");
+          }
+        },
+      },
+    ]);
+  };
+
+  const archiveReminder = async (reminder: LoanReminder) => {
+    await updateReminder(setReminderStatus(reminder, "archived"));
+    if (screen === "reminder-detail") {
+      setScreen("reminders");
+    }
+  };
+
+  const handleMasterNotificationToggle = async (enabled: boolean) => {
+    if (enabled) {
+      const allowed = await enableMasterNotifications();
+      if (!allowed) {
+        Alert.alert(
+          "Notifications are off",
+          reminderNotificationsSupported
+            ? "Allow notifications in your phone settings, then turn them on here."
+            : notificationUnavailableHint
+        );
+        return;
+      }
+      await refillAndPersist(remindersRef.current);
+      return;
+    }
+    const next = await patchAppSettings({ reminderNotificationsEnabled: false });
+    setReminderSettings(next);
+    reminderSettingsRef.current = next;
+    await refillAndPersist(remindersRef.current);
+  };
+
+  const handleNotifyHourChange = async (hour: number) => {
+    const next = await patchAppSettings({ defaultNotifyHour: hour });
+    setReminderSettings(next);
+    reminderSettingsRef.current = next;
+    await refillAndPersist(remindersRef.current);
+  };
+
+  const overlayScreen =
+    screen === "settings" ||
+    screen === "reminders" ||
+    screen === "reminder-edit" ||
+    screen === "reminder-detail";
+  const remindersSectionActive =
+    screen === "reminders" || screen === "reminder-edit" || screen === "reminder-detail";
+
   if (loadingState) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -353,18 +622,39 @@ function AppContent() {
                 Simple Loan Calculator
               </Text>
             </View>
-            <Pressable
-              onPress={openSettings}
-              style={styles.settingsButton}
-              accessibilityRole="button"
-              accessibilityLabel="Settings"
-            >
-              <Ionicons
-                name={screen === "settings" ? "settings" : "settings-outline"}
-                size={22}
-                color={screen === "settings" ? colors.accentTextStrong : colors.text}
-              />
-            </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable
+                onPress={openReminders}
+                style={styles.settingsButton}
+                accessibilityRole="button"
+                accessibilityLabel="Repayment reminders"
+              >
+                <Ionicons
+                  name={remindersSectionActive ? "notifications" : "notifications-outline"}
+                  size={22}
+                  color={remindersSectionActive ? colors.accentTextStrong : colors.text}
+                />
+                {activeReminders.length > 0 ? (
+                  <View style={styles.headerBadge}>
+                    <Text style={styles.headerBadgeText}>
+                      {activeReminders.length > 9 ? "9+" : String(activeReminders.length)}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+              <Pressable
+                onPress={openSettings}
+                style={styles.settingsButton}
+                accessibilityRole="button"
+                accessibilityLabel="Settings"
+              >
+                <Ionicons
+                  name={screen === "settings" ? "settings" : "settings-outline"}
+                  size={22}
+                  color={screen === "settings" ? colors.accentTextStrong : colors.text}
+                />
+              </Pressable>
+            </View>
           </View>
         </View>
 
@@ -409,6 +699,17 @@ function AppContent() {
                   {savedProfiles.length} profile{savedProfiles.length === 1 ? "" : "s"}
                 </Text>
               </Pressable>
+              <Pressable style={styles.dashboardCard} onPress={openReminders}>
+                <Text style={styles.dashboardIcon}>🔔</Text>
+                <Text style={styles.dashboardTitle}>Repayment reminders</Text>
+                <Text style={styles.dashboardHint}>
+                  {activeReminders.length > 0
+                    ? nextDueReminder
+                      ? `${activeReminders.length} active · next ${formatDisplayDate(nextDueReminder.nextPaymentDate)}`
+                      : `${activeReminders.length} active`
+                    : "Track loans and get due-date alerts"}
+                </Text>
+              </Pressable>
             </View>
           </View>
         ) : null}
@@ -434,6 +735,19 @@ function AppContent() {
                   <Text style={styles.minimumRepaymentValue}>
                     {formatCurrency(minimumMonthlyRepayment, input.currencyCode)}
                   </Text>
+                  {input.lumpSum.enabled ? (
+                    <Text style={styles.minimumRepaymentNote}>
+                      Excludes the final lump sum of{" "}
+                      {formatCurrency(input.lumpSum.amount, input.currencyCode)}
+                    </Text>
+                  ) : null}
+                  {input.offsetSavings.enabled ? (
+                    <Text style={styles.minimumRepaymentNote}>
+                      Interest is calculated on the balance minus{" "}
+                      {formatCurrency(input.offsetSavings.amount, input.currencyCode)}{" "}
+                      offset
+                    </Text>
+                  ) : null}
                   {input.extraRepayment.enabled ? (
                     <View style={styles.monthlyBreakdownWrap}>
                       <View style={styles.monthlyBreakdownRow}>
@@ -484,7 +798,113 @@ function AppContent() {
         {screen === "basic" ? <BasicCalculatorScreen /> : null}
 
         {screen === "settings" ? (
-          <SettingsScreen onBack={() => setScreen(previousScreenRef.current)} />
+          <SwipeBackView onBack={() => setScreen(previousScreenRef.current)}>
+            <SettingsScreen
+              onBack={() => setScreen(previousScreenRef.current)}
+              reminderNotificationsEnabled={reminderSettings.reminderNotificationsEnabled}
+              defaultNotifyHour={reminderSettings.defaultNotifyHour}
+              osPermissionStatus={osPermissionStatus}
+              notificationsSupported={reminderNotificationsSupported}
+              onToggleReminderNotifications={(enabled) => {
+                handleMasterNotificationToggle(enabled).catch(() => {});
+              }}
+              onChangeNotifyHour={(hour) => {
+                handleNotifyHourChange(hour).catch(() => {});
+              }}
+              onOpenPhoneSettings={() => {
+                openPhoneNotificationSettings().catch(() => {});
+              }}
+            />
+          </SwipeBackView>
+        ) : null}
+
+        {screen === "reminders" ? (
+          <SwipeBackView onBack={() => setScreen(remindersReturnRef.current)}>
+            <RemindersScreen
+              reminders={reminders}
+              showArchived={showArchivedReminders}
+              onToggleArchived={() => setShowArchivedReminders((value) => !value)}
+              notificationsAvailable={
+                reminderNotificationsSupported &&
+                reminderSettings.reminderNotificationsEnabled &&
+                osPermissionStatus === "granted"
+              }
+              onBack={() => setScreen(remindersReturnRef.current)}
+              onAdd={() => openReminderEditor(createEmptyReminder(), "reminders")}
+              onOpen={openReminderDetail}
+              onToggleNotifications={(reminder, enabled) => {
+                toggleReminderNotifications(reminder, enabled).catch(() => {});
+              }}
+              onArchive={(reminder) => {
+                archiveReminder(reminder).catch(() => {});
+              }}
+              onDelete={confirmDeleteReminder}
+            />
+          </SwipeBackView>
+        ) : null}
+
+        {screen === "reminder-edit" && editingReminder ? (
+          <SwipeBackView onBack={() => setScreen(editorBackRef.current)}>
+            <ReminderEditorScreen
+              initialReminder={editingReminder}
+              savedProfiles={savedProfiles}
+              notificationsSupported={reminderNotificationsSupported}
+              onBack={() => setScreen(editorBackRef.current)}
+              onSave={(reminder) => {
+                updateReminder(reminder)
+                  .then(() => {
+                    setEditingReminder(null);
+                    setDetailReminderId(reminder.id);
+                    setScreen("reminder-detail");
+                  })
+                  .catch(() => {});
+              }}
+              onRequestEnableNotifications={enableMasterNotifications}
+            />
+          </SwipeBackView>
+        ) : null}
+
+        {screen === "reminder-detail" && detailReminder ? (
+          <SwipeBackView onBack={() => setScreen("reminders")}>
+            <ReminderDetailScreen
+            reminder={detailReminder}
+            linkedProfile={
+              savedProfiles.find((item) => item.id === detailReminder.linkedProfileId) ??
+              null
+            }
+            notificationsSupported={reminderNotificationsSupported}
+            onBack={() => setScreen("reminders")}
+            onEdit={() => openReminderEditor(detailReminder, "reminder-detail")}
+            onToggleNotifications={(enabled) => {
+              toggleReminderNotifications(detailReminder, enabled).catch(() => {});
+            }}
+            onExtraPayment={(amount) => {
+              updateReminder(applyExtraPayment(detailReminder, amount)).catch(() => {});
+            }}
+            onUndoLast={() => {
+              updateReminder(undoLastPayment(detailReminder)).catch(() => {});
+            }}
+            onArchive={() => {
+              archiveReminder(detailReminder).catch(() => {});
+            }}
+            onUnarchive={() => {
+              updateReminder(setReminderStatus(detailReminder, "active")).catch(() => {});
+            }}
+            onDelete={() => confirmDeleteReminder(detailReminder)}
+            onRefreshFromProfile={() => {
+              const profile = savedProfiles.find(
+                (item) => item.id === detailReminder.linkedProfileId
+              );
+              if (!profile) {
+                Alert.alert("Profile missing", "The linked saved loan is no longer available.");
+                return;
+              }
+              updateReminder(refreshTermsFromProfile(detailReminder, profile)).catch(
+                () => {}
+              );
+            }}
+          />
+          </SwipeBackView>
         ) : null}
 
         {screen === "saved" ? (
@@ -540,6 +960,14 @@ function AppContent() {
                     </Pressable>
 
                     <Pressable
+                      style={styles.secondaryButtonSmall}
+                      onPress={() => {
+                        openReminderFromProfile(item);
+                      }}
+                    >
+                      <Text style={styles.secondaryButtonSmallText}>Remind</Text>
+                    </Pressable>
+                    <Pressable
                       style={styles.deleteButtonSmall}
                       onPress={() => {
                         confirmDeleteProfile(item);
@@ -556,12 +984,12 @@ function AppContent() {
 
         {snackbarVisible ? (
           <View style={styles.snackbarWrap}>
-            <Text style={styles.snackbarText}>Your loan calculation is ready</Text>
+            <Text style={styles.snackbarText}>{snackbarText}</Text>
           </View>
         ) : null}
         </View>
 
-        {screen !== "settings" ? (
+        {!overlayScreen ? (
           <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
             {NAV_TABS.map((tab) => {
               const active = screen === tab.id;
@@ -731,6 +1159,28 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: 20,
       alignItems: "center",
       justifyContent: "center",
+      position: "relative",
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    headerBadge: {
+      position: "absolute",
+      top: 4,
+      right: 2,
+      minWidth: 16,
+      height: 16,
+      paddingHorizontal: 4,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerBadgeText: {
+      color: colors.textInverse,
+      fontSize: 9,
+      fontWeight: "800",
     },
     saveStickyBar: {
       paddingHorizontal: 16,
@@ -864,6 +1314,13 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "800",
       fontSize: 28,
     },
+    minimumRepaymentNote: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontWeight: "600",
+      fontSize: 12,
+      lineHeight: 16,
+    },
     monthlyBreakdownWrap: {
       marginTop: 12,
       borderTopWidth: 1,
@@ -967,6 +1424,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     savedActionRow: {
       flexDirection: "row",
+      flexWrap: "wrap",
       justifyContent: "flex-end",
       gap: 8,
     },
