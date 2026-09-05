@@ -31,6 +31,12 @@ export interface ReminderPayment {
   undoSnapshot: ReminderUndoSnapshot;
 }
 
+export interface ReminderRateChange {
+  id: string;
+  effectiveDate: string;
+  annualInterestRatePercent: number;
+}
+
 export interface LoanReminder {
   id: string;
   name: string;
@@ -54,6 +60,7 @@ export interface LoanReminder {
   payments: ReminderPayment[];
   notes: string;
   scheduledNotificationIds: string[];
+  rateChanges: ReminderRateChange[];
   createdAt: string;
   updatedAt: string;
 }

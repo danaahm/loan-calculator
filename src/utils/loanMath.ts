@@ -1,7 +1,9 @@
 import {
+  FREQUENCIES,
   type LoanCalculationResult,
   type LoanInput,
   type LoanSchedule,
+  type OffsetContributionConfig,
   type PeriodRow,
   type RepaymentFrequency,
   type YearlyRow,
@@ -53,6 +55,16 @@ const getOffsetAmount = (input: LoanInput): number => {
   return Math.max(0, input.offsetSavings.amount);
 };
 
+const getOffsetContribution = (input: LoanInput): OffsetContributionConfig | null => {
+  if (!input.offsetSavings.enabled || !input.offsetSavings.contribution.enabled) {
+    return null;
+  }
+  if (input.offsetSavings.contribution.amount <= ZERO_EPSILON) {
+    return null;
+  }
+  return input.offsetSavings.contribution;
+};
+
 const getBalloonAmount = (input: LoanInput, principal: number): number => {
   if (!input.lumpSum.enabled) {
     return 0;
@@ -83,6 +95,10 @@ const computeSchedule = (
     input.extraRepayment.startAfterUnit,
     periodsPerYear
   );
+  const offsetContribution = getOffsetContribution(input);
+  const offsetEventsPerYear = offsetContribution
+    ? getPeriodsPerYear(offsetContribution.frequency)
+    : 0;
   const totalPeriods = Math.max(
     1,
     Math.round(input.loanLengthYears * periodsPerYear)
@@ -90,7 +106,6 @@ const computeSchedule = (
   const periodRate =
     input.annualInterestRatePercent / 100 / Math.max(1, periodsPerYear);
   const principal = Math.max(0, input.amountBorrowed);
-  const offsetAmount = getOffsetAmount(input);
   const balloonAmount = getBalloonAmount(input, principal);
   const scheduledRepayment = calculateBaseRepayment(
     principal,
@@ -100,8 +115,10 @@ const computeSchedule = (
   );
 
   let balance = principal;
+  let offsetBalance = getOffsetAmount(input);
   let feeEventCarry = 0;
   let extraEventCarry = 0;
+  let offsetEventCarry = 0;
   const periodRows: PeriodRow[] = [];
   const yearlyMap = new Map<number, YearlyRow>();
   let periodIndex = 0;
@@ -118,7 +135,7 @@ const computeSchedule = (
     periodIndex += 1;
     const yearIndex = Math.ceil(periodIndex / periodsPerYear);
     const openingBalance = balance;
-    const interestPaid = Math.max(0, openingBalance - offsetAmount) * periodRate;
+    const interestPaid = Math.max(0, openingBalance - offsetBalance) * periodRate;
 
     let principalPaid = Math.max(0, scheduledRepayment - interestPaid);
     principalPaid = Math.min(principalPaid, balance);
@@ -153,6 +170,15 @@ const computeSchedule = (
       balance = 0;
     }
 
+    if (offsetContribution) {
+      offsetEventCarry += offsetEventsPerYear / periodsPerYear;
+      const offsetEventsThisPeriod = Math.floor(offsetEventCarry + ZERO_EPSILON);
+      if (offsetEventsThisPeriod > 0) {
+        offsetBalance += offsetContribution.amount * offsetEventsThisPeriod;
+        offsetEventCarry -= offsetEventsThisPeriod;
+      }
+    }
+
     const periodTotalPaid = interestPaid + feePaid + principalPaid + extraPaid;
     totalPrincipalPaid += principalPaid;
     totalInterestPaid += interestPaid;
@@ -171,6 +197,7 @@ const computeSchedule = (
         extraPaid,
         totalPaid: periodTotalPaid,
         closingBalance: balance,
+        offsetBalance,
       });
     } else {
       existingYear.principalPaid += principalPaid;
@@ -179,6 +206,7 @@ const computeSchedule = (
       existingYear.extraPaid += extraPaid;
       existingYear.totalPaid += periodTotalPaid;
       existingYear.closingBalance = balance;
+      existingYear.offsetBalance = offsetBalance;
     }
 
     periodRows.push({
@@ -205,6 +233,7 @@ const computeSchedule = (
       extraPaid: safeRound(row.extraPaid),
       totalPaid: safeRound(row.totalPaid),
       closingBalance: safeRound(row.closingBalance),
+      offsetBalance: safeRound(row.offsetBalance),
     }));
 
   const lastReportedYear = Math.max(1, Math.ceil(input.loanLengthYears));
@@ -306,6 +335,15 @@ export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
     offsetSavings: {
       enabled: Boolean(input.offsetSavings?.enabled),
       amount: Math.max(0, input.offsetSavings?.amount ?? 0),
+      contribution: {
+        enabled: Boolean(input.offsetSavings?.contribution?.enabled),
+        amount: Math.max(0, input.offsetSavings?.contribution?.amount ?? 0),
+        frequency: FREQUENCIES.includes(
+          input.offsetSavings?.contribution?.frequency as RepaymentFrequency
+        )
+          ? (input.offsetSavings?.contribution?.frequency as RepaymentFrequency)
+          : "monthly",
+      },
     },
   };
 };

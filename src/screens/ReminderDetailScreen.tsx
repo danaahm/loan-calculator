@@ -11,11 +11,12 @@ import {
   View,
 } from "react-native";
 
+import { DatePickerField } from "../components/DatePickerField";
 import { notificationUnavailableHint } from "../notifications/reminderNotifications";
 import { useTheme } from "../theme/ThemeProvider";
 import { type SavedLoanProfile } from "../types/loan";
 import { REMINDER_DISCLAIMER, type LoanReminder } from "../types/reminder";
-import { formatDisplayDate } from "../utils/dateIso";
+import { formatDisplayDate, todayLocalIso } from "../utils/dateIso";
 import {
   formatCurrency,
   formatFrequencyLabel,
@@ -26,6 +27,7 @@ import {
   amountDueForReminder,
   estimatePayoffDate,
   listUpcomingDates,
+  rateAsOf,
 } from "../utils/reminderMath";
 
 interface ReminderDetailScreenProps {
@@ -37,6 +39,8 @@ interface ReminderDetailScreenProps {
   onToggleNotifications: (enabled: boolean) => void;
   onExtraPayment: (amount: number) => void;
   onUndoLast: () => void;
+  onAddRateChange: (effectiveDate: string, rate: number) => void;
+  onRemoveRateChange: (id: string) => void;
   onArchive: () => void;
   onUnarchive: () => void;
   onDelete: () => void;
@@ -52,6 +56,8 @@ export const ReminderDetailScreen = ({
   onToggleNotifications,
   onExtraPayment,
   onUndoLast,
+  onAddRateChange,
+  onRemoveRateChange,
   onArchive,
   onUnarchive,
   onDelete,
@@ -59,9 +65,15 @@ export const ReminderDetailScreen = ({
 }: ReminderDetailScreenProps) => {
   const { colors } = useTheme();
   const [extraInput, setExtraInput] = useState("");
+  const [rateDate, setRateDate] = useState(todayLocalIso());
+  const [rateInput, setRateInput] = useState("");
   const due = amountDueForReminder(reminder);
   const payoff = estimatePayoffDate(reminder);
   const upcoming = listUpcomingDates(reminder, 6);
+  const currentRate = rateAsOf(reminder, todayLocalIso());
+  const rateChanges = [...(reminder.rateChanges ?? [])].sort((left, right) =>
+    left.effectiveDate.localeCompare(right.effectiveDate)
+  );
   const progress =
     reminder.originalAmount > 0
       ? Math.min(1, Math.max(0, 1 - reminder.remainingBalance / reminder.originalAmount))
@@ -79,6 +91,16 @@ export const ReminderDetailScreen = ({
     }
     onExtraPayment(amount);
     setExtraInput("");
+  };
+
+  const submitRateChange = () => {
+    const rate = Number(rateInput.replace(/,/g, ""));
+    if (!Number.isFinite(rate) || rate < 0) {
+      Alert.alert("Rate required", "Enter the new interest rate.");
+      return;
+    }
+    onAddRateChange(rateDate, rate);
+    setRateInput("");
   };
 
   return (
@@ -133,7 +155,7 @@ export const ReminderDetailScreen = ({
           </Text>
           <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>Interest rate</Text>
           <Text style={[styles.rowValue, { color: colors.text }]}>
-            {formatPercent(reminder.annualInterestRatePercent)}
+            {formatPercent(currentRate)} as of today
           </Text>
           {payoff ? (
             <>
@@ -145,6 +167,70 @@ export const ReminderDetailScreen = ({
               </Text>
             </>
           ) : null}
+        </View>
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>Rate changes</Text>
+          <Text style={[styles.hint, { color: colors.textMuted }]}>
+            Dated rates apply to new payments and payoff estimates. Past recorded
+            payments are not rewritten. Update repayment in Edit if your lender
+            changed the minimum.
+          </Text>
+          {rateChanges.length === 0 ? (
+            <Text style={[styles.hint, { color: colors.textMuted }]}>
+              Starting rate {formatPercent(reminder.annualInterestRatePercent)}. No dated
+              changes yet.
+            </Text>
+          ) : (
+            rateChanges.map((change) => (
+              <View key={change.id} style={styles.historyRow}>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.listLine, { color: colors.text }]}>
+                      {formatDisplayDate(change.effectiveDate)}
+                    </Text>
+                    <Text style={[styles.hint, { color: colors.textMuted }]}>
+                      {formatPercent(change.annualInterestRatePercent)}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => onRemoveRateChange(change.id)}
+                    style={[styles.secondaryBtn, { borderColor: colors.borderStrong, marginTop: 0 }]}
+                  >
+                    <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
+                      Remove
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))
+          )}
+          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>Effective date</Text>
+          <DatePickerField value={rateDate} onChange={setRateDate} />
+          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>New rate (% per year)</Text>
+          <View style={styles.row}>
+            <TextInput
+              keyboardType="decimal-pad"
+              value={rateInput}
+              onChangeText={setRateInput}
+              placeholder="e.g. 5.99"
+              placeholderTextColor={colors.textMuted}
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  backgroundColor: colors.inputBg,
+                  borderColor: colors.borderStrong,
+                },
+              ]}
+            />
+            <Pressable
+              onPress={submitRateChange}
+              style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+            >
+              <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>Add</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>

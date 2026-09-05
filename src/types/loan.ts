@@ -19,6 +19,18 @@ export interface OptionalAmountConfig {
   amount: number;
 }
 
+export interface OffsetContributionConfig {
+  enabled: boolean;
+  amount: number;
+  frequency: RepaymentFrequency;
+}
+
+export interface OffsetSavingsConfig {
+  enabled: boolean;
+  amount: number;
+  contribution: OffsetContributionConfig;
+}
+
 export interface LoanInput {
   currencyCode: string;
   amountBorrowed: number;
@@ -29,7 +41,7 @@ export interface LoanInput {
   accountFeeFrequency: RepaymentFrequency;
   extraRepayment: ExtraRepaymentConfig;
   lumpSum: OptionalAmountConfig;
-  offsetSavings: OptionalAmountConfig;
+  offsetSavings: OffsetSavingsConfig;
 }
 
 export interface PeriodRow {
@@ -53,6 +65,7 @@ export interface YearlyRow {
   extraPaid: number;
   totalPaid: number;
   closingBalance: number;
+  offsetBalance: number;
 }
 
 export interface ScheduleSummary {

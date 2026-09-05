@@ -27,6 +27,8 @@ import { LoanForm } from "./src/components/LoanForm";
 import { PieBreakdownChart } from "./src/components/PieBreakdownChart";
 import { SwipeBackView } from "./src/components/SwipeBackView";
 import { BasicCalculatorScreen } from "./src/screens/BasicCalculatorScreen";
+import { CompareProfilesScreen } from "./src/screens/CompareProfilesScreen";
+import { HomeScreen } from "./src/screens/HomeScreen";
 import { ReminderDetailScreen } from "./src/screens/ReminderDetailScreen";
 import { ReminderEditorScreen } from "./src/screens/ReminderEditorScreen";
 import { RemindersScreen } from "./src/screens/RemindersScreen";
@@ -52,14 +54,16 @@ import {
 import { type LoanReminder } from "./src/types/reminder";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "./src/types/settings";
 import { calculateLoan, normalizeInput } from "./src/utils/loanMath";
-import { formatCurrency } from "./src/utils/format";
-import { formatDisplayDate, todayLocalIso } from "./src/utils/dateIso";
+import { formatCurrency, formatFrequencyLabel } from "./src/utils/format";
+import { todayLocalIso } from "./src/utils/dateIso";
 import {
+  addRateChange,
   applyExtraPayment,
   catchUpReminders,
   createEmptyReminder,
   draftFromSavedProfile,
   refreshTermsFromProfile,
+  removeRateChange,
   setReminderStatus,
   undoLastPayment,
 } from "./src/utils/reminderMath";
@@ -74,7 +78,13 @@ import {
 } from "./src/notifications/reminderNotifications";
 
 type TabScreen = "home" | "calculator" | "basic" | "saved";
-type AppScreen = TabScreen | "settings" | "reminders" | "reminder-edit" | "reminder-detail";
+type AppScreen =
+  | TabScreen
+  | "settings"
+  | "reminders"
+  | "reminder-edit"
+  | "reminder-detail"
+  | "compare";
 
 const NAV_TABS: {
   id: TabScreen;
@@ -110,6 +120,11 @@ const DEFAULT_INPUT: LoanInput = {
   offsetSavings: {
     enabled: false,
     amount: 0,
+    contribution: {
+      enabled: false,
+      amount: 200,
+      frequency: "monthly",
+    },
   },
 };
 
@@ -146,6 +161,8 @@ function AppContent() {
   const [editingReminder, setEditingReminder] = useState<LoanReminder | null>(null);
   const [detailReminderId, setDetailReminderId] = useState<string | null>(null);
   const [showArchivedReminders, setShowArchivedReminders] = useState(false);
+  const [compareSelectMode, setCompareSelectMode] = useState(false);
+  const [compareSelection, setCompareSelection] = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("My Loan Profile");
   const [saveDialogVisible, setSaveDialogVisible] = useState(false);
@@ -201,6 +218,10 @@ function AppContent() {
   )[0];
   const detailReminder =
     reminders.find((item) => item.id === detailReminderId) ?? null;
+  const compareLeftProfile =
+    savedProfiles.find((item) => item.id === compareSelection[0]) ?? null;
+  const compareRightProfile =
+    savedProfiles.find((item) => item.id === compareSelection[1]) ?? null;
 
   const showSnackbar = (text: string) => {
     setSnackbarText(text);
@@ -489,6 +510,30 @@ function AppContent() {
     openReminderEditor(draftFromSavedProfile(profile), "saved");
   };
 
+  const exitCompareSelectMode = () => {
+    setCompareSelectMode(false);
+    setCompareSelection([]);
+  };
+
+  const toggleCompareSelection = (id: string) => {
+    setCompareSelection((current) => {
+      if (current.includes(id)) {
+        return current.filter((item) => item !== id);
+      }
+      if (current.length >= 2) {
+        return current;
+      }
+      return [...current, id];
+    });
+  };
+
+  const openCompareScreen = () => {
+    if (compareSelection.length !== 2) {
+      return;
+    }
+    setScreen("compare");
+  };
+
   const openReminderDetail = (reminder: LoanReminder) => {
     setDetailReminderId(reminder.id);
     setScreen("reminder-detail");
@@ -598,7 +643,8 @@ function AppContent() {
     screen === "settings" ||
     screen === "reminders" ||
     screen === "reminder-edit" ||
-    screen === "reminder-detail";
+    screen === "reminder-detail" ||
+    screen === "compare";
   const remindersSectionActive =
     screen === "reminders" || screen === "reminder-edit" || screen === "reminder-detail";
 
@@ -677,41 +723,19 @@ function AppContent() {
 
         <View style={styles.screenBody}>
         {screen === "home" ? (
-          <View style={styles.pageContent}>
-            <View style={styles.dashboardGrid}>
-              <Pressable
-                style={styles.dashboardCard}
-                onPress={() => setScreen("calculator")}
-              >
-                <Text style={styles.dashboardIcon}>🧮</Text>
-                <Text style={styles.dashboardTitle}>Loan calculator</Text>
-                <Text style={styles.dashboardHint}>Open loan calculator</Text>
-              </Pressable>
-              <Pressable style={styles.dashboardCard} onPress={() => setScreen("basic")}>
-                <Text style={styles.dashboardIcon}>🔢</Text>
-                <Text style={styles.dashboardTitle}>Calculator</Text>
-                <Text style={styles.dashboardHint}>Basic calculator</Text>
-              </Pressable>
-              <Pressable style={styles.dashboardCard} onPress={() => setScreen("saved")}>
-                <Text style={styles.dashboardIcon}>📄</Text>
-                <Text style={styles.dashboardTitle}>My Saved Loans</Text>
-                <Text style={styles.dashboardHint}>
-                  {savedProfiles.length} profile{savedProfiles.length === 1 ? "" : "s"}
-                </Text>
-              </Pressable>
-              <Pressable style={styles.dashboardCard} onPress={openReminders}>
-                <Text style={styles.dashboardIcon}>🔔</Text>
-                <Text style={styles.dashboardTitle}>Repayment reminders</Text>
-                <Text style={styles.dashboardHint}>
-                  {activeReminders.length > 0
-                    ? nextDueReminder
-                      ? `${activeReminders.length} active · next ${formatDisplayDate(nextDueReminder.nextPaymentDate)}`
-                      : `${activeReminders.length} active`
-                    : "Track loans and get due-date alerts"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
+          <HomeScreen
+            nextReminder={nextDueReminder ?? null}
+            activeReminderCount={activeReminders.length}
+            input={input}
+            result={result}
+            minimumMonthlyRepayment={minimumMonthlyRepayment}
+            savedProfileCount={savedProfiles.length}
+            onOpenCalculator={() => setScreen("calculator")}
+            onOpenBasic={() => setScreen("basic")}
+            onOpenSaved={() => setScreen("saved")}
+            onOpenReminders={openReminders}
+            onOpenReminder={openReminderDetail}
+          />
         ) : null}
 
         {screen === "calculator" ? (
@@ -746,6 +770,14 @@ function AppContent() {
                       Interest is calculated on the balance minus{" "}
                       {formatCurrency(input.offsetSavings.amount, input.currencyCode)}{" "}
                       offset
+                      {input.offsetSavings.contribution?.enabled
+                        ? `, plus ${formatCurrency(
+                            input.offsetSavings.contribution.amount,
+                            input.currencyCode
+                          )} ${formatFrequencyLabel(
+                            input.offsetSavings.contribution.frequency
+                          ).toLowerCase()} deposits`
+                        : ""}
                     </Text>
                   ) : null}
                   {input.extraRepayment.enabled ? (
@@ -884,6 +916,14 @@ function AppContent() {
             onUndoLast={() => {
               updateReminder(undoLastPayment(detailReminder)).catch(() => {});
             }}
+            onAddRateChange={(effectiveDate, rate) => {
+              updateReminder(addRateChange(detailReminder, effectiveDate, rate)).catch(
+                () => {}
+              );
+            }}
+            onRemoveRateChange={(id) => {
+              updateReminder(removeRateChange(detailReminder, id)).catch(() => {});
+            }}
             onArchive={() => {
               archiveReminder(detailReminder).catch(() => {});
             }}
@@ -907,8 +947,74 @@ function AppContent() {
           </SwipeBackView>
         ) : null}
 
+        {screen === "compare" && compareLeftProfile && compareRightProfile ? (
+          <SwipeBackView
+            onBack={() => {
+              setScreen("saved");
+            }}
+          >
+            <CompareProfilesScreen
+              leftProfile={compareLeftProfile}
+              rightProfile={compareRightProfile}
+              onBack={() => setScreen("saved")}
+              onOpenProfile={(profile) => {
+                exitCompareSelectMode();
+                openProfile(profile);
+              }}
+            />
+          </SwipeBackView>
+        ) : null}
+
         {screen === "saved" ? (
           <View style={styles.pageContent}>
+            <View style={styles.compareBar}>
+              {compareSelectMode ? (
+                <>
+                  <Text style={styles.compareHint}>
+                    {compareSelection.length === 2
+                      ? "Two loans selected"
+                      : "Select two saved loans"}
+                  </Text>
+                  <View style={styles.compareBarActions}>
+                    <Pressable
+                      style={[
+                        styles.compareActionButton,
+                        { flex: 1 },
+                        compareSelection.length !== 2 && styles.buttonDisabled,
+                      ]}
+                      onPress={openCompareScreen}
+                      disabled={compareSelection.length !== 2}
+                    >
+                      <Text style={styles.primaryButtonText}>Compare</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.secondaryButton, { flex: 1 }]}
+                      onPress={exitCompareSelectMode}
+                    >
+                      <Text style={styles.secondaryButtonText}>Cancel</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.compareHint}>
+                    {savedProfiles.length < 2
+                      ? "Save at least two loans to compare offers."
+                      : "Compare two saved loans side by side."}
+                  </Text>
+                  <Pressable
+                    style={[
+                      styles.compareActionButton,
+                      savedProfiles.length < 2 && styles.buttonDisabled,
+                    ]}
+                    onPress={() => setCompareSelectMode(true)}
+                    disabled={savedProfiles.length < 2}
+                  >
+                    <Text style={styles.primaryButtonText}>Compare</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
             <FlatList
               data={savedProfiles}
               keyExtractor={(item) => item.id}
@@ -917,19 +1023,41 @@ function AppContent() {
               ListEmptyComponent={
                 <Text style={styles.emptyText}>No saved loan profiles yet.</Text>
               }
-              renderItem={({ item, index }) => (
+              renderItem={({ item, index }) => {
+                const selectedIndex = compareSelection.indexOf(item.id);
+                const selected = selectedIndex >= 0;
+                return (
                 <Pressable
-                  style={styles.savedCard}
-                  onPress={() => openProfile(item)}
-                  onLongPress={() =>
-                    confirmDeleteProfile(item)
-                  }
+                  style={[
+                    styles.savedCard,
+                    selected && styles.savedCardSelected,
+                  ]}
+                  onPress={() => {
+                    if (compareSelectMode) {
+                      toggleCompareSelection(item.id);
+                      return;
+                    }
+                    openProfile(item);
+                  }}
+                  onLongPress={() => {
+                    if (!compareSelectMode) {
+                      confirmDeleteProfile(item);
+                    }
+                  }}
                 >
-                  <Text style={styles.savedCardTitle}>{item.name}</Text>
+                  <View style={styles.savedCardHeader}>
+                    <Text style={styles.savedCardTitle}>{item.name}</Text>
+                    {compareSelectMode && selected ? (
+                      <Text style={styles.savedCardBadge}>
+                        {selectedIndex === 0 ? "A" : "B"}
+                      </Text>
+                    ) : null}
+                  </View>
                   <Text style={styles.savedCardMeta}>
                     {item.input.currencyCode} {item.input.amountBorrowed.toLocaleString()} |{" "}
                     {item.input.loanLengthYears} years
                   </Text>
+                  {compareSelectMode ? null : (
                   <View style={styles.savedActionRow}>
                   <Pressable
   style={styles.secondaryButtonSmall}
@@ -976,8 +1104,10 @@ function AppContent() {
                       <Text style={styles.deleteButtonSmallText}>Delete</Text>
                     </Pressable>
                   </View>
+                  )}
                 </Pressable>
-              )}
+                );
+              }}
             />
           </View>
         ) : null}
@@ -997,7 +1127,12 @@ function AppContent() {
                 <Pressable
                   key={tab.id}
                   style={[styles.bottomNavButton, active && styles.bottomNavButtonActive]}
-                  onPress={() => setScreen(tab.id)}
+                  onPress={() => {
+                    if (tab.id !== "saved") {
+                      exitCompareSelectMode();
+                    }
+                    setScreen(tab.id);
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel={tab.label}
                 >
@@ -1260,36 +1395,6 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "800",
       color: colors.text,
     },
-    dashboardCard: {
-      width: "48%",
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.cardBorder,
-      borderRadius: 14,
-      padding: 16,
-      marginBottom: 10,
-    },
-    dashboardGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent: "space-between",
-    },
-    dashboardIcon: {
-      fontSize: 30,
-      color: colors.accentTextStrong,
-      fontWeight: "900",
-    },
-    dashboardTitle: {
-      marginTop: 6,
-      fontSize: 18,
-      fontWeight: "800",
-      color: colors.text,
-    },
-    dashboardHint: {
-      marginTop: 4,
-      color: colors.textMuted,
-      fontWeight: "600",
-    },
     minimumRepaymentCard: {
       backgroundColor: colors.card,
       borderRadius: 14,
@@ -1397,6 +1502,44 @@ const createStyles = (colors: ThemeColors) =>
     },
     savedListWrap: {
       paddingBottom: 24,
+    },
+    compareBar: {
+      marginBottom: 12,
+      gap: 8,
+    },
+    compareBarActions: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    compareHint: {
+      color: colors.textMuted,
+      fontWeight: "600",
+      marginBottom: 2,
+    },
+    compareActionButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+    },
+    buttonDisabled: {
+      opacity: 0.45,
+    },
+    savedCardSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySoft,
+    },
+    savedCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    savedCardBadge: {
+      color: colors.accentTextDeep,
+      fontWeight: "800",
+      fontSize: 13,
     },
     emptyText: {
       color: colors.textMuted,

@@ -16,6 +16,7 @@ export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) 
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [collapsed, setCollapsed] = useState(false);
+  const showOffset = rows.some((row) => (row.offsetBalance ?? 0) > 0);
 
   return (
     <View style={styles.card}>
@@ -50,6 +51,9 @@ export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) 
                 <Text style={[styles.cell, styles.headerCell]}>Fees</Text>
                 <Text style={[styles.cell, styles.headerCell]}>Extra</Text>
                 <Text style={[styles.cell, styles.headerCell]}>Closing</Text>
+                {showOffset ? (
+                  <Text style={[styles.cell, styles.headerCell]}>Offset</Text>
+                ) : null}
               </View>
 
               {rows.map((row, index) => (
@@ -73,6 +77,11 @@ export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) 
                   <Text style={styles.cell}>
                     {formatCurrency(row.closingBalance, currencyCode)}
                   </Text>
+                  {showOffset ? (
+                    <Text style={styles.cell}>
+                      {formatCurrency(row.offsetBalance ?? 0, currencyCode)}
+                    </Text>
+                  ) : null}
                 </View>
               ))}
             </View>

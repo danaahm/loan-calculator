@@ -3,6 +3,7 @@ import {
   DEFAULT_NOTIFY_LEADS,
   type LoanReminder,
   type ReminderPayment,
+  type ReminderRateChange,
   type ReminderStatus,
 } from "../types/reminder";
 import { calculateLoan, normalizeInput } from "./loanMath";
@@ -47,6 +48,7 @@ export const createEmptyReminder = (): LoanReminder => {
     payments: [],
     notes: "",
     scheduledNotificationIds: [],
+    rateChanges: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -119,13 +121,56 @@ export const amountDueForReminder = (reminder: LoanReminder): number => {
   return safeRound(reminder.repaymentAmount + feePortion);
 };
 
+export const rateAsOf = (reminder: LoanReminder, isoDate: string): number => {
+  let rate = reminder.annualInterestRatePercent;
+  const changes = [...(reminder.rateChanges ?? [])].sort((left, right) =>
+    left.effectiveDate.localeCompare(right.effectiveDate)
+  );
+  for (const change of changes) {
+    if (change.effectiveDate <= isoDate) {
+      rate = change.annualInterestRatePercent;
+    }
+  }
+  return rate;
+};
+
+export const addRateChange = (
+  reminder: LoanReminder,
+  effectiveDate: string,
+  annualInterestRatePercent: number
+): LoanReminder => {
+  const next: ReminderRateChange = {
+    id: newId(),
+    effectiveDate,
+    annualInterestRatePercent: Math.max(0, annualInterestRatePercent),
+  };
+  return {
+    ...reminder,
+    rateChanges: [...(reminder.rateChanges ?? []), next].sort((left, right) =>
+      left.effectiveDate.localeCompare(right.effectiveDate)
+    ),
+    updatedAt: new Date().toISOString(),
+  };
+};
+
+export const removeRateChange = (
+  reminder: LoanReminder,
+  id: string
+): LoanReminder => {
+  return {
+    ...reminder,
+    rateChanges: (reminder.rateChanges ?? []).filter((item) => item.id !== id),
+    updatedAt: new Date().toISOString(),
+  };
+};
+
 const applyScheduledPayment = (
   reminder: LoanReminder,
   source: "auto" | "manual"
 ): LoanReminder => {
   const periodsPerYear = FREQUENCY_PER_YEAR[reminder.repaymentFrequency];
   const periodRate =
-    reminder.annualInterestRatePercent / 100 / Math.max(1, periodsPerYear);
+    rateAsOf(reminder, reminder.nextPaymentDate) / 100 / Math.max(1, periodsPerYear);
   const interest = reminder.remainingBalance * periodRate;
   const { feePortion, feeEventCarry } = feeForCycle(reminder);
   const payment = Math.max(0, reminder.repaymentAmount);

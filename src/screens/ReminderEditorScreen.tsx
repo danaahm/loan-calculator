@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
+  FlatList,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -30,7 +32,7 @@ import {
   formatMonthAnchorLabel,
   getCurrencySymbol,
 } from "../utils/format";
-import { draftFromSavedProfile } from "../utils/reminderMath";
+import { createEmptyReminder, draftFromSavedProfile } from "../utils/reminderMath";
 import { normalizeCustomDates } from "../utils/reminderSchedule";
 
 interface ReminderEditorScreenProps {
@@ -68,6 +70,11 @@ const parseAmount = (value: string): number => {
   return parsed;
 };
 
+const PROFILE_CHIP_LIMIT = 5;
+
+const isNoneLinked = (linkedProfileId: string | null): boolean =>
+  linkedProfileId == null || linkedProfileId.length === 0;
+
 const Chip = ({
   label,
   selected,
@@ -81,6 +88,9 @@ const Chip = ({
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
       style={[
         styles.chip,
         {
@@ -102,6 +112,139 @@ const Chip = ({
   );
 };
 
+const LinkedProfilePicker = ({
+  profiles,
+  selectedId,
+  onSelectNone,
+  onSelectProfile,
+}: {
+  profiles: SavedLoanProfile[];
+  selectedId: string | null;
+  onSelectNone: () => void;
+  onSelectProfile: (profile: SavedLoanProfile) => void;
+}) => {
+  const { colors } = useTheme();
+  const [open, setOpen] = useState(false);
+  const noneSelected = isNoneLinked(selectedId);
+  const selectedName =
+    profiles.find((item) => item.id === selectedId)?.name ?? "None";
+
+  if (profiles.length <= PROFILE_CHIP_LIMIT) {
+    return (
+      <View style={styles.chipWrap}>
+        <Chip label="None" selected={noneSelected} onPress={onSelectNone} />
+        {profiles.map((profile) => (
+          <Chip
+            key={profile.id}
+            label={profile.name}
+            selected={selectedId === profile.id}
+            onPress={() => onSelectProfile(profile)}
+          />
+        ))}
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <Pressable
+        onPress={() => setOpen(true)}
+        style={[
+          styles.dropdownButton,
+          {
+            borderColor: colors.borderStrong,
+            backgroundColor: colors.inputBg,
+          },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={`Linked loan profile, ${selectedName}`}
+      >
+        <Text style={[styles.dropdownText, { color: colors.text }]} numberOfLines={1}>
+          {selectedName}
+        </Text>
+        <Ionicons name="chevron-down" size={18} color={colors.accentTextStrong} />
+      </Pressable>
+      <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
+        <View style={[styles.modalPage, { backgroundColor: colors.card }]}>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>Link a saved loan</Text>
+          <Pressable
+            onPress={() => {
+              onSelectNone();
+              setOpen(false);
+            }}
+            style={[
+              styles.modalRow,
+              {
+                borderColor: noneSelected ? colors.primary : colors.border,
+                backgroundColor: noneSelected ? colors.primarySoft : colors.inputBg,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.modalRowTitle,
+                { color: noneSelected ? colors.accentTextDeep : colors.text },
+              ]}
+            >
+              None
+            </Text>
+            <Text style={[styles.modalRowHint, { color: colors.textMuted }]}>
+              Clear linked loan fields
+            </Text>
+          </Pressable>
+          <FlatList
+            data={profiles}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.modalList}
+            renderItem={({ item }) => {
+              const selected = selectedId === item.id;
+              return (
+                <Pressable
+                  onPress={() => {
+                    onSelectProfile(item);
+                    setOpen(false);
+                  }}
+                  style={[
+                    styles.modalRow,
+                    {
+                      borderColor: selected ? colors.primary : colors.border,
+                      backgroundColor: selected
+                        ? colors.primarySoft
+                        : colors.inputBg,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.modalRowTitle,
+                      { color: selected ? colors.accentTextDeep : colors.text },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.name}
+                  </Text>
+                  <Text style={[styles.modalRowHint, { color: colors.textMuted }]}>
+                    {item.input.currencyCode} {item.input.amountBorrowed.toLocaleString()}{" "}
+                    · {item.input.loanLengthYears} years
+                  </Text>
+                </Pressable>
+              );
+            }}
+          />
+          <Pressable
+            onPress={() => setOpen(false)}
+            style={[styles.modalClose, { backgroundColor: colors.primary }]}
+          >
+            <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
+              Close
+            </Text>
+          </Pressable>
+        </View>
+      </Modal>
+    </View>
+  );
+};
+
 export const ReminderEditorScreen = ({
   initialReminder,
   savedProfiles,
@@ -112,8 +255,8 @@ export const ReminderEditorScreen = ({
 }: ReminderEditorScreenProps) => {
   const { colors } = useTheme();
   const [name, setName] = useState(initialReminder.name);
-  const [linkedProfileId, setLinkedProfileId] = useState(
-    initialReminder.linkedProfileId
+  const [linkedProfileId, setLinkedProfileId] = useState<string | null>(
+    initialReminder.linkedProfileId ?? null
   );
   const [currencyCode, setCurrencyCode] = useState(initialReminder.currencyCode);
   const [originalAmount, setOriginalAmount] = useState(
@@ -164,7 +307,7 @@ export const ReminderEditorScreen = ({
 
   useEffect(() => {
     setName(initialReminder.name);
-    setLinkedProfileId(initialReminder.linkedProfileId);
+    setLinkedProfileId(initialReminder.linkedProfileId ?? null);
     setCurrencyCode(initialReminder.currencyCode);
     setOriginalAmount(
       formatGroupedNumberInput(String(initialReminder.originalAmount || ""))
@@ -217,6 +360,28 @@ export const ReminderEditorScreen = ({
     setRepaymentFrequency(draft.repaymentFrequency);
     setAccountFee(formatGroupedNumberInput(String(draft.accountFee)));
     setAccountFeeFrequency(draft.accountFeeFrequency);
+    setError(null);
+  };
+
+  const clearLinkedProfile = () => {
+    if (isNoneLinked(linkedProfileId)) {
+      setLinkedProfileId(null);
+      return;
+    }
+    const empty = createEmptyReminder();
+    setLinkedProfileId(null);
+    setName("");
+    setCurrencyCode(empty.currencyCode);
+    setOriginalAmount("");
+    setAlreadyPaid("");
+    setRemainingBalance("");
+    setInterestRate("");
+    setRepaymentAmount("");
+    setRepaymentFrequency(empty.repaymentFrequency);
+    setMonthlyAnchor(empty.monthlyAnchor);
+    setAccountFee("");
+    setAccountFeeFrequency(empty.accountFeeFrequency);
+    setError(null);
   };
 
   const onChangeOriginal = (value: string) => {
@@ -319,7 +484,7 @@ export const ReminderEditorScreen = ({
     onSave({
       ...initialReminder,
       name: trimmedName,
-      linkedProfileId,
+      linkedProfileId: isNoneLinked(linkedProfileId) ? null : linkedProfileId,
       currencyCode: currencyCode.trim().toUpperCase() || "AUD",
       originalAmount: original,
       remainingBalance: remaining,
@@ -337,6 +502,7 @@ export const ReminderEditorScreen = ({
       notificationsEnabled: notificationsSupported ? notificationsEnabled : false,
       notifyLeads: notifyLeads.length > 0 ? notifyLeads : NOTIFY_LEAD_PRESETS.slice(1, 2),
       notes: notes.trim(),
+      rateChanges: initialReminder.rateChanges ?? [],
       status: remaining <= 0.005 ? "completed" : initialReminder.status === "archived"
         ? "archived"
         : "active",
@@ -364,21 +530,16 @@ export const ReminderEditorScreen = ({
             <Text style={[styles.label, { color: colors.textSecondary }]}>
               Link a saved loan profile
             </Text>
-            <View style={styles.chipWrap}>
-              <Chip
-                label="None"
-                selected={linkedProfileId === null}
-                onPress={() => setLinkedProfileId(null)}
-              />
-              {savedProfiles.map((profile) => (
-                <Chip
-                  key={profile.id}
-                  label={profile.name}
-                  selected={linkedProfileId === profile.id}
-                  onPress={() => applyProfile(profile)}
-                />
-              ))}
-            </View>
+            <LinkedProfilePicker
+              profiles={savedProfiles}
+              selectedId={linkedProfileId}
+              onSelectNone={clearLinkedProfile}
+              onSelectProfile={applyProfile}
+            />
+            <Text style={[styles.linkHint, { color: colors.textMuted }]}>
+              Choosing a saved loan fills the fields below. None unlinks it and
+              clears those fields.
+            </Text>
           </View>
         ) : null}
 
@@ -631,6 +792,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     fontWeight: "600",
   },
+  linkHint: {
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600",
+  },
   input: {
     borderWidth: 1,
     borderRadius: 10,
@@ -664,6 +831,58 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 12,
+  },
+  dropdownButton: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  dropdownText: {
+    flex: 1,
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  modalPage: {
+    flex: 1,
+    padding: 16,
+    paddingTop: 56,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  modalList: {
+    paddingBottom: 16,
+  },
+  modalRow: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  modalRowTitle: {
+    fontWeight: "700",
+  },
+  modalRowHint: {
+    marginTop: 2,
+    fontWeight: "600",
+    fontSize: 12,
+  },
+  modalClose: {
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  modalCloseText: {
+    fontWeight: "700",
   },
   row: {
     flexDirection: "row",

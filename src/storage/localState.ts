@@ -13,6 +13,7 @@ import {
   type MonthlyAnchor,
   type NotifyLead,
   type ReminderPayment,
+  type ReminderRateChange,
   type ReminderStatus,
 } from "../types/reminder";
 import {
@@ -66,6 +67,31 @@ const normalizeLeads = (value: unknown): NotifyLead[] => {
     );
   });
   return leads.length > 0 ? leads : DEFAULT_NOTIFY_LEADS;
+};
+
+const normalizeRateChanges = (value: unknown): ReminderRateChange[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is ReminderRateChange => {
+      if (!item || typeof item !== "object") {
+        return false;
+      }
+      const change = item as ReminderRateChange;
+      return (
+        typeof change.id === "string" &&
+        typeof change.effectiveDate === "string" &&
+        isValidIsoDate(change.effectiveDate) &&
+        typeof change.annualInterestRatePercent === "number" &&
+        Number.isFinite(change.annualInterestRatePercent)
+      );
+    })
+    .map((item) => ({
+      ...item,
+      annualInterestRatePercent: Math.max(0, item.annualInterestRatePercent),
+    }))
+    .sort((left, right) => left.effectiveDate.localeCompare(right.effectiveDate));
 };
 
 const normalizePayments = (value: unknown): ReminderPayment[] => {
@@ -141,6 +167,7 @@ export const normalizeReminder = (raw: Partial<LoanReminder>): LoanReminder | nu
           (id): id is string => typeof id === "string"
         )
       : [],
+    rateChanges: normalizeRateChanges(raw.rateChanges),
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : new Date().toISOString(),
   };

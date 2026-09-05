@@ -49,6 +49,13 @@ const parsePositiveInt = (value: string): number => {
   return Math.floor(parsed);
 };
 
+const defaultOffsetContribution = (value: LoanInput) =>
+  value.offsetSavings.contribution ?? {
+    enabled: false,
+    amount: 0,
+    frequency: "monthly" as RepaymentFrequency,
+  };
+
 const formatGroupedNumberInput = (value: string): string => {
   const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
   if (!cleaned) {
@@ -144,6 +151,16 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
   const [offsetAmount, setOffsetAmount] = useState(
     formatGroupedNumberInput(String(initialValue.offsetSavings.amount))
   );
+  const [offsetContributionEnabled, setOffsetContributionEnabled] = useState(
+    defaultOffsetContribution(initialValue).enabled
+  );
+  const [offsetContributionAmount, setOffsetContributionAmount] = useState(
+    formatGroupedNumberInput(
+      String(defaultOffsetContribution(initialValue).amount || 0)
+    )
+  );
+  const [offsetContributionFrequency, setOffsetContributionFrequency] =
+    useState<RepaymentFrequency>(defaultOffsetContribution(initialValue).frequency);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -165,6 +182,13 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     setOffsetAmount(
       formatGroupedNumberInput(String(initialValue.offsetSavings.amount))
     );
+    setOffsetContributionEnabled(defaultOffsetContribution(initialValue).enabled);
+    setOffsetContributionAmount(
+      formatGroupedNumberInput(
+        String(defaultOffsetContribution(initialValue).amount || 0)
+      )
+    );
+    setOffsetContributionFrequency(defaultOffsetContribution(initialValue).frequency);
   }, [initialValue]);
 
   const fieldValue = useMemo<LoanInput>(() => {
@@ -190,6 +214,11 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
       offsetSavings: {
         enabled: offsetEnabled,
         amount: parsePositiveNumber(offsetAmount),
+        contribution: {
+          enabled: offsetContributionEnabled,
+          amount: parsePositiveNumber(offsetContributionAmount),
+          frequency: offsetContributionFrequency,
+        },
       },
     };
   }, [
@@ -207,6 +236,9 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     interestRate,
     loanLengthYears,
     offsetAmount,
+    offsetContributionAmount,
+    offsetContributionEnabled,
+    offsetContributionFrequency,
     offsetEnabled,
     repaymentFrequency,
   ]);
@@ -260,9 +292,22 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
       setError("Lump sum amount must be greater than zero.");
       return;
     }
-    if (fieldValue.offsetSavings.enabled && fieldValue.offsetSavings.amount <= 0) {
-      setError("Offset savings amount must be greater than zero.");
-      return;
+    if (fieldValue.offsetSavings.enabled) {
+      const hasStart = fieldValue.offsetSavings.amount > 0;
+      const hasDeposit =
+        fieldValue.offsetSavings.contribution.enabled &&
+        fieldValue.offsetSavings.contribution.amount > 0;
+      if (!hasStart && !hasDeposit) {
+        setError("Enter an offset amount or a regular offset deposit.");
+        return;
+      }
+      if (
+        fieldValue.offsetSavings.contribution.enabled &&
+        fieldValue.offsetSavings.contribution.amount <= 0
+      ) {
+        setError("Offset deposit amount must be greater than zero.");
+        return;
+      }
     }
 
     setError(null);
@@ -476,8 +521,8 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             />
           </View>
           <Text style={styles.hintText}>
-            Interest is charged on the loan balance minus this amount. It does not
-            reduce how much you owe.
+            Interest is charged on the loan balance minus the offset. Deposits cut
+            interest; they do not pay down the loan.
           </Text>
           {offsetEnabled ? (
             <View>
@@ -493,6 +538,44 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                   placeholderTextColor={colors.textMuted}
                 />
               </View>
+
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>Regular offset deposit</Text>
+                <Switch
+                  value={offsetContributionEnabled}
+                  onValueChange={setOffsetContributionEnabled}
+                  trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
+                  thumbColor={colors.switchThumb}
+                />
+              </View>
+              <Text style={styles.hintText}>
+                Add this amount to the offset on each deposit. Compare with extra
+                repayments by saving two profiles.
+              </Text>
+              {offsetContributionEnabled ? (
+                <View>
+                  <Text style={styles.label}>Offset Deposit Amount</Text>
+                  <View style={styles.inputWrap}>
+                    <Text style={styles.prefixText}>{moneySymbol}</Text>
+                    <TextInput
+                      keyboardType="decimal-pad"
+                      value={offsetContributionAmount}
+                      onChangeText={(value) =>
+                        setOffsetContributionAmount(formatGroupedNumberInput(value))
+                      }
+                      style={styles.input}
+                      placeholder="e.g. 200"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </View>
+                  <Text style={styles.label}>Offset Deposit Frequency</Text>
+                  <FrequencySelector
+                    value={offsetContributionFrequency}
+                    onChange={setOffsetContributionFrequency}
+                    styles={styles}
+                  />
+                </View>
+              ) : null}
             </View>
           ) : null}
 
