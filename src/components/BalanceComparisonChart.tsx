@@ -7,6 +7,8 @@ import {
   StyleSheet,
   Text,
   View,
+  type StyleProp,
+  type TextStyle,
 } from "react-native";
 import { LineChart } from "react-native-chart-kit";
 import {
@@ -24,6 +26,49 @@ import {
   getCurrencySymbol,
 } from "../utils/format";
 import { CardHeader } from "./CardHeader";
+
+const FitOneLineText = ({
+  value,
+  style,
+  maxFontSize = 30,
+  minFontSize = 13,
+}: {
+  value: string;
+  style?: StyleProp<TextStyle>;
+  maxFontSize?: number;
+  minFontSize?: number;
+}) => {
+  const [containerWidth, setContainerWidth] = useState(0);
+  const fontSize = useMemo(() => {
+    if (containerWidth <= 0 || value.length === 0) {
+      return maxFontSize;
+    }
+    const estimatedGlyphWidth = 0.62;
+    const fitted = Math.floor(containerWidth / (value.length * estimatedGlyphWidth));
+    return Math.max(minFontSize, Math.min(maxFontSize, fitted));
+  }, [containerWidth, maxFontSize, minFontSize, value]);
+
+  return (
+    <View
+      style={styles.savingsValueWrap}
+      onLayout={(event) => {
+        const nextWidth = Math.floor(event.nativeEvent.layout.width);
+        if (nextWidth > 0 && nextWidth !== containerWidth) {
+          setContainerWidth(nextWidth);
+        }
+      }}
+    >
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={minFontSize / maxFontSize}
+        style={[style, { fontSize }]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+};
 
 interface BalanceComparisonChartProps {
   result: LoanCalculationResult;
@@ -365,19 +410,19 @@ export const BalanceComparisonChart = ({
               <View style={styles.savingsCardsRow}>
                 <View style={styles.savingsCard}>
                   <Text style={styles.savingsCardLabel}>Interest saved:</Text>
-                  <Text style={styles.savingsCardValue}>
-                {currencySymbol}
-                {Math.round(result.savings.moneySaved).toLocaleString()}
-                  </Text>
+                  <FitOneLineText
+                    value={`${currencySymbol}${Math.round(result.savings.moneySaved).toLocaleString()}`}
+                    style={styles.savingsCardValue}
+                  />
                 </View>
                 <View style={styles.savingsCard}>
                   <Text style={styles.savingsCardLabel}>Time saved:</Text>
-                  <Text style={styles.savingsCardValue}>{savedTime}</Text>
+                  <FitOneLineText value={savedTime} style={styles.savingsCardValue} />
                 </View>
               </View>
               <View style={styles.savingsCardWide}>
                 <Text style={styles.savingsCardLabel}>Total loan time:</Text>
-                <Text style={styles.savingsCardValue}>{totalLoanTime}</Text>
+                <FitOneLineText value={totalLoanTime} style={styles.savingsCardValue} />
               </View>
             </View>
           ) : null}
@@ -468,12 +513,16 @@ const styles = StyleSheet.create({
   },
   savingsCard: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: "rgba(139, 228, 172, 0.5)",
     borderColor: "rgba(92, 228, 141, 0.5)",
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 10,
+  },
+  savingsValueWrap: {
+    width: "100%",
   },
   savingsCardWide: {
     marginTop: 10,
@@ -496,8 +545,6 @@ const styles = StyleSheet.create({
     color: "#14532d",
     fontWeight: "500",
     fontSize: 30,
-    alignItems: "center",
-    justifyContent: "center",
     textAlign: "center",
   },
   chartFallbackText: {
