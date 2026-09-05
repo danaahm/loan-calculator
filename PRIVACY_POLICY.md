@@ -22,6 +22,8 @@ To provide core functionality, the App stores the following data locally on your
 - Loan input values (for example: amount borrowed, interest rate, loan length, fee values)
 - Calculation preferences (for example: currency and repayment options)
 - Saved loan profiles you choose to store in the App
+- Repayment reminders, payment history, and notification preferences you choose to store in the App
+- Appearance (theme) settings and basic calculator history
 
 This data is stored only on your device using local storage and is not sent to our servers.
 
@@ -43,7 +45,7 @@ Because data is stored locally on your device, you are responsible for device-le
 
 ## Your Choices
 
-You can delete your saved loan profiles directly in the App at any time.
+You can delete your saved loan profiles and reminders directly in the App at any time.
 You can also uninstall the App to remove local app data from your device (subject to device backup settings).
 
 ## Changes to This Policy

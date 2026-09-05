@@ -48,7 +48,8 @@
           "enableBackgroundRemoteNotifications": false
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-font"
     ]
   }
 }

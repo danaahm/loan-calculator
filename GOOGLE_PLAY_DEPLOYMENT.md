@@ -7,8 +7,8 @@ This project is now prepared for Android release builds with EAS.
 Check `app.json`:
 
 - `expo.android.package` is set to `com.danaa.loancalculator`
-- `expo.android.versionCode` starts at `1`
-- `expo.version` is your public app version (currently `1.0.0`)
+- `expo.android.versionCode` is currently `2` in `app.json` (EAS can auto-increment on production builds)
+- `expo.version` is your public app version (currently `1.0.1`)
 
 If you want a different package id, change it before first production release.
 
@@ -92,9 +92,11 @@ upload it to Play Console by hand.
 
 What it does:
 
-1. Builds the production `.aab` on the GitHub runner with `eas build --local`
+1. Installs JDK 17, Android SDK, NDK 27.1, and CMake (required for Expo SDK 57
+   native modules including Skia charts and notifications).
+2. Builds the production `.aab` on the GitHub runner with `eas build --local`
    (free public-repo Actions minutes; does not use EAS cloud build credits).
-2. Submits it to Google Play with `eas submit`, releasing to the chosen track.
+3. Submits it to Google Play with `eas submit`, releasing to the chosen track.
 
 ### Triggering it
 
