@@ -32,6 +32,7 @@ import {
   formatMonthAnchorLabel,
   getCurrencySymbol,
 } from "../utils/format";
+import { buildSavedProfileCardSummary } from "../utils/profileSummary";
 import { createEmptyReminder, draftFromSavedProfile } from "../utils/reminderMath";
 import { normalizeCustomDates } from "../utils/reminderSchedule";
 
@@ -198,6 +199,7 @@ const LinkedProfilePicker = ({
             contentContainerStyle={styles.modalList}
             renderItem={({ item }) => {
               const selected = selectedId === item.id;
+              const summary = buildSavedProfileCardSummary(item);
               return (
                 <Pressable
                   onPress={() => {
@@ -224,9 +226,16 @@ const LinkedProfilePicker = ({
                     {item.name}
                   </Text>
                   <Text style={[styles.modalRowHint, { color: colors.textMuted }]}>
-                    {item.input.currencyCode} {item.input.amountBorrowed.toLocaleString()}{" "}
-                    · {item.input.loanLengthYears} years
+                    {summary.headline}
                   </Text>
+                  {summary.tags.length > 0 ? (
+                    <Text
+                      style={[styles.modalRowHint, { color: colors.textMuted }]}
+                      numberOfLines={2}
+                    >
+                      {summary.tags.join(" · ")}
+                    </Text>
+                  ) : null}
                 </Pressable>
               );
             }}

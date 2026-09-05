@@ -55,6 +55,7 @@ import { type LoanReminder } from "./src/types/reminder";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "./src/types/settings";
 import { calculateLoan, normalizeInput } from "./src/utils/loanMath";
 import { formatCurrency, formatFrequencyLabel } from "./src/utils/format";
+import { buildSavedProfileCardSummary } from "./src/utils/profileSummary";
 import { todayLocalIso } from "./src/utils/dateIso";
 import {
   addRateChange,
@@ -1026,6 +1027,7 @@ function AppContent() {
               renderItem={({ item, index }) => {
                 const selectedIndex = compareSelection.indexOf(item.id);
                 const selected = selectedIndex >= 0;
+                const summary = buildSavedProfileCardSummary(item);
                 return (
                 <Pressable
                   style={[
@@ -1054,9 +1056,23 @@ function AppContent() {
                     ) : null}
                   </View>
                   <Text style={styles.savedCardMeta}>
-                    {item.input.currencyCode} {item.input.amountBorrowed.toLocaleString()} |{" "}
-                    {item.input.loanLengthYears} years
+                    {summary.amountLabel} | {summary.termLabel} |{" "}
+                    <Text style={styles.savedCardRate}>{summary.rateLabel}</Text>
                   </Text>
+                  {summary.tags.length > 0 ? (
+                    <View
+                      style={[
+                        styles.savedCardTags,
+                        compareSelectMode && styles.savedCardTagsCompare,
+                      ]}
+                    >
+                      {summary.tags.map((tag) => (
+                        <View key={tag} style={styles.savedCardTag}>
+                          <Text style={styles.savedCardTagText}>{tag}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                   {compareSelectMode ? null : (
                   <View style={styles.savedActionRow}>
                   <Pressable
@@ -1564,7 +1580,33 @@ const createStyles = (colors: ThemeColors) =>
     savedCardMeta: {
       color: colors.textMuted,
       marginTop: 4,
+    },
+    savedCardRate: {
+      color: colors.textSecondary,
+      fontWeight: "800",
+    },
+    savedCardTags: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 8,
       marginBottom: 10,
+    },
+    savedCardTagsCompare: {
+      marginBottom: 0,
+    },
+    savedCardTag: {
+      backgroundColor: colors.inputBg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+    },
+    savedCardTagText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: "700",
     },
     savedActionRow: {
       flexDirection: "row",
