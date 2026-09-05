@@ -41,9 +41,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The preinstalled SDK is huge; delete it, then recreate the default
+      # ANDROID_HOME parent so setup-android can write without root.
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/share/swift /usr/local/share/powershell
+          sudo mkdir -p /usr/local/lib/android
+          sudo chown -R "$(id -u):$(id -g)" /usr/local/lib/android
           df -h
 
       - name: Set up Node.js
@@ -61,7 +65,7 @@ jobs:
       # eas build --local compiles on the runner. Expo SDK 57 / RN 0.86 and
       # Skia (charts) need the Android SDK plus NDK 27, matching EAS cloud images.
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install Android NDK and platforms
         run: |
