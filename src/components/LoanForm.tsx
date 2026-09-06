@@ -677,7 +677,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: 12,
       paddingVertical: 10,
       fontSize: 15,
-      backgroundColor: colors.inputBg,
+      backgroundColor: "transparent",
       color: colors.text,
     },
     simpleInput: {
@@ -697,6 +697,7 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.borderStrong,
       borderRadius: 10,
       backgroundColor: colors.inputBg,
+      overflow: "hidden",
     },
     prefixText: {
       paddingLeft: 12,
