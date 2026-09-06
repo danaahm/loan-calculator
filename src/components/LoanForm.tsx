@@ -32,7 +32,8 @@ type FormStyles = ReturnType<typeof createStyles>;
 
 interface LoanFormProps {
   initialValue: LoanInput;
-  onSubmit: (value: LoanInput) => void;
+  /** Fires on every field change so the sticky Calculate bar can react. */
+  onDraftChange: (value: LoanInput) => void;
 }
 
 const parsePositiveNumber = (value: string): number => {
@@ -71,6 +72,9 @@ const defaultOffsetContribution = (value: LoanInput) =>
     amount: 0,
     frequency: "monthly" as RepaymentFrequency,
   };
+
+/** Zero means "not filled in yet", so show an empty field rather than "0". */
+const blankIfZero = (value: number): string => (value > 0 ? String(value) : "");
 
 const formatGroupedNumberInput = (value: string): string => {
   const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
@@ -122,7 +126,7 @@ const FrequencySelector = ({
   );
 };
 
-export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
+export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [collapsed, setCollapsed] = useState(false);
@@ -131,17 +135,17 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
   const currencies = useMemo(() => getAvailableCurrencies(), []);
 
   const [amountBorrowed, setAmountBorrowed] = useState(
-    formatGroupedNumberInput(String(initialValue.amountBorrowed))
+    formatGroupedNumberInput(blankIfZero(initialValue.amountBorrowed))
   );
   const [currencyCode, setCurrencyCode] = useState(initialValue.currencyCode);
   const [interestRate, setInterestRate] = useState(
-    String(initialValue.annualInterestRatePercent)
+    blankIfZero(initialValue.annualInterestRatePercent)
   );
   const [loanLengthYears, setLoanLengthYears] = useState(
-    String(decomposeLoanYears(initialValue.loanLengthYears).years)
+    blankIfZero(decomposeLoanYears(initialValue.loanLengthYears).years)
   );
   const [loanLengthMonths, setLoanLengthMonths] = useState(
-    String(decomposeLoanYears(initialValue.loanLengthYears).months)
+    blankIfZero(decomposeLoanYears(initialValue.loanLengthYears).months)
   );
   const [accountFeeEnabled, setAccountFeeEnabled] = useState(
     initialValue.accountFeeEnabled
@@ -183,15 +187,14 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
   );
   const [offsetContributionFrequency, setOffsetContributionFrequency] =
     useState<RepaymentFrequency>(defaultOffsetContribution(initialValue).frequency);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrencyCode(initialValue.currencyCode);
-    setAmountBorrowed(formatGroupedNumberInput(String(initialValue.amountBorrowed)));
-    setInterestRate(String(initialValue.annualInterestRatePercent));
+    setAmountBorrowed(formatGroupedNumberInput(blankIfZero(initialValue.amountBorrowed)));
+    setInterestRate(blankIfZero(initialValue.annualInterestRatePercent));
     const loanLength = decomposeLoanYears(initialValue.loanLengthYears);
-    setLoanLengthYears(String(loanLength.years));
-    setLoanLengthMonths(String(loanLength.months));
+    setLoanLengthYears(blankIfZero(loanLength.years));
+    setLoanLengthMonths(blankIfZero(loanLength.months));
     setAccountFeeEnabled(initialValue.accountFeeEnabled);
     setAccountFee(String(initialValue.accountFee));
     setRepaymentFrequency(initialValue.repaymentFrequency);
@@ -304,54 +307,11 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     );
   };
 
-  const submit = () => {
-    if (fieldValue.amountBorrowed <= 0) {
-      setError("Amount borrowed must be greater than zero.");
-      return;
-    }
-
-    if (
-      parsePositiveInt(loanLengthYears) === 0 &&
-      parsePositiveInt(loanLengthMonths) === 0
-    ) {
-      setError("Loan length must be at least 1 month.");
-      return;
-    }
-
-    if (fieldValue.loanLengthYears <= 0) {
-      setError("Loan length must be greater than zero.");
-      return;
-    }
-
-    if (fieldValue.extraRepayment.enabled && fieldValue.extraRepayment.amount <= 0) {
-      setError("Extra repayment amount must be greater than zero.");
-      return;
-    }
-    if (fieldValue.lumpSum.enabled && fieldValue.lumpSum.amount <= 0) {
-      setError("Lump sum amount must be greater than zero.");
-      return;
-    }
-    if (fieldValue.offsetSavings.enabled) {
-      const hasStart = fieldValue.offsetSavings.amount > 0;
-      const hasDeposit =
-        fieldValue.offsetSavings.contribution.enabled &&
-        fieldValue.offsetSavings.contribution.amount > 0;
-      if (!hasStart && !hasDeposit) {
-        setError("Enter an offset amount or a regular offset deposit.");
-        return;
-      }
-      if (
-        fieldValue.offsetSavings.contribution.enabled &&
-        fieldValue.offsetSavings.contribution.amount <= 0
-      ) {
-        setError("Offset deposit amount must be greater than zero.");
-        return;
-      }
-    }
-
-    setError(null);
-    onSubmit(fieldValue);
-  };
+  // Publish the live draft upward so the sticky Calculate bar can enable
+  // itself. Runs only when a parsed field actually changes, not per keystroke.
+  useEffect(() => {
+    onDraftChange(fieldValue);
+  }, [fieldValue, onDraftChange]);
 
   return (
     <View style={styles.card}>
@@ -655,11 +615,6 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             </View>
           ) : null}
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-          <Pressable style={styles.calculateButton} onPress={submit}>
-            <Text style={styles.calculateButtonText}>Calculate</Text>
-          </Pressable>
         </View>
       ) : null}
 
@@ -848,23 +803,6 @@ const createStyles = (colors: ThemeColors) =>
     startAfterToggleTextActive: {
       color: colors.accentTextDeep,
       fontWeight: "700",
-    },
-    errorText: {
-      color: colors.errorText,
-      marginTop: 12,
-      fontWeight: "600",
-    },
-    calculateButton: {
-      marginTop: 16,
-      borderRadius: 10,
-      backgroundColor: colors.primary,
-      paddingVertical: 12,
-      alignItems: "center",
-    },
-    calculateButtonText: {
-      color: colors.textInverse,
-      fontWeight: "700",
-      fontSize: 16,
     },
     modalContainer: {
       flex: 1,

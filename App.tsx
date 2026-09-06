@@ -54,7 +54,11 @@ import {
 } from "./src/types/loan";
 import { type LoanReminder } from "./src/types/reminder";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "./src/types/settings";
-import { calculateLoan, normalizeInput } from "./src/utils/loanMath";
+import {
+  calculateLoan,
+  normalizeInput,
+  validateLoanInput,
+} from "./src/utils/loanMath";
 import { formatCurrency, formatFrequencyLabel } from "./src/utils/format";
 import { buildSavedProfileCardSummary } from "./src/utils/profileSummary";
 import { todayLocalIso } from "./src/utils/dateIso";
@@ -133,6 +137,20 @@ const DEFAULT_INPUT: LoanInput = {
   },
 };
 
+/**
+ * A brand-new loan starts blank in the mandatory fields. Optional sections keep
+ * their prefill so they are not empty the moment a user switches one on.
+ * Deliberately NOT run through normalizeInput, which would clamp the zeroed
+ * loan length up to one month.
+ */
+const emptyInput = (): LoanInput => ({
+  ...DEFAULT_INPUT,
+  currencyCode: detectCurrencyCode(),
+  amountBorrowed: 0,
+  annualInterestRatePercent: 0,
+  loanLengthYears: 0,
+});
+
 const REPAYMENT_PERIODS_PER_YEAR: Record<RepaymentFrequency, number> = {
   yearly: 1,
   quarterly: 4,
@@ -157,6 +175,8 @@ function AppContent() {
   const [screen, setScreen] = useState<AppScreen>("home");
   const previousScreenRef = useRef<Exclude<AppScreen, "settings">>("home");
   const [input, setInput] = useState<LoanInput>(DEFAULT_INPUT);
+  // The live form values, which only become `input` once Calculate is pressed.
+  const [draftInput, setDraftInput] = useState<LoanInput>(DEFAULT_INPUT);
   const [result, setResult] = useState<LoanCalculationResult | null>(null);
   const [savedProfiles, setSavedProfiles] = useState<SavedLoanProfile[]>([]);
   const [reminders, setReminders] = useState<LoanReminder[]>([]);
@@ -192,6 +212,14 @@ function AppContent() {
   const insets = useSafeAreaInsets();
 
   const inputHash = JSON.stringify(input);
+  const draftValidation = validateLoanInput(draftInput);
+  const calculatorDirty =
+    JSON.stringify(normalizeInput(draftInput)) !== lastCalculatedHash;
+  const showCalculateBar =
+    screen === "calculator" &&
+    loanFormMode === "form" &&
+    draftValidation.ready &&
+    calculatorDirty;
   const canSaveCalculatedProfile =
     result !== null && lastCalculatedHash.length > 0 && lastCalculatedHash !== lastSavedHash;
   const minimumMonthlyRepayment = (() => {
@@ -307,6 +335,7 @@ function AppContent() {
       setLoanFormMode(savedInput ? "form" : "chooser");
       const initialHash = JSON.stringify(initial);
       setInput(initial);
+      setDraftInput(initial);
       setResult(calculateLoan(initial));
       setLastCalculatedHash(initialHash);
       setLastSavedHash(initialHash);
@@ -337,6 +366,7 @@ function AppContent() {
 
     bootstrap().catch(() => {
       setInput(DEFAULT_INPUT);
+      setDraftInput(DEFAULT_INPUT);
       setResult(calculateLoan(DEFAULT_INPUT));
       const defaultHash = JSON.stringify(DEFAULT_INPUT);
       setLastCalculatedHash(defaultHash);
@@ -350,6 +380,7 @@ function AppContent() {
     setIsCalculating(true);
     await new Promise((resolve) => setTimeout(resolve, 2000));
     setInput(normalized);
+    setDraftInput(normalized);
     setResult(calculateLoan(normalized));
     setLastCalculatedHash(JSON.stringify(normalized));
     await saveLoanInput(normalized);
@@ -386,6 +417,7 @@ function AppContent() {
     const normalized = normalizeInput(profile.input);
     const hash = JSON.stringify(normalized);
     setInput(normalized);
+    setDraftInput(normalized);
     setResult(calculateLoan(normalized));
     setProfileName(profile.name);
     setSelectedProfileId(profile.id);
@@ -396,12 +428,10 @@ function AppContent() {
   };
 
   const startNewLoan = () => {
-    const fresh = normalizeInput({
-      ...DEFAULT_INPUT,
-      currencyCode: detectCurrencyCode(),
-    });
-    const hash = JSON.stringify(fresh);
+    const fresh = emptyInput();
+    const hash = JSON.stringify(normalizeInput(fresh));
     setInput(fresh);
+    setDraftInput(fresh);
     setResult(null);
     setProfileName("My Loan Profile");
     setSelectedProfileId(null);
@@ -792,7 +822,7 @@ function AppContent() {
               </Pressable>
             </View>
 
-            <LoanForm initialValue={input} onSubmit={handleSubmit} />
+            <LoanForm initialValue={input} onDraftChange={setDraftInput} />
 
             {result ? (
               <View>
@@ -1181,6 +1211,28 @@ function AppContent() {
         ) : null}
         </View>
 
+        {showCalculateBar ? (
+          <View style={styles.calculateStickyBar}>
+            {draftValidation.error ? (
+              <Text style={styles.calculateStickyHint}>{draftValidation.error}</Text>
+            ) : null}
+            <Pressable
+              style={[
+                styles.calculateStickyButton,
+                draftValidation.error ? styles.calculateStickyButtonDisabled : null,
+              ]}
+              disabled={Boolean(draftValidation.error) || isCalculating}
+              onPress={() => {
+                handleSubmit(draftInput).catch(() => {});
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: Boolean(draftValidation.error) }}
+            >
+              <Text style={styles.calculateStickyButtonText}>Calculate</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {!overlayScreen ? (
           <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
             {NAV_TABS.map((tab) => {
@@ -1395,6 +1447,35 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.textInverse,
       fontSize: 9,
       fontWeight: "800",
+    },
+    calculateStickyBar: {
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.headerBorder,
+      backgroundColor: colors.saveBarBg,
+    },
+    calculateStickyHint: {
+      color: colors.errorText,
+      fontWeight: "600",
+      fontSize: 12,
+      marginBottom: 8,
+    },
+    calculateStickyButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 12,
+    },
+    calculateStickyButtonDisabled: {
+      opacity: 0.5,
+    },
+    calculateStickyButtonText: {
+      color: colors.textInverse,
+      fontWeight: "700",
+      fontSize: 16,
     },
     saveStickyBar: {
       paddingHorizontal: 16,

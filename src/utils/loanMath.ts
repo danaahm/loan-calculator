@@ -305,6 +305,64 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
   };
 };
 
+export interface LoanInputValidation {
+  /** The mandatory fields are filled in, so a calculation is possible. */
+  ready: boolean;
+  /** First blocking problem, if any. Null means safe to calculate. */
+  error: string | null;
+}
+
+/**
+ * Mandatory fields are the amount borrowed, the loan length and a currency.
+ * The interest rate is optional and treated as 0% when left blank. Optional
+ * sections (extra repayment, lump sum, offset) only block once switched on.
+ */
+export const validateLoanInput = (input: LoanInput): LoanInputValidation => {
+  const ready =
+    input.currencyCode.trim().length > 0 &&
+    input.amountBorrowed > 0 &&
+    input.loanLengthYears > 0;
+
+  const error = ((): string | null => {
+    if (input.amountBorrowed <= 0) {
+      return "Enter the amount borrowed.";
+    }
+    if (input.loanLengthYears <= 0) {
+      return "Loan length must be at least 1 month.";
+    }
+    if (input.currencyCode.trim().length === 0) {
+      return "Select a currency.";
+    }
+    if (input.extraRepayment.enabled && input.extraRepayment.amount <= 0) {
+      return "Extra repayment amount must be greater than zero.";
+    }
+    if (input.lumpSum.enabled && input.lumpSum.amount <= 0) {
+      return "Lump sum amount must be greater than zero.";
+    }
+    if (input.accountFeeEnabled && input.accountFee <= 0) {
+      return "Account fee must be greater than zero.";
+    }
+    if (input.offsetSavings.enabled) {
+      const hasStart = input.offsetSavings.amount > 0;
+      const hasDeposit =
+        input.offsetSavings.contribution.enabled &&
+        input.offsetSavings.contribution.amount > 0;
+      if (!hasStart && !hasDeposit) {
+        return "Enter an offset amount or a regular offset deposit.";
+      }
+      if (
+        input.offsetSavings.contribution.enabled &&
+        input.offsetSavings.contribution.amount <= 0
+      ) {
+        return "Offset deposit amount must be greater than zero.";
+      }
+    }
+    return null;
+  })();
+
+  return { ready, error };
+};
+
 export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
   const repaymentFrequency = input.repaymentFrequency ?? "monthly";
   const periodsPerYear = getPeriodsPerYear(repaymentFrequency);
