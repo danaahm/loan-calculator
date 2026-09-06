@@ -1,6 +1,7 @@
 import { isRunningInExpoGo } from "expo";
 import { Linking, Platform } from "react-native";
 
+import { t } from "../i18n/translate";
 import { type LoanReminder, REMINDER_DISCLAIMER, leadKey } from "../types/reminder";
 import { formatCurrency } from "../utils/format";
 import { formatDisplayDate } from "../utils/dateIso";
@@ -26,11 +27,16 @@ const runningInExpoGo = isRunningInExpoGo();
 export const reminderNotificationsSupported =
   (Platform.OS === "ios" || Platform.OS === "android") && !runningInExpoGo;
 
-export const notificationUnavailableHint = runningInExpoGo
-  ? "Expo Go cannot show phone alerts from SDK 53. Tracking still works here. Use a development build for banners."
-  : Platform.OS === "web"
-    ? "Phone alerts are available on iOS and Android."
-    : "Phone alerts are not available on this device.";
+/**
+ * A function, not a const: catalogues resolve at call time, and a module-level
+ * const would freeze the English copy at import, before settings have loaded.
+ */
+export const notificationUnavailableHint = (): string =>
+  runningInExpoGo
+    ? t("notifications.unavailable.expoGo")
+    : Platform.OS === "web"
+      ? t("notifications.unavailable.web")
+      : t("notifications.unavailable.device");
 
 let notificationsModule: NotificationsModule | null | undefined;
 let handlerReady = false;
@@ -100,7 +106,7 @@ const ensureAndroidChannel = async (
     return;
   }
   await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL_ID, {
-    name: "Loan repayment reminders",
+    name: t("notifications.channelName"),
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 250, 250, 250],
     lightColor: "#2563EB",
@@ -156,12 +162,12 @@ const cancelOurScheduledNotifications = async (): Promise<void> => {
 
 const leadTitle = (name: string, leadDays: number): string => {
   if (leadDays <= 0) {
-    return `${name} repayment today`;
+    return t("notifications.leadTitle.today", { name });
   }
   if (leadDays === 1) {
-    return `${name} repayment tomorrow`;
+    return t("notifications.leadTitle.tomorrow", { name });
   }
-  return `${name} repayment in ${leadDays} days`;
+  return t("notifications.leadTitle.inDays", { name, count: leadDays });
 };
 
 interface PlannedNotification {
@@ -221,8 +227,15 @@ export const refillReminderNotifications = async (
           identifier,
           reminderId: reminder.id,
           fireAt,
-          title: leadTitle(reminder.name || "Loan", leadDays),
-          body: `About ${formatCurrency(cycle.amountDue, reminder.currencyCode)} due ${formatDisplayDate(cycle.date)}. Remaining about ${formatCurrency(reminder.remainingBalance, reminder.currencyCode)}. Estimate only.`,
+          title: leadTitle(reminder.name || t("notifications.fallbackName"), leadDays),
+          body: t("notifications.body", {
+            amount: formatCurrency(cycle.amountDue, reminder.currencyCode),
+            date: formatDisplayDate(cycle.date),
+            remaining: formatCurrency(
+              reminder.remainingBalance,
+              reminder.currencyCode
+            ),
+          }),
         });
       }
     }
@@ -262,18 +275,63 @@ export const refillReminderNotifications = async (
   }));
 };
 
+/**
+ * Clears already-delivered reminder notifications from the system tray (and
+ * with them the launcher's badge), for reminders the user has just looked at.
+ * Only touches notifications this app posted, and only delivered ones -
+ * scheduled future alerts are untouched.
+ *
+ * Pass reminder ids to dismiss just those; omit to clear all of ours.
+ */
+export const dismissDeliveredReminderNotifications = async (
+  reminderIds?: string[]
+): Promise<void> => {
+  const Notifications = loadNotifications();
+  if (!Notifications) {
+    return;
+  }
+
+  const wanted = reminderIds ? new Set(reminderIds) : null;
+  if (wanted && wanted.size === 0) {
+    return;
+  }
+
+  try {
+    const presented = await Notifications.getPresentedNotificationsAsync();
+    await Promise.all(
+      presented
+        .filter((item) => {
+          const identifier = item.request.identifier;
+          if (!isOurIdentifier(identifier)) {
+            return false;
+          }
+          if (!wanted) {
+            return true;
+          }
+          const data = item.request.content.data as
+            | { reminderId?: string }
+            | undefined;
+          return typeof data?.reminderId === "string" && wanted.has(data.reminderId);
+        })
+        .map((item) => Notifications.dismissNotificationAsync(item.request.identifier))
+    );
+  } catch {
+    // A tray we cannot read or clear must never block opening the screen.
+  }
+};
+
 export const permissionStatusLabel = (status: OsPermissionStatus): string => {
   switch (status) {
     case "granted":
-      return "Allowed on this phone";
+      return t("notifications.permission.granted");
     case "denied":
-      return "Off in phone settings";
+      return t("notifications.permission.denied");
     case "undetermined":
-      return "Not enabled yet";
+      return t("notifications.permission.undetermined");
     default:
       return runningInExpoGo
-        ? "Needs a development build"
-        : "Not available on web";
+        ? t("notifications.permission.needsDevBuild")
+        : t("notifications.permission.unavailable");
   }
 };
 

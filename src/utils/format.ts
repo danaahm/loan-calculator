@@ -1,3 +1,4 @@
+import { t } from "../i18n/translate";
 import { type RepaymentFrequency } from "../types/loan";
 import {
   formatCurrency as formatWithLibrary,
@@ -62,24 +63,13 @@ export const formatCurrency = (value: number, currencyCode: string): string => {
 };
 
 export const formatPercent = (value: number): string => {
-  return `${(Number.isFinite(value) ? value : 0).toFixed(2)}%`;
+  return t("format.percent", {
+    value: (Number.isFinite(value) ? value : 0).toFixed(2),
+  });
 };
 
 export const formatFrequencyLabel = (frequency: RepaymentFrequency): string => {
-  switch (frequency) {
-    case "yearly":
-      return "Yearly";
-    case "quarterly":
-      return "Quarterly";
-    case "monthly":
-      return "Monthly";
-    case "fortnightly":
-      return "Fortnightly";
-    case "weekly":
-      return "Weekly";
-    default:
-      return frequency;
-  }
+  return t(`frequency.${frequency}`);
 };
 
 export const formatYearsAndPeriods = (
@@ -88,7 +78,7 @@ export const formatYearsAndPeriods = (
   periodsPerYear: number
 ): string => {
   if (periods <= 0 || periodsPerYear <= 0) {
-    return "No time saved";
+    return t("duration.noTimeSaved");
   }
 
   const wholeYears = Math.floor(years);
@@ -100,37 +90,64 @@ export const formatYearsAndPeriods = (
   );
 
   if (wholeYears === 0) {
-    return `${remainingMonths} month${remainingMonths === 1 ? "" : "s"}`;
+    return t("duration.months", { count: remainingMonths });
   }
 
-  return `${wholeYears} year${wholeYears === 1 ? "" : "s"} and ${remainingMonths} month${remainingMonths === 1 ? "" : "s"}`;
+  return t("duration.yearsAndMonths", {
+    years: t("duration.years", { count: wholeYears }),
+    months: t("duration.months", { count: remainingMonths }),
+  });
 };
 
 export const formatMonthAnchorLabel = (
   anchor: "onDate" | "startOfMonth" | "endOfMonth"
 ): string => {
-  switch (anchor) {
-    case "startOfMonth":
-      return "Start of month";
-    case "endOfMonth":
-      return "End of month";
-    default:
-      return "Same day each month";
+  return t(`monthAnchor.${anchor}`);
+};
+
+export interface LoanLengthParts {
+  years: number;
+  months: number;
+}
+
+export const composeLoanYears = (years: number, months: number): number => {
+  return (Math.max(0, years) * 12 + Math.max(0, months)) / 12;
+};
+
+/**
+ * Split decimal years into whole years and months. Rounding the *total* months
+ * is deliberate: 30 + 7 / 12 is 30.583333333333332, so flooring the fractional
+ * remainder would yield 6 months instead of 7.
+ */
+export const decomposeLoanYears = (value: number): LoanLengthParts => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return { years: 0, months: 0 };
   }
+  const totalMonths = Math.max(0, Math.round(value * 12));
+  return { years: Math.floor(totalMonths / 12), months: totalMonths % 12 };
+};
+
+export const formatLoanLengthLabel = (loanLengthYears: number): string => {
+  const { years, months } = decomposeLoanYears(loanLengthYears);
+
+  if (years === 0 && months === 0) {
+    return "";
+  }
+  if (years === 0) {
+    return t("duration.months", { count: months });
+  }
+  if (months === 0) {
+    return t("duration.years", { count: years });
+  }
+  return t("duration.yearsMonths", {
+    years: t("duration.years", { count: years }),
+    months: t("duration.months", { count: months }),
+  });
 };
 
 export const formatDurationLabel = (loanLengthYears: number): string => {
-  if (!Number.isFinite(loanLengthYears) || loanLengthYears <= 0) {
-    return "over loan term";
-  }
-
-  if (loanLengthYears < 1) {
-    const months = Math.max(1, Math.round(loanLengthYears * 12));
-    return `over ${months} month${months === 1 ? "" : "s"}`;
-  }
-
-  const roundedYears = Number.isInteger(loanLengthYears)
-    ? `${loanLengthYears}`
-    : `${loanLengthYears.toFixed(1)}`;
-  return `over ${roundedYears} year${Number(roundedYears) === 1 ? "" : "s"}`;
+  const label = formatLoanLengthLabel(loanLengthYears);
+  return label
+    ? t("duration.overLength", { length: label })
+    : t("duration.overLoanTerm");
 };

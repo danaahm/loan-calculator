@@ -14,6 +14,7 @@ import {
 
 import { DatePickerField } from "../components/DatePickerField";
 import { notificationUnavailableHint } from "../notifications/reminderNotifications";
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { FREQUENCIES, type SavedLoanProfile } from "../types/loan";
 import {
@@ -125,15 +126,16 @@ const LinkedProfilePicker = ({
   onSelectProfile: (profile: SavedLoanProfile) => void;
 }) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const [open, setOpen] = useState(false);
   const noneSelected = isNoneLinked(selectedId);
   const selectedName =
-    profiles.find((item) => item.id === selectedId)?.name ?? "None";
+    profiles.find((item) => item.id === selectedId)?.name ?? t("common.none");
 
   if (profiles.length <= PROFILE_CHIP_LIMIT) {
     return (
       <View style={styles.chipWrap}>
-        <Chip label="None" selected={noneSelected} onPress={onSelectNone} />
+        <Chip label={t("common.none")} selected={noneSelected} onPress={onSelectNone} />
         {profiles.map((profile) => (
           <Chip
             key={profile.id}
@@ -158,7 +160,7 @@ const LinkedProfilePicker = ({
           },
         ]}
         accessibilityRole="button"
-        accessibilityLabel={`Linked loan profile, ${selectedName}`}
+        accessibilityLabel={t("editor.linkedProfileA11y", { name: selectedName })}
       >
         <Text style={[styles.dropdownText, { color: colors.text }]} numberOfLines={1}>
           {selectedName}
@@ -167,7 +169,7 @@ const LinkedProfilePicker = ({
       </Pressable>
       <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
         <View style={[styles.modalPage, { backgroundColor: colors.card }]}>
-          <Text style={[styles.modalTitle, { color: colors.text }]}>Link a saved loan</Text>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>{t("editor.linkSavedLoan")}</Text>
           <Pressable
             onPress={() => {
               onSelectNone();
@@ -263,6 +265,7 @@ export const ReminderEditorScreen = ({
   onRequestEnableNotifications,
 }: ReminderEditorScreenProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const [name, setName] = useState(initialReminder.name);
   const [linkedProfileId, setLinkedProfileId] = useState<string | null>(
     initialReminder.linkedProfileId ?? null
@@ -367,7 +370,7 @@ export const ReminderEditorScreen = ({
     setInterestRate(String(draft.annualInterestRatePercent));
     setRepaymentAmount(formatGroupedNumberInput(String(draft.repaymentAmount)));
     setRepaymentFrequency(draft.repaymentFrequency);
-    setAccountFee(formatGroupedNumberInput(String(draft.accountFee)));
+    setAccountFee(formatGroupedNumberInput(String(draft.accountFee || "")));
     setAccountFeeFrequency(draft.accountFeeFrequency);
     setError(null);
   };
@@ -445,13 +448,13 @@ export const ReminderEditorScreen = ({
       return;
     }
     if (!notificationsSupported) {
-      setError(notificationUnavailableHint);
+      setError(notificationUnavailableHint());
       return;
     }
     const allowed = await onRequestEnableNotifications();
     setNotificationsEnabled(allowed);
     if (!allowed) {
-      setError("Notifications are off on this phone. You can enable them in Settings.");
+      setError(t("editor.notificationsOff"));
     }
   };
 
@@ -464,27 +467,27 @@ export const ReminderEditorScreen = ({
     const nextIso = nextPaymentIso;
 
     if (!trimmedName) {
-      setError("Please enter a name for this reminder.");
+      setError(t("editor.errorName"));
       return;
     }
     if (original <= 0) {
-      setError("Enter the original loan amount.");
+      setError(t("editor.errorOriginal"));
       return;
     }
     if (remaining < 0) {
-      setError("Remaining balance cannot be negative.");
+      setError(t("editor.errorRemaining"));
       return;
     }
     if (repayment <= 0) {
-      setError("Enter how much you repay each cycle.");
+      setError(t("editor.errorRepayment"));
       return;
     }
     if (!Number.isFinite(rate) || rate < 0) {
-      setError("Enter a valid interest rate.");
+      setError(t("editor.errorRate"));
       return;
     }
     if (!nextIso) {
-      setError("Choose the next repayment date.");
+      setError(t("editor.errorDate"));
       return;
     }
 
@@ -524,20 +527,20 @@ export const ReminderEditorScreen = ({
     <View style={[styles.page, { backgroundColor: colors.page }]}>
       <Pressable onPress={onBack} style={styles.backRow} accessibilityRole="button">
         <Ionicons name="chevron-back" size={22} color={colors.accentTextStrong} />
-        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>Back</Text>
+        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>{t("common.back")}</Text>
       </Pressable>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={[styles.title, { color: colors.text }]}>
-          {isNew ? "New reminder" : "Edit reminder"}
+          {isNew ? t("editor.titleNew") : t("editor.titleEdit")}
         </Text>
         <Text style={[styles.disclaimer, { color: colors.textMuted }]}>
-          {REMINDER_DISCLAIMER}
+          {REMINDER_DISCLAIMER()}
         </Text>
 
         {savedProfiles.length > 0 ? (
           <View>
             <Text style={[styles.label, { color: colors.textSecondary }]}>
-              Link a saved loan profile
+              {t("editor.linkProfileLabel")}
             </Text>
             <LinkedProfilePicker
               profiles={savedProfiles}
@@ -546,32 +549,31 @@ export const ReminderEditorScreen = ({
               onSelectProfile={applyProfile}
             />
             <Text style={[styles.linkHint, { color: colors.textMuted }]}>
-              Choosing a saved loan fills the fields below. None unlinks it and
-              clears those fields.
+              {t("editor.linkProfileHint")}
             </Text>
           </View>
         ) : null}
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Name</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.name")}</Text>
         <TextInput
           style={[styles.input, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.borderStrong }]}
           value={name}
           onChangeText={setName}
-          placeholder="e.g. Car loan"
+          placeholder={t("editor.namePlaceholder")}
           placeholderTextColor={colors.textMuted}
         />
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Currency code</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.currencyCode")}</Text>
         <TextInput
           autoCapitalize="characters"
           style={[styles.input, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.borderStrong }]}
           value={currencyCode}
           onChangeText={setCurrencyCode}
-          placeholder="AUD"
+          placeholder={t("editor.currencyPlaceholder")}
           placeholderTextColor={colors.textMuted}
         />
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Original loan amount</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.originalAmount")}</Text>
         <View style={[styles.inputWrap, { borderColor: colors.borderStrong, backgroundColor: colors.inputBg }]}>
           <Text style={[styles.prefix, { color: colors.text }]}>{moneySymbol}</Text>
           <TextInput
@@ -579,12 +581,12 @@ export const ReminderEditorScreen = ({
             value={originalAmount}
             onChangeText={onChangeOriginal}
             style={[styles.bareInput, { color: colors.text }]}
-            placeholder="3,000"
+            placeholder={t("editor.originalPlaceholder")}
             placeholderTextColor={colors.textMuted}
           />
         </View>
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Already paid</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.alreadyPaid")}</Text>
         <View style={[styles.inputWrap, { borderColor: colors.borderStrong, backgroundColor: colors.inputBg }]}>
           <Text style={[styles.prefix, { color: colors.text }]}>{moneySymbol}</Text>
           <TextInput
@@ -592,12 +594,12 @@ export const ReminderEditorScreen = ({
             value={alreadyPaid}
             onChangeText={onChangePaid}
             style={[styles.bareInput, { color: colors.text }]}
-            placeholder="400"
+            placeholder={t("editor.alreadyPaidPlaceholder")}
             placeholderTextColor={colors.textMuted}
           />
         </View>
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Remaining balance</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.remainingBalance")}</Text>
         <View style={[styles.inputWrap, { borderColor: colors.borderStrong, backgroundColor: colors.inputBg }]}>
           <Text style={[styles.prefix, { color: colors.text }]}>{moneySymbol}</Text>
           <TextInput
@@ -605,22 +607,22 @@ export const ReminderEditorScreen = ({
             value={remainingBalance}
             onChangeText={onChangeRemaining}
             style={[styles.bareInput, { color: colors.text }]}
-            placeholder="2,600"
+            placeholder={t("editor.remainingPlaceholder")}
             placeholderTextColor={colors.textMuted}
           />
         </View>
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Annual interest rate (%)</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.annualRate")}</Text>
         <TextInput
           keyboardType="decimal-pad"
           style={[styles.input, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.borderStrong }]}
           value={interestRate}
           onChangeText={setInterestRate}
-          placeholder="6.2"
+          placeholder={t("editor.ratePlaceholder")}
           placeholderTextColor={colors.textMuted}
         />
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Repayment each cycle</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.repaymentEachCycle")}</Text>
         <View style={[styles.inputWrap, { borderColor: colors.borderStrong, backgroundColor: colors.inputBg }]}>
           <Text style={[styles.prefix, { color: colors.text }]}>{moneySymbol}</Text>
           <TextInput
@@ -628,12 +630,12 @@ export const ReminderEditorScreen = ({
             value={repaymentAmount}
             onChangeText={(value) => setRepaymentAmount(formatGroupedNumberInput(value))}
             style={[styles.bareInput, { color: colors.text }]}
-            placeholder="120"
+            placeholder={t("editor.repaymentPlaceholder")}
             placeholderTextColor={colors.textMuted}
           />
         </View>
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Repayment frequency</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.repaymentFrequency")}</Text>
         <View style={styles.chipWrap}>
           {FREQUENCIES.map((item) => (
             <Chip
@@ -647,7 +649,7 @@ export const ReminderEditorScreen = ({
 
         {repaymentFrequency === "monthly" ? (
           <>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Monthly timing</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.monthlyTiming")}</Text>
             <View style={styles.chipWrap}>
               {MONTHLY_ANCHORS.map((item) => (
                 <Chip
@@ -661,14 +663,14 @@ export const ReminderEditorScreen = ({
           </>
         ) : null}
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Next repayment date</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.nextRepaymentDate")}</Text>
         <DatePickerField
           value={nextPaymentIso}
           onChange={setNextPaymentIso}
-          placeholder="Choose next repayment date"
+          placeholderKey="editor.nextDatePlaceholder"
         />
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Account fee (optional)</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.accountFee")}</Text>
         <View style={[styles.inputWrap, { borderColor: colors.borderStrong, backgroundColor: colors.inputBg }]}>
           <Text style={[styles.prefix, { color: colors.text }]}>{moneySymbol}</Text>
           <TextInput
@@ -676,11 +678,11 @@ export const ReminderEditorScreen = ({
             value={accountFee}
             onChangeText={(value) => setAccountFee(formatGroupedNumberInput(value))}
             style={[styles.bareInput, { color: colors.text }]}
-            placeholder="0"
+            placeholder={t("editor.accountFeePlaceholder")}
             placeholderTextColor={colors.textMuted}
           />
         </View>
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Fee frequency</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.feeFrequency")}</Text>
         <View style={styles.chipWrap}>
           {FREQUENCIES.map((item) => (
             <Chip
@@ -692,10 +694,10 @@ export const ReminderEditorScreen = ({
           ))}
         </View>
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Extra upcoming dates (optional)</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.extraDates")}</Text>
         <DatePickerField
           value={null}
-          placeholder="Add another date"
+          placeholderKey="editor.addAnotherDate"
           onChange={addCustomDate}
         />
         {customUpcomingDates.map((date) => (
@@ -708,26 +710,26 @@ export const ReminderEditorScreen = ({
                 setCustomUpcomingDates(customUpcomingDates.filter((item) => item !== date))
               }
             >
-              <Text style={{ color: colors.danger, fontWeight: "700" }}>Remove</Text>
+              <Text style={{ color: colors.danger, fontWeight: "700" }}>{t("common.remove")}</Text>
             </Pressable>
           </View>
         ))}
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Notes</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.notes")}</Text>
         <TextInput
           style={[styles.input, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.borderStrong }]}
           value={notes}
           onChangeText={setNotes}
-          placeholder="Lender, last 4 digits, etc."
+          placeholder={t("editor.notesPlaceholder")}
           placeholderTextColor={colors.textMuted}
         />
 
         <View style={styles.switchRow}>
           <View style={styles.flex}>
-            <Text style={[styles.switchLabel, { color: colors.text }]}>Enable notifications</Text>
+            <Text style={[styles.switchLabel, { color: colors.text }]}>{t("editor.enableNotifications")}</Text>
             {!notificationsSupported ? (
               <Text style={{ color: colors.textMuted, fontWeight: "600", marginTop: 4 }}>
-                {notificationUnavailableHint}
+                {notificationUnavailableHint()}
               </Text>
             ) : null}
           </View>
@@ -742,7 +744,7 @@ export const ReminderEditorScreen = ({
           />
         </View>
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Alert me</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.alertMe")}</Text>
         <View style={styles.chipWrap}>
           {NOTIFY_LEAD_PRESETS.map((lead) => (
             <Chip
@@ -760,7 +762,7 @@ export const ReminderEditorScreen = ({
           style={[styles.saveButton, { backgroundColor: colors.primary }]}
           onPress={submit}
         >
-          <Text style={[styles.saveButtonText, { color: colors.textInverse }]}>Save reminder</Text>
+          <Text style={[styles.saveButtonText, { color: colors.textInverse }]}>{t("editor.save")}</Text>
         </Pressable>
       </ScrollView>
     </View>

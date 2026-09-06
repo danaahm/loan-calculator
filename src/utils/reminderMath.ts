@@ -22,14 +22,16 @@ export const safeRound = (value: number): number => {
 const newId = (): string =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-export const createEmptyReminder = (): LoanReminder => {
+export const createEmptyReminder = (
+  defaultCurrencyCode = "AUD"
+): LoanReminder => {
   const today = todayLocalIso();
   const now = new Date().toISOString();
   return {
     id: newId(),
     name: "",
     linkedProfileId: null,
-    currencyCode: "AUD",
+    currencyCode: defaultCurrencyCode,
     originalAmount: 0,
     remainingBalance: 0,
     annualInterestRatePercent: 0,
@@ -82,7 +84,7 @@ export const draftFromSavedProfile = (
     annualInterestRatePercent: input.annualInterestRatePercent,
     repaymentAmount: estimatePeriodRepaymentFromProfile(profile),
     repaymentFrequency: input.repaymentFrequency,
-    accountFee: input.accountFee,
+    accountFee: input.accountFeeEnabled ? input.accountFee : 0,
     accountFeeFrequency: input.accountFeeFrequency,
     updatedAt: new Date().toISOString(),
   };
@@ -96,7 +98,7 @@ export const refreshTermsFromProfile = (
   return {
     ...reminder,
     annualInterestRatePercent: input.annualInterestRatePercent,
-    accountFee: input.accountFee,
+    accountFee: input.accountFeeEnabled ? input.accountFee : 0,
     accountFeeFrequency: input.accountFeeFrequency,
     repaymentFrequency: input.repaymentFrequency,
     updatedAt: new Date().toISOString(),
@@ -119,6 +121,17 @@ const feeForCycle = (
 export const amountDueForReminder = (reminder: LoanReminder): number => {
   const { feePortion } = feeForCycle(reminder);
   return safeRound(reminder.repaymentAmount + feePortion);
+};
+
+/** Fraction of the original balance paid down so far, clamped to 0..1. */
+export const payoffProgress = (reminder: LoanReminder): number => {
+  if (reminder.originalAmount <= 0) {
+    return 0;
+  }
+  return Math.min(
+    1,
+    Math.max(0, 1 - reminder.remainingBalance / reminder.originalAmount)
+  );
 };
 
 export const rateAsOf = (reminder: LoanReminder, isoDate: string): number => {
@@ -313,6 +326,15 @@ export const applyExtraPayment = (
   };
 };
 
+// Weekly repayments run 52 periods a year, so a 30-year loan is already 1560
+// cycles. Sized to cover ~100 years of weekly repayments.
+const MAX_PAYOFF_PERIODS = 5200;
+
+/**
+ * The date the final scheduled repayment lands on, or null when that cannot be
+ * determined - a loan whose repayment never covers the interest, or one that
+ * runs past the projection limit.
+ */
 export const estimatePayoffDate = (reminder: LoanReminder): string | null => {
   if (reminder.status !== "active" || reminder.remainingBalance <= ZERO_EPSILON) {
     return reminder.status === "completed" ? reminder.nextPaymentDate : null;
@@ -322,13 +344,27 @@ export const estimatePayoffDate = (reminder: LoanReminder): string | null => {
   }
 
   let current: LoanReminder = { ...reminder, payments: [] };
+  let lastPaymentDate: string | null = null;
   let guard = 0;
-  while (current.status === "active" && guard < 600) {
-    current = applyScheduledPayment(current, "auto");
+
+  while (current.status === "active" && guard < MAX_PAYOFF_PERIODS) {
+    const balanceBefore = current.remainingBalance;
+    const dueDate = current.nextPaymentDate;
+    // Discard each payment record as we go; only the final date matters, and
+    // keeping thousands of them (with undo snapshots) is pure waste.
+    current = { ...applyScheduledPayment(current, "auto"), payments: [] };
+
+    if (current.remainingBalance >= balanceBefore - ZERO_EPSILON) {
+      // The repayment does not dent the principal, so the loan never clears.
+      return null;
+    }
+
+    lastPaymentDate = dueDate;
     guard += 1;
   }
-  const last = current.payments[current.payments.length - 1];
-  return last?.date ?? null;
+
+  // Still active means the projection limit was hit rather than a real payoff.
+  return current.status === "active" ? null : lastPaymentDate;
 };
 
 export interface UpcomingCycle {
@@ -381,6 +417,48 @@ export const listUpcomingDates = (
   return projectUpcomingCycles(reminder, 365 * 2, count).map((cycle) => cycle.date);
 };
 
+export interface UpcomingRepayment {
+  key: string;
+  reminder: LoanReminder;
+  date: string;
+  amountDue: number;
+  remainingAfter: number;
+}
+
+/**
+ * The next `count` repayments across every active reminder, in date order.
+ * Each reminder contributes up to `count` of its own cycles, so a single
+ * tracked loan fills the list with its own upcoming cycles while several
+ * loans naturally interleave.
+ */
+export const buildUpcomingRepayments = (
+  reminders: LoanReminder[],
+  count = 3
+): UpcomingRepayment[] => {
+  const occurrences: UpcomingRepayment[] = [];
+
+  reminders
+    .filter((reminder) => reminder.status === "active")
+    .forEach((reminder) => {
+      projectUpcomingCycles(reminder, 365 * 2, count).forEach((cycle) => {
+        occurrences.push({
+          key: `${reminder.id}:${cycle.date}`,
+          reminder,
+          date: cycle.date,
+          amountDue: cycle.amountDue,
+          remainingAfter: cycle.remainingAfter,
+        });
+      });
+    });
+
+  return occurrences
+    .sort((a, b) => {
+      const byDate = a.date.localeCompare(b.date);
+      return byDate !== 0 ? byDate : a.reminder.name.localeCompare(b.reminder.name);
+    })
+    .slice(0, count);
+};
+
 export const setReminderStatus = (
   reminder: LoanReminder,
   status: ReminderStatus
@@ -388,8 +466,10 @@ export const setReminderStatus = (
   return {
     ...reminder,
     status,
+    // Only an active reminder can notify, so archiving or completing one
+    // turns its alerts off rather than leaving a stale enabled flag behind.
     notificationsEnabled:
-      status === "completed" ? false : reminder.notificationsEnabled,
+      status === "active" ? reminder.notificationsEnabled : false,
     updatedAt: new Date().toISOString(),
   };
 };

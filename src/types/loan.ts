@@ -37,6 +37,7 @@ export interface LoanInput {
   annualInterestRatePercent: number;
   repaymentFrequency: RepaymentFrequency;
   loanLengthYears: number;
+  accountFeeEnabled: boolean;
   accountFee: number;
   accountFeeFrequency: RepaymentFrequency;
   extraRepayment: ExtraRepaymentConfig;
@@ -89,11 +90,26 @@ export interface LoanSchedule {
 }
 
 export interface LoanCalculationResult {
+  /**
+   * The loan on its contracted terms alone: principal, rate and term. No extra
+   * repayments, no offset, no lump-sum residual. This is the reference line
+   * every comparison is measured against.
+   */
+  contracted: LoanSchedule;
+  /** The user's terms with extra repayments withheld. Defines the scheduled repayment. */
   baseline: LoanSchedule;
   withExtra?: LoanSchedule;
+  /** The user's terms with every enabled feature applied. */
   activeSchedule: LoanSchedule;
+  /** True when at least one of extra repayment, lump sum or offset is on. */
+  hasPlanComparison: boolean;
+  /**
+   * activeSchedule measured against contracted. Positive means the plan beats
+   * the contracted loan; negative means it costs more or takes longer.
+   */
   savings: {
     moneySaved: number;
+    interestSaved: number;
     periodsSaved: number;
     yearsSaved: number;
   };

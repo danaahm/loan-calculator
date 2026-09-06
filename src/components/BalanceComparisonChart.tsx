@@ -51,6 +51,7 @@ import {
   getBalanceChartDomain,
 } from "../utils/chartData";
 import { CardHeader } from "./CardHeader";
+import { useLocale } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeColors } from "../theme/tokens";
 
@@ -223,6 +224,7 @@ export const BalanceComparisonChart = ({
   loanLengthYears,
 }: BalanceComparisonChartProps) => {
   const { colors } = useTheme();
+  const { t, language } = useLocale();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [collapsed, setCollapsed] = useState(false);
   const [showBaseline, setShowBaseline] = useState(true);
@@ -231,7 +233,7 @@ export const BalanceComparisonChart = ({
   const [chartWidth, setChartWidth] = useState(0);
 
   const periodsPerYear = PERIODS_PER_YEAR[repaymentFrequency];
-  const hasExtraSeries = Boolean(result.withExtra);
+  const hasExtraSeries = result.hasPlanComparison;
   const useMonthAxis = loanLengthYears <= 2;
   const currencySymbol = getCurrencySymbol(currencyCode);
   const chartData = useMemo(
@@ -287,22 +289,38 @@ export const BalanceComparisonChart = ({
     [transformState]
   );
 
-  const savedTime = formatYearsAndPeriods(
-    result.savings.yearsSaved,
-    result.savings.periodsSaved,
-    periodsPerYear
-  );
-  const totalLoanTime = result.withExtra
+  // A lump-sum residual lowers the repayment but costs more overall, so these
+  // deltas can be negative and the labels have to say so rather than show a
+  // minus sign under a "saved" heading.
+  const interestDelta = result.savings.interestSaved;
+  const periodsDelta = result.savings.periodsSaved;
+  const interestLabel =
+    interestDelta < 0 ? t("chart.extraInterest") : t("chart.interestSaved");
+  const timeLabel =
+    periodsDelta < 0
+      ? t("chart.longerBy")
+      : periodsDelta === 0
+        ? t("chart.term")
+        : t("chart.timeSaved");
+  const timeValue =
+    periodsDelta === 0
+      ? t("chart.unchanged")
+      : formatYearsAndPeriods(
+          Math.abs(result.savings.yearsSaved),
+          Math.abs(periodsDelta),
+          periodsPerYear
+        );
+  const totalLoanTime = result.hasPlanComparison
     ? formatYearsAndPeriods(
-        result.withExtra.summary.payoffYears,
-        result.withExtra.summary.payoffPeriods,
+        result.activeSchedule.summary.payoffYears,
+        result.activeSchedule.summary.payoffPeriods,
         periodsPerYear
       )
     : formatDurationLabel(loanLengthYears);
 
   const formatMoney = useCallback(
     (value: number): string => {
-      return `${currencySymbol}${Math.round(value).toLocaleString()}`;
+      return `${currencySymbol}${Math.round(value).toLocaleString(language)}`;
     },
     [currencySymbol]
   );
@@ -371,8 +389,10 @@ export const BalanceComparisonChart = ({
   return (
     <View style={styles.card}>
       <CardHeader
-        title="Loan Balance Over Time"
-        subtitle={`(${formatDurationLabel(loanLengthYears)})`}
+        title={t("chart.title")}
+        subtitle={t("chart.subtitle", {
+          duration: formatDurationLabel(loanLengthYears),
+        })}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
@@ -509,12 +529,12 @@ export const BalanceComparisonChart = ({
                 }}
               </CartesianChart>
             ) : (
-              <Text style={styles.chartFallbackText}>Enable at least one series.</Text>
+              <Text style={styles.chartFallbackText}>{t("chart.enableSeries")}</Text>
             )}
           </View>
-          <Text style={styles.xAxisTitle}>{useMonthAxis ? "Months" : "Years"}</Text>
+          <Text style={styles.xAxisTitle}>{useMonthAxis ? t("chart.axisMonths") : t("chart.axisYears")}</Text>
           <Text style={styles.chartHint}>
-            Hold a point for details. Pinch to zoom.
+            {t("chart.hint")}
           </Text>
 
           {activePoint ? (
@@ -524,15 +544,19 @@ export const BalanceComparisonChart = ({
               </Text>
               {showBaseline ? (
                 <Text style={styles.tooltipBaseline}>
-                  Original: {formatMoney(activePoint.baseline)}
+                  {t("chart.tooltipOriginal", {
+                    value: formatMoney(activePoint.baseline),
+                  })}
                 </Text>
               ) : null}
               {hasExtraSeries && showExtra ? (
                 <Text style={styles.tooltipExtra}>
-                  With extra:{" "}
-                  {activePoint.extra === null
-                    ? "Paid off"
-                    : formatMoney(activePoint.extra)}
+                  {t("chart.tooltipPlan", {
+                    value:
+                      activePoint.extra === null
+                        ? t("chart.paidOff")
+                        : formatMoney(activePoint.extra),
+                  })}
                 </Text>
               ) : null}
             </View>
@@ -543,7 +567,7 @@ export const BalanceComparisonChart = ({
             onPress={() => setShowBaseline((prev) => !prev)}
           >
             <View style={[styles.dot, { backgroundColor: "#2563eb" }]} />
-            <Text style={styles.legendText}>Original repayment</Text>
+            <Text style={styles.legendText}>{t("chart.legendOriginal")}</Text>
           </Pressable>
           {hasExtraSeries ? (
             <Pressable
@@ -551,28 +575,30 @@ export const BalanceComparisonChart = ({
               onPress={() => setShowExtra((prev) => !prev)}
             >
               <View style={[styles.dot, { backgroundColor: "#10b981" }]} />
-              <Text style={styles.legendText}>With extra repayment</Text>
+              <Text style={styles.legendText}>{t("chart.legendPlan")}</Text>
             </Pressable>
           ) : null}
 
           {hasExtraSeries ? (
             <View style={styles.savingsWrap}>
-              <Text style={styles.savingsTitle}>Extra Repayment Benefit</Text>
+              <Text style={styles.savingsTitle}>{t("chart.savingsTitle")}</Text>
               <View style={styles.savingsCardsRow}>
                 <View style={styles.savingsCard}>
-                  <Text style={styles.savingsCardLabel}>Interest saved:</Text>
+                  <Text style={styles.savingsCardLabel}>{interestLabel}</Text>
                   <FitOneLineText
-                    value={`${currencySymbol}${Math.round(result.savings.moneySaved).toLocaleString()}`}
+                    value={`${currencySymbol}${Math.abs(
+                      Math.round(interestDelta)
+                    ).toLocaleString(language)}`}
                     style={styles.savingsCardValue}
                   />
                 </View>
                 <View style={styles.savingsCard}>
-                  <Text style={styles.savingsCardLabel}>Time saved:</Text>
-                  <FitOneLineText value={savedTime} style={styles.savingsCardValue} />
+                  <Text style={styles.savingsCardLabel}>{timeLabel}</Text>
+                  <FitOneLineText value={timeValue} style={styles.savingsCardValue} />
                 </View>
               </View>
               <View style={styles.savingsCardWide}>
-                <Text style={styles.savingsCardLabel}>Total loan time:</Text>
+                <Text style={styles.savingsCardLabel}>{t("chart.totalLoanTime")}</Text>
                 <FitOneLineText value={totalLoanTime} style={styles.savingsCardValue} />
               </View>
             </View>

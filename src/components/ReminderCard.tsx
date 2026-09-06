@@ -1,10 +1,12 @@
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type LoanReminder } from "../types/reminder";
-import { daysUntil, formatDisplayDate } from "../utils/dateIso";
+import { formatDisplayDate } from "../utils/dateIso";
 import { formatCurrency, formatFrequencyLabel } from "../utils/format";
 import { amountDueForReminder } from "../utils/reminderMath";
+import { DueChip, isReminderOverdue } from "./DueChip";
 
 interface ReminderCardProps {
   reminder: LoanReminder;
@@ -24,19 +26,10 @@ export const ReminderCard = ({
   onDelete,
 }: ReminderCardProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const due = amountDueForReminder(reminder);
-  const until = daysUntil(reminder.nextPaymentDate);
-  const overdue = reminder.status === "active" && until < 0;
+  const overdue = isReminderOverdue(reminder.nextPaymentDate, reminder.status);
   const paidOff = reminder.status === "completed";
-  const badge = paidOff
-    ? "Paid off"
-    : overdue
-      ? "Overdue"
-      : until === 0
-        ? "Due today"
-        : until === 1
-          ? "Due tomorrow"
-          : `Due in ${until} days`;
 
   return (
     <Pressable
@@ -53,45 +46,24 @@ export const ReminderCard = ({
         <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
           {reminder.name}
         </Text>
-        <View
-          style={[
-            styles.badge,
-            {
-              backgroundColor: paidOff
-                ? colors.savingsBg
-                : overdue
-                  ? colors.dangerBg
-                  : colors.primarySoft,
-            },
-          ]}
-        >
-          <Text
-            style={{
-              color: paidOff
-                ? colors.savingsText
-                : overdue
-                  ? colors.danger
-                  : colors.accentTextDeep,
-              fontWeight: "700",
-              fontSize: 11,
-            }}
-          >
-            {badge}
-          </Text>
-        </View>
+        <DueChip dateIso={reminder.nextPaymentDate} status={reminder.status} />
       </View>
       <Text style={[styles.meta, { color: colors.textMuted }]}>
-        Remaining {formatCurrency(reminder.remainingBalance, reminder.currencyCode)} of{" "}
-        {formatCurrency(reminder.originalAmount, reminder.currencyCode)}
+        {t("reminderCard.remainingOf", {
+          remaining: formatCurrency(reminder.remainingBalance, reminder.currencyCode),
+          original: formatCurrency(reminder.originalAmount, reminder.currencyCode),
+        })}
       </Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
-        Next {formatDisplayDate(reminder.nextPaymentDate)} ·{" "}
-        {formatCurrency(due, reminder.currencyCode)} ·{" "}
-        {formatFrequencyLabel(reminder.repaymentFrequency)}
+        {t("reminderCard.nextLine", {
+          date: formatDisplayDate(reminder.nextPaymentDate),
+          amount: formatCurrency(due, reminder.currencyCode),
+          frequency: formatFrequencyLabel(reminder.repaymentFrequency),
+        })}
       </Text>
 
       <View style={styles.switchRow}>
-        <Text style={[styles.switchLabel, { color: colors.text }]}>Notifications</Text>
+        <Text style={[styles.switchLabel, { color: colors.text }]}>{t("reminderCard.notifications")}</Text>
         <Switch
           value={reminder.notificationsEnabled && notificationsAvailable}
           disabled={!notificationsAvailable || paidOff || reminder.status === "archived"}
@@ -107,14 +79,14 @@ export const ReminderCard = ({
             onPress={onArchive}
             style={[styles.actionBtn, { borderColor: colors.borderStrong, backgroundColor: colors.inputBg }]}
           >
-            <Text style={[styles.actionText, { color: colors.textSecondary }]}>Archive</Text>
+            <Text style={[styles.actionText, { color: colors.textSecondary }]}>{t("common.archive")}</Text>
           </Pressable>
         ) : null}
         <Pressable
           onPress={onDelete}
           style={[styles.actionBtn, { borderColor: colors.dangerBorder, backgroundColor: colors.dangerBg }]}
         >
-          <Text style={[styles.actionText, { color: colors.danger }]}>Delete</Text>
+          <Text style={[styles.actionText, { color: colors.danger }]}>{t("common.delete")}</Text>
         </Pressable>
       </View>
     </Pressable>
@@ -137,11 +109,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: "800",
-  },
-  badge: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
   },
   meta: {
     marginTop: 4,

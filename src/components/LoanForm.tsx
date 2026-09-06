@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeColors } from "../theme/tokens";
 import {
@@ -19,6 +20,8 @@ import {
   type RepaymentFrequency,
 } from "../types/loan";
 import {
+  composeLoanYears,
+  decomposeLoanYears,
   getAvailableCurrencies,
   getCurrencySymbol,
   type CurrencyOption,
@@ -30,7 +33,8 @@ type FormStyles = ReturnType<typeof createStyles>;
 
 interface LoanFormProps {
   initialValue: LoanInput;
-  onSubmit: (value: LoanInput) => void;
+  /** Fires on every field change so the sticky Calculate bar can react. */
+  onDraftChange: (value: LoanInput) => void;
 }
 
 const parsePositiveNumber = (value: string): number => {
@@ -39,6 +43,20 @@ const parsePositiveNumber = (value: string): number => {
     return 0;
   }
   return parsed;
+};
+
+const digitsOnly = (value: string): string => value.replace(/[^0-9]/g, "");
+
+/** Digits only, capped at `max`, and blank is allowed while editing. */
+const clampWholeNumberInput = (value: string, max?: number): string => {
+  const digits = digitsOnly(value).replace(/^0+(?=\d)/, "");
+  if (digits === "") {
+    return "";
+  }
+  if (max !== undefined && Number(digits) > max) {
+    return String(max);
+  }
+  return digits;
 };
 
 const parsePositiveInt = (value: string): number => {
@@ -55,6 +73,9 @@ const defaultOffsetContribution = (value: LoanInput) =>
     amount: 0,
     frequency: "monthly" as RepaymentFrequency,
   };
+
+/** Zero means "not filled in yet", so show an empty field rather than "0". */
+const blankIfZero = (value: number): string => (value > 0 ? String(value) : "");
 
 const formatGroupedNumberInput = (value: string): string => {
   const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
@@ -106,8 +127,9 @@ const FrequencySelector = ({
   );
 };
 
-export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
+export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [collapsed, setCollapsed] = useState(false);
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
@@ -115,14 +137,20 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
   const currencies = useMemo(() => getAvailableCurrencies(), []);
 
   const [amountBorrowed, setAmountBorrowed] = useState(
-    formatGroupedNumberInput(String(initialValue.amountBorrowed))
+    formatGroupedNumberInput(blankIfZero(initialValue.amountBorrowed))
   );
   const [currencyCode, setCurrencyCode] = useState(initialValue.currencyCode);
   const [interestRate, setInterestRate] = useState(
-    String(initialValue.annualInterestRatePercent)
+    blankIfZero(initialValue.annualInterestRatePercent)
   );
   const [loanLengthYears, setLoanLengthYears] = useState(
-    String(initialValue.loanLengthYears)
+    blankIfZero(decomposeLoanYears(initialValue.loanLengthYears).years)
+  );
+  const [loanLengthMonths, setLoanLengthMonths] = useState(
+    blankIfZero(decomposeLoanYears(initialValue.loanLengthYears).months)
+  );
+  const [accountFeeEnabled, setAccountFeeEnabled] = useState(
+    initialValue.accountFeeEnabled
   );
   const [accountFee, setAccountFee] = useState(String(initialValue.accountFee));
   const [repaymentFrequency, setRepaymentFrequency] = useState(
@@ -161,13 +189,15 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
   );
   const [offsetContributionFrequency, setOffsetContributionFrequency] =
     useState<RepaymentFrequency>(defaultOffsetContribution(initialValue).frequency);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrencyCode(initialValue.currencyCode);
-    setAmountBorrowed(formatGroupedNumberInput(String(initialValue.amountBorrowed)));
-    setInterestRate(String(initialValue.annualInterestRatePercent));
-    setLoanLengthYears(String(initialValue.loanLengthYears));
+    setAmountBorrowed(formatGroupedNumberInput(blankIfZero(initialValue.amountBorrowed)));
+    setInterestRate(blankIfZero(initialValue.annualInterestRatePercent));
+    const loanLength = decomposeLoanYears(initialValue.loanLengthYears);
+    setLoanLengthYears(blankIfZero(loanLength.years));
+    setLoanLengthMonths(blankIfZero(loanLength.months));
+    setAccountFeeEnabled(initialValue.accountFeeEnabled);
     setAccountFee(String(initialValue.accountFee));
     setRepaymentFrequency(initialValue.repaymentFrequency);
     setAccountFeeFrequency(initialValue.accountFeeFrequency);
@@ -197,7 +227,11 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
       amountBorrowed: parsePositiveNumber(amountBorrowed),
       annualInterestRatePercent: parsePositiveNumber(interestRate),
       repaymentFrequency,
-      loanLengthYears: parsePositiveNumber(loanLengthYears),
+      loanLengthYears: composeLoanYears(
+        parsePositiveInt(loanLengthYears),
+        parsePositiveInt(loanLengthMonths)
+      ),
+      accountFeeEnabled,
       accountFee: parsePositiveNumber(accountFee),
       accountFeeFrequency,
       extraRepayment: {
@@ -223,6 +257,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     };
   }, [
     accountFee,
+    accountFeeEnabled,
     accountFeeFrequency,
     amountBorrowed,
     currencyCode,
@@ -234,6 +269,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     lumpSumAmount,
     lumpSumEnabled,
     interestRate,
+    loanLengthMonths,
     loanLengthYears,
     offsetAmount,
     offsetContributionAmount,
@@ -273,59 +309,24 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     );
   };
 
-  const submit = () => {
-    if (fieldValue.amountBorrowed <= 0) {
-      setError("Amount borrowed must be greater than zero.");
-      return;
-    }
-
-    if (fieldValue.loanLengthYears <= 0) {
-      setError("Loan length must be greater than zero.");
-      return;
-    }
-
-    if (fieldValue.extraRepayment.enabled && fieldValue.extraRepayment.amount <= 0) {
-      setError("Extra repayment amount must be greater than zero.");
-      return;
-    }
-    if (fieldValue.lumpSum.enabled && fieldValue.lumpSum.amount <= 0) {
-      setError("Lump sum amount must be greater than zero.");
-      return;
-    }
-    if (fieldValue.offsetSavings.enabled) {
-      const hasStart = fieldValue.offsetSavings.amount > 0;
-      const hasDeposit =
-        fieldValue.offsetSavings.contribution.enabled &&
-        fieldValue.offsetSavings.contribution.amount > 0;
-      if (!hasStart && !hasDeposit) {
-        setError("Enter an offset amount or a regular offset deposit.");
-        return;
-      }
-      if (
-        fieldValue.offsetSavings.contribution.enabled &&
-        fieldValue.offsetSavings.contribution.amount <= 0
-      ) {
-        setError("Offset deposit amount must be greater than zero.");
-        return;
-      }
-    }
-
-    setError(null);
-    onSubmit(fieldValue);
-  };
+  // Publish the live draft upward so the sticky Calculate bar can enable
+  // itself. Runs only when a parsed field actually changes, not per keystroke.
+  useEffect(() => {
+    onDraftChange(fieldValue);
+  }, [fieldValue, onDraftChange]);
 
   return (
     <View style={styles.card}>
       <CardHeader
-        title="Loan Profile"
-        subtitle="Enter values to calculate repayments."
+        title={t("loanForm.title")}
+        subtitle={t("loanForm.subtitle")}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
 
       {!collapsed ? (
         <View>
-          <Text style={styles.label}>Currency</Text>
+          <Text style={styles.label}>{t("loanForm.currency")}</Text>
           <Pressable
             style={styles.currencySelectButton}
             onPress={() => setCurrencyModalVisible(true)}
@@ -335,7 +336,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             </Text>
           </Pressable>
 
-          <Text style={styles.label}>Amount Borrowed</Text>
+          <Text style={styles.label}>{t("loanForm.amountBorrowed")}</Text>
           <View style={styles.inputWrap}>
             <Text style={styles.prefixText}>{moneySymbol}</Text>
             <TextInput
@@ -343,60 +344,97 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
               value={amountBorrowed}
           onChangeText={(value) => setAmountBorrowed(formatGroupedNumberInput(value))}
               style={styles.input}
-              placeholder="e.g. 500000"
+              placeholder={t("loanForm.amountPlaceholder")}
               placeholderTextColor={colors.textMuted}
             />
           </View>
 
-          <Text style={styles.label}>Interest Rate (% per year)</Text>
+          <Text style={styles.label}>{t("loanForm.interestRate")}</Text>
           <TextInput
             keyboardType="decimal-pad"
             value={interestRate}
             onChangeText={setInterestRate}
             style={styles.simpleInput}
-            placeholder="e.g. 6.25%"
+            placeholder={t("loanForm.interestPlaceholder")}
             placeholderTextColor={colors.textMuted}
           />
 
-          <Text style={styles.label}>Repayment Frequency</Text>
+          <Text style={styles.label}>{t("loanForm.repaymentFrequency")}</Text>
           <FrequencySelector
             value={repaymentFrequency}
             onChange={setRepaymentFrequency}
             styles={styles}
           />
 
-          <Text style={styles.label}>Loan Length (years)</Text>
-          <TextInput
-            keyboardType="decimal-pad"
-            value={loanLengthYears}
-            onChangeText={setLoanLengthYears}
-            style={styles.simpleInput}
-            placeholder="e.g. 30"
-            placeholderTextColor={colors.textMuted}
-          />
-
-          <Text style={styles.label}>Account Fee (per fee event)</Text>
-          <View style={styles.inputWrap}>
-            <Text style={styles.prefixText}>{moneySymbol}</Text>
-            <TextInput
-              keyboardType="decimal-pad"
-              value={accountFee}
-              onChangeText={setAccountFee}
-              style={styles.input}
-              placeholder="e.g. 10"
-              placeholderTextColor={colors.textMuted}
-            />
+          <Text style={styles.label}>{t("loanForm.loanLength")}</Text>
+          <View style={styles.loanLengthRow}>
+            <View style={styles.startAfterInputWrap}>
+              <TextInput
+                keyboardType="number-pad"
+                value={loanLengthYears}
+                onChangeText={(value) =>
+                  setLoanLengthYears(clampWholeNumberInput(value))
+                }
+                style={styles.simpleInput}
+                placeholder={t("loanForm.yearsPlaceholder")}
+                placeholderTextColor={colors.textMuted}
+              />
+              <Text style={styles.fieldUnitText}>{t("loanForm.unitYears")}</Text>
+            </View>
+            <View style={styles.startAfterInputWrap}>
+              <TextInput
+                keyboardType="number-pad"
+                value={loanLengthMonths}
+                onChangeText={(value) =>
+                  setLoanLengthMonths(clampWholeNumberInput(value, 11))
+                }
+                style={styles.simpleInput}
+                placeholder="0"
+                placeholderTextColor={colors.textMuted}
+              />
+              <Text style={styles.fieldUnitText}>{t("loanForm.unitMonthsOptional")}</Text>
+            </View>
           </View>
 
-          <Text style={styles.label}>Account Fee Frequency</Text>
-          <FrequencySelector
-            value={accountFeeFrequency}
-            onChange={setAccountFeeFrequency}
-            styles={styles}
-          />
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>{t("loanForm.enableAccountFee")}</Text>
+            <Switch
+              value={accountFeeEnabled}
+              onValueChange={setAccountFeeEnabled}
+              trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
+              thumbColor={colors.switchThumb}
+            />
+          </View>
+          <Text style={styles.hintText}>
+            {t("loanForm.accountFeeHint")}
+          </Text>
+
+          {accountFeeEnabled ? (
+            <View>
+              <Text style={styles.label}>{t("loanForm.accountFee")}</Text>
+              <View style={styles.inputWrap}>
+                <Text style={styles.prefixText}>{moneySymbol}</Text>
+                <TextInput
+                  keyboardType="decimal-pad"
+                  value={accountFee}
+                  onChangeText={setAccountFee}
+                  style={styles.input}
+                  placeholder={t("loanForm.accountFeePlaceholder")}
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+
+              <Text style={styles.label}>{t("loanForm.accountFeeFrequency")}</Text>
+              <FrequencySelector
+                value={accountFeeFrequency}
+                onChange={setAccountFeeFrequency}
+                styles={styles}
+              />
+            </View>
+          ) : null}
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Enable Extra Repayment</Text>
+            <Text style={styles.switchLabel}>{t("loanForm.enableExtra")}</Text>
             <Switch
               value={extraEnabled}
               onValueChange={setExtraEnabled}
@@ -407,7 +445,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
 
           {extraEnabled ? (
             <View>
-              <Text style={styles.label}>Extra Repayment Amount</Text>
+              <Text style={styles.label}>{t("loanForm.extraAmount")}</Text>
               <View style={styles.inputWrap}>
                 <Text style={styles.prefixText}>{moneySymbol}</Text>
                 <TextInput
@@ -415,19 +453,19 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                   value={extraAmount}
                   onChangeText={(value) => setExtraAmount(formatGroupedNumberInput(value))}
                   style={styles.input}
-                  placeholder="e.g. 250"
+                  placeholder={t("loanForm.extraPlaceholder")}
                   placeholderTextColor={colors.textMuted}
                 />
               </View>
 
-              <Text style={styles.label}>Extra Repayment Frequency</Text>
+              <Text style={styles.label}>{t("loanForm.extraFrequency")}</Text>
               <FrequencySelector
                 value={extraFrequency}
                 onChange={setExtraFrequency}
                 styles={styles}
               />
 
-              <Text style={styles.label}>Start Extra After</Text>
+              <Text style={styles.label}>{t("loanForm.startExtraAfter")}</Text>
               <View style={styles.startAfterRow}>
                 <View style={styles.startAfterInputWrap}>
                   <TextInput
@@ -435,7 +473,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                     value={extraStartAfter}
                     onChangeText={setExtraStartAfter}
                     style={styles.simpleInput}
-                    placeholder="e.g. 12"
+                    placeholder={t("loanForm.startAfterPlaceholder")}
                     placeholderTextColor={colors.textMuted}
                   />
                 </View>
@@ -455,7 +493,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                           styles.startAfterToggleTextActive,
                       ]}
                     >
-                      Months
+                      {t("loanForm.unitMonths")}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -473,7 +511,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                           styles.startAfterToggleTextActive,
                       ]}
                     >
-                      Years
+                      {t("loanForm.unitYears")}
                     </Text>
                   </Pressable>
                 </View>
@@ -482,7 +520,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
           ) : null}
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Enable Lump Sum (final payment)</Text>
+            <Text style={styles.switchLabel}>{t("loanForm.enableLumpSum")}</Text>
             <Switch
               value={lumpSumEnabled}
               onValueChange={setLumpSumEnabled}
@@ -491,12 +529,11 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             />
           </View>
           <Text style={styles.hintText}>
-            Lowers regular repayments. The lump sum is due as a residual at the end of
-            the term.
+            {t("loanForm.lumpSumHint")}
           </Text>
           {lumpSumEnabled ? (
             <View>
-              <Text style={styles.label}>Lump Sum Amount</Text>
+              <Text style={styles.label}>{t("loanForm.lumpSumAmount")}</Text>
               <View style={styles.inputWrap}>
                 <Text style={styles.prefixText}>{moneySymbol}</Text>
                 <TextInput
@@ -504,7 +541,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                   value={lumpSumAmount}
                   onChangeText={(value) => setLumpSumAmount(formatGroupedNumberInput(value))}
                   style={styles.input}
-                  placeholder="e.g. 10,000"
+                  placeholder={t("loanForm.lumpSumPlaceholder")}
                   placeholderTextColor={colors.textMuted}
                 />
               </View>
@@ -512,7 +549,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
           ) : null}
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Enable Offset Savings</Text>
+            <Text style={styles.switchLabel}>{t("loanForm.enableOffset")}</Text>
             <Switch
               value={offsetEnabled}
               onValueChange={setOffsetEnabled}
@@ -521,12 +558,11 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             />
           </View>
           <Text style={styles.hintText}>
-            Interest is charged on the loan balance minus the offset. Deposits cut
-            interest; they do not pay down the loan.
+            {t("loanForm.offsetHint")}
           </Text>
           {offsetEnabled ? (
             <View>
-              <Text style={styles.label}>Offset Savings Amount</Text>
+              <Text style={styles.label}>{t("loanForm.offsetAmount")}</Text>
               <View style={styles.inputWrap}>
                 <Text style={styles.prefixText}>{moneySymbol}</Text>
                 <TextInput
@@ -534,13 +570,13 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                   value={offsetAmount}
                   onChangeText={(value) => setOffsetAmount(formatGroupedNumberInput(value))}
                   style={styles.input}
-                  placeholder="e.g. 5,000"
+                  placeholder={t("loanForm.offsetPlaceholder")}
                   placeholderTextColor={colors.textMuted}
                 />
               </View>
 
               <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Regular offset deposit</Text>
+                <Text style={styles.switchLabel}>{t("loanForm.offsetDeposit")}</Text>
                 <Switch
                   value={offsetContributionEnabled}
                   onValueChange={setOffsetContributionEnabled}
@@ -549,12 +585,11 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                 />
               </View>
               <Text style={styles.hintText}>
-                Add this amount to the offset on each deposit. Compare with extra
-                repayments by saving two profiles.
+                {t("loanForm.offsetDepositHint")}
               </Text>
               {offsetContributionEnabled ? (
                 <View>
-                  <Text style={styles.label}>Offset Deposit Amount</Text>
+                  <Text style={styles.label}>{t("loanForm.offsetDepositAmount")}</Text>
                   <View style={styles.inputWrap}>
                     <Text style={styles.prefixText}>{moneySymbol}</Text>
                     <TextInput
@@ -564,11 +599,11 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
                         setOffsetContributionAmount(formatGroupedNumberInput(value))
                       }
                       style={styles.input}
-                      placeholder="e.g. 200"
+                      placeholder={t("loanForm.offsetDepositPlaceholder")}
                       placeholderTextColor={colors.textMuted}
                     />
                   </View>
-                  <Text style={styles.label}>Offset Deposit Frequency</Text>
+                  <Text style={styles.label}>{t("loanForm.offsetDepositFrequency")}</Text>
                   <FrequencySelector
                     value={offsetContributionFrequency}
                     onChange={setOffsetContributionFrequency}
@@ -579,11 +614,6 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             </View>
           ) : null}
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-          <Pressable style={styles.calculateButton} onPress={submit}>
-            <Text style={styles.calculateButtonText}>Calculate</Text>
-          </Pressable>
         </View>
       ) : null}
 
@@ -593,10 +623,10 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
         onRequestClose={() => setCurrencyModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-          <Text style={styles.modalTitle}>Select Currency</Text>
+          <Text style={styles.modalTitle}>{t("loanForm.selectCurrency")}</Text>
           <TextInput
             style={styles.modalSearch}
-            placeholder="Search currency code or symbol"
+            placeholder={t("loanForm.currencySearchPlaceholder")}
             placeholderTextColor={colors.textMuted}
             value={currencySearch}
             onChangeText={setCurrencySearch}
@@ -606,7 +636,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
               style={styles.clearSearchButton}
               onPress={() => setCurrencySearch("")}
             >
-              <Text style={styles.clearSearchButtonText}>Clear filter</Text>
+              <Text style={styles.clearSearchButtonText}>{t("loanForm.clearFilter")}</Text>
             </Pressable>
           ) : null}
           <FlatList
@@ -619,7 +649,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             style={styles.modalCloseButton}
             onPress={() => setCurrencyModalVisible(false)}
           >
-            <Text style={styles.modalCloseText}>Close</Text>
+            <Text style={styles.modalCloseText}>{t("common.close")}</Text>
           </Pressable>
         </View>
       </Modal>
@@ -647,7 +677,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: 12,
       paddingVertical: 10,
       fontSize: 15,
-      backgroundColor: colors.inputBg,
+      backgroundColor: "transparent",
       color: colors.text,
     },
     simpleInput: {
@@ -667,6 +697,7 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.borderStrong,
       borderRadius: 10,
       backgroundColor: colors.inputBg,
+      overflow: "hidden",
     },
     prefixText: {
       paddingLeft: 12,
@@ -739,6 +770,17 @@ const createStyles = (colors: ThemeColors) =>
     startAfterInputWrap: {
       flex: 1,
     },
+    loanLengthRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+    },
+    fieldUnitText: {
+      marginTop: 4,
+      fontSize: 12,
+      color: colors.textMuted,
+      fontWeight: "600",
+    },
     startAfterToggle: {
       flexDirection: "row",
       borderWidth: 1,
@@ -761,23 +803,6 @@ const createStyles = (colors: ThemeColors) =>
     startAfterToggleTextActive: {
       color: colors.accentTextDeep,
       fontWeight: "700",
-    },
-    errorText: {
-      color: colors.errorText,
-      marginTop: 12,
-      fontWeight: "600",
-    },
-    calculateButton: {
-      marginTop: 16,
-      borderRadius: 10,
-      backgroundColor: colors.primary,
-      paddingVertical: 12,
-      alignItems: "center",
-    },
-    calculateButtonText: {
-      color: colors.textInverse,
-      fontWeight: "700",
-      fontSize: 16,
     },
     modalContainer: {
       flex: 1,

@@ -10,6 +10,7 @@ import {
 import { matchFont } from "@shopify/react-native-skia";
 import { Pie, PolarChart } from "victory-native";
 
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeColors } from "../theme/tokens";
 import { formatDurationLabel, getCurrencySymbol } from "../utils/format";
@@ -78,6 +79,7 @@ export const PieBreakdownChart = ({
   loanLengthYears,
 }: PieBreakdownChartProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const currencySymbol = getCurrencySymbol(currencyCode);
   const formatCurrencyTwoDecimals = (value: number): string => {
@@ -153,25 +155,25 @@ export const PieBreakdownChart = ({
     const rows = [
       {
         id: "principal" as const,
-        label: "Principal",
+        label: t("breakdown.principal"),
         value: Math.max(0, animatedValues.principal),
         color: COLORS.principal,
       },
       {
         id: "interest" as const,
-        label: "Interest",
+        label: t("breakdown.interest"),
         value: Math.max(0, animatedValues.interest),
         color: COLORS.interest,
       },
       {
         id: "fees" as const,
-        label: "Account Fees",
+        label: t("breakdown.accountFees"),
         value: Math.max(0, animatedValues.fees),
         color: COLORS.fees,
       },
       {
         id: "extra" as const,
-        label: "Extra Repayment",
+        label: t("breakdown.extraRepayment"),
         value: Math.max(0, animatedValues.extra),
         color: COLORS.extra,
       },
@@ -181,7 +183,7 @@ export const PieBreakdownChart = ({
       ...item,
       percent: totalValue > 0 ? (item.value / totalValue) * 100 : 0,
     }));
-  }, [animatedValues]);
+  }, [animatedValues, t]);
 
   const visibleSlices = series.filter(
     (item) => visibleSeries[item.id] && item.value > 0.005
@@ -193,8 +195,10 @@ export const PieBreakdownChart = ({
   return (
     <View style={styles.card}>
       <CardHeader
-        title="Repayment Breakdown"
-        subtitle={`(${formatDurationLabel(loanLengthYears)})`}
+        title={t("breakdown.title")}
+        subtitle={t("breakdown.subtitle", {
+          duration: formatDurationLabel(loanLengthYears),
+        })}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
@@ -262,7 +266,7 @@ export const PieBreakdownChart = ({
                     { paddingHorizontal: Math.round(donutSize * 0.24) },
                   ]}
                 >
-                  <Text style={styles.holeTitle}>Total</Text>
+                  <Text style={styles.holeTitle}>{t("breakdown.total")}</Text>
                   <Text
                     numberOfLines={1}
                     adjustsFontSizeToFit
@@ -274,7 +278,7 @@ export const PieBreakdownChart = ({
                 </View>
               </View>
             ) : (
-              <Text style={styles.hiddenAllText}>Enable at least one series.</Text>
+              <Text style={styles.hiddenAllText}>{t("breakdown.enableSeries")}</Text>
             )}
           </Animated.View>
 
@@ -299,7 +303,7 @@ export const PieBreakdownChart = ({
               </Pressable>
             ))}
             <View style={[styles.legendRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Total Paid</Text>
+              <Text style={styles.totalLabel}>{t("breakdown.totalPaid")}</Text>
               <Text style={styles.totalValue}>{formatCurrencyTwoDecimals(total)}</Text>
             </View>
           </View>

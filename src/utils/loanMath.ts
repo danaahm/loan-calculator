@@ -1,3 +1,4 @@
+import { t } from "../i18n/translate";
 import {
   FREQUENCIES,
   type LoanCalculationResult,
@@ -18,6 +19,10 @@ const FREQUENCY_PER_YEAR: Record<RepaymentFrequency, number> = {
 };
 
 const ZERO_EPSILON = 1e-7;
+
+// Loan length is stored as decimal years but entered as whole years + months,
+// so the smallest expressible term is one month.
+export const MIN_LOAN_LENGTH_YEARS = 1 / 12;
 
 const safeRound = (value: number): number => {
   return Math.round(value * 100) / 100;
@@ -89,6 +94,9 @@ const computeSchedule = (
 ): LoanSchedule => {
   const periodsPerYear = getPeriodsPerYear(input.repaymentFrequency);
   const feeEventsPerYear = getPeriodsPerYear(input.accountFeeFrequency);
+  const accountFeeAmount = input.accountFeeEnabled
+    ? Math.max(0, input.accountFee)
+    : 0;
   const extraEventsPerYear = getPeriodsPerYear(input.extraRepayment.frequency);
   const extraStartAfterPeriods = getExtraRepaymentStartAfterPeriods(
     input.extraRepayment.startAfterValue,
@@ -143,7 +151,7 @@ const computeSchedule = (
 
     feeEventCarry += feeEventsPerYear / periodsPerYear;
     const feeEventsThisPeriod = Math.floor(feeEventCarry + ZERO_EPSILON);
-    const feePaid = input.accountFee * feeEventsThisPeriod;
+    const feePaid = accountFeeAmount * feeEventsThisPeriod;
     feeEventCarry -= feeEventsThisPeriod;
 
     let extraPaid = 0;
@@ -269,6 +277,27 @@ const computeSchedule = (
   };
 };
 
+/** Anything the user adds on top of the contracted loan terms. */
+export const hasPlanAdjustments = (input: LoanInput): boolean => {
+  return (
+    input.extraRepayment.enabled ||
+    input.lumpSum.enabled ||
+    input.offsetSavings.enabled
+  );
+};
+
+/** Strips every optional feature back to the plain contracted loan. */
+const withoutPlanAdjustments = (input: LoanInput): LoanInput => ({
+  ...input,
+  extraRepayment: { ...input.extraRepayment, enabled: false },
+  lumpSum: { ...input.lumpSum, enabled: false },
+  offsetSavings: {
+    ...input.offsetSavings,
+    enabled: false,
+    contribution: { ...input.offsetSavings.contribution, enabled: false },
+  },
+});
+
 export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
   const baseline = computeSchedule(input, false);
   const withExtra = input.extraRepayment.enabled
@@ -276,26 +305,102 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
     : undefined;
   const activeSchedule = withExtra ?? baseline;
 
-  const moneySaved = withExtra
-    ? safeRound(baseline.summary.totalPaid - withExtra.summary.totalPaid)
+  const hasPlanComparison = hasPlanAdjustments(input);
+  // With nothing switched on the contracted loan *is* the baseline, so skip
+  // simulating an identical schedule.
+  const contracted = hasPlanComparison
+    ? computeSchedule(withoutPlanAdjustments(input), false)
+    : baseline;
+
+  // Signed on purpose: a lump-sum residual lowers the repayment but raises the
+  // total cost, so the difference can legitimately be negative.
+  const moneySaved = hasPlanComparison
+    ? safeRound(contracted.summary.totalPaid - activeSchedule.summary.totalPaid)
     : 0;
-  const periodsSaved = withExtra
-    ? Math.max(0, baseline.summary.payoffPeriods - withExtra.summary.payoffPeriods)
+  const interestSaved = hasPlanComparison
+    ? safeRound(
+        contracted.summary.totalInterestPaid -
+          activeSchedule.summary.totalInterestPaid
+      )
     : 0;
-  const yearsSaved = withExtra
-    ? baseline.summary.payoffYears - withExtra.summary.payoffYears
+  const periodsSaved = hasPlanComparison
+    ? contracted.summary.payoffPeriods - activeSchedule.summary.payoffPeriods
+    : 0;
+  const yearsSaved = hasPlanComparison
+    ? contracted.summary.payoffYears - activeSchedule.summary.payoffYears
     : 0;
 
   return {
+    contracted,
     baseline,
     withExtra,
     activeSchedule,
+    hasPlanComparison,
     savings: {
       moneySaved,
+      interestSaved,
       periodsSaved,
       yearsSaved,
     },
   };
+};
+
+export interface LoanInputValidation {
+  /** The mandatory fields are filled in, so a calculation is possible. */
+  ready: boolean;
+  /** First blocking problem, if any. Null means safe to calculate. */
+  error: string | null;
+}
+
+/**
+ * Mandatory fields are the amount borrowed, the loan length and a currency.
+ * The interest rate is optional and treated as 0% when left blank. Optional
+ * sections (extra repayment, lump sum, offset) only block once switched on.
+ */
+export const validateLoanInput = (input: LoanInput): LoanInputValidation => {
+  const ready =
+    input.currencyCode.trim().length > 0 &&
+    input.amountBorrowed > 0 &&
+    input.loanLengthYears > 0;
+
+  const error = ((): string | null => {
+    if (input.amountBorrowed <= 0) {
+      return t("validation.amountBorrowed");
+    }
+    if (input.loanLengthYears <= 0) {
+      return t("validation.loanLength");
+    }
+    if (input.currencyCode.trim().length === 0) {
+      return t("validation.currency");
+    }
+    if (input.extraRepayment.enabled && input.extraRepayment.amount <= 0) {
+      return t("validation.extraRepayment");
+    }
+    if (input.lumpSum.enabled && input.lumpSum.amount <= 0) {
+      return t("validation.lumpSum");
+    }
+    if (input.accountFeeEnabled && input.accountFee <= 0) {
+      return t("validation.accountFee");
+    }
+    if (input.offsetSavings.enabled) {
+      const hasStart = input.offsetSavings.amount > 0;
+      const hasDeposit =
+        input.offsetSavings.contribution.enabled &&
+        input.offsetSavings.contribution.amount > 0;
+      if (!hasStart && !hasDeposit) {
+        return t("validation.offsetEmpty");
+      }
+      if (
+        input.offsetSavings.contribution.enabled &&
+        input.offsetSavings.contribution.amount <= 0
+      ) {
+        return t("validation.offsetDeposit");
+      }
+    }
+    return null;
+  })();
+
+  return { ready, error };
 };
 
 export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
@@ -315,7 +420,13 @@ export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
     amountBorrowed: Math.max(0, input.amountBorrowed ?? 0),
     annualInterestRatePercent: Math.max(0, input.annualInterestRatePercent ?? 0),
     repaymentFrequency,
-    loanLengthYears: Math.max(0.5, input.loanLengthYears ?? 0.5),
+    loanLengthYears: Math.max(
+      MIN_LOAN_LENGTH_YEARS,
+      input.loanLengthYears ?? 1
+    ),
+    // Older saved profiles predate the toggle: a stored fee above zero means
+    // the fee was in effect, so preserve that behaviour on load.
+    accountFeeEnabled: input.accountFeeEnabled ?? (input.accountFee ?? 0) > 0,
     accountFee: Math.max(0, input.accountFee ?? 0),
     accountFeeFrequency: input.accountFeeFrequency ?? "monthly",
     extraRepayment: {

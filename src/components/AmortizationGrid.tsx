@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeColors } from "../theme/tokens";
 import { type YearlyRow } from "../types/loan";
@@ -14,6 +15,7 @@ interface AmortizationGridProps {
 
 export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [collapsed, setCollapsed] = useState(false);
   const showOffset = rows.some((row) => (row.offsetBalance ?? 0) > 0);
@@ -21,8 +23,8 @@ export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) 
   return (
     <View style={styles.card}>
       <CardHeader
-        title="Yearly Loan Plan"
-        subtitle="Opening balance, yearly payments, and closing balance."
+        title={t("amortization.title")}
+        subtitle={t("amortization.subtitle")}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
@@ -31,7 +33,7 @@ export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) 
         <View style={styles.gridShell}>
           <View style={styles.stickyYearColumn}>
             <View style={[styles.row, styles.headerRow, styles.yearHeaderCellWrap]}>
-              <Text style={[styles.yearCell, styles.headerCell]}>Year</Text>
+              <Text style={[styles.yearCell, styles.headerCell]}>{t("amortization.year")}</Text>
             </View>
             {rows.map((row, index) => (
               <View
@@ -45,14 +47,14 @@ export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) 
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View>
               <View style={[styles.row, styles.headerRow]}>
-                <Text style={[styles.cell, styles.headerCell]}>Opening</Text>
-                <Text style={[styles.cell, styles.headerCell]}>Principal</Text>
-                <Text style={[styles.cell, styles.headerCell]}>Interest</Text>
-                <Text style={[styles.cell, styles.headerCell]}>Fees</Text>
-                <Text style={[styles.cell, styles.headerCell]}>Extra</Text>
-                <Text style={[styles.cell, styles.headerCell]}>Closing</Text>
+                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.opening")}</Text>
+                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.principal")}</Text>
+                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.interest")}</Text>
+                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.fees")}</Text>
+                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.extra")}</Text>
+                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.closing")}</Text>
                 {showOffset ? (
-                  <Text style={[styles.cell, styles.headerCell]}>Offset</Text>
+                  <Text style={[styles.cell, styles.headerCell]}>{t("amortization.offset")}</Text>
                 ) : null}
               </View>
 

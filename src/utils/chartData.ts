@@ -1,3 +1,4 @@
+import { t } from "../i18n/translate";
 import { type LoanCalculationResult } from "../types/loan";
 
 export type BalanceChartPoint = {
@@ -56,8 +57,12 @@ export const buildBalanceChartPoints = (
   result: LoanCalculationResult,
   periodsPerYear: number
 ): BalanceChartPoint[] => {
-  const baselineRows = result.baseline.periodRows;
-  const extraRows = result.withExtra?.periodRows ?? [];
+  // `baseline` here is the chart's reference series: the contracted loan with
+  // no extra repayment, offset or lump sum. `extra` is the user's full plan.
+  const baselineRows = result.contracted.periodRows;
+  const extraRows = result.hasPlanComparison
+    ? result.activeSchedule.periodRows
+    : [];
   const opening = clampNonNegative(baselineRows[0]?.openingBalance, 0);
   const count = Math.max(baselineRows.length, extraRows.length);
   const hasExtra = extraRows.length > 0;
@@ -141,14 +146,17 @@ export const formatChartTimeDetail = (
     const years = Math.floor(totalMonths / 12);
     const months = totalMonths % 12;
     if (years === 0) {
-      return `${months} month${months === 1 ? "" : "s"}`;
+      return t("duration.months", { count: months });
     }
     if (months === 0) {
-      return `${years} year${years === 1 ? "" : "s"}`;
+      return t("duration.years", { count: years });
     }
-    return `${years} year${years === 1 ? "" : "s"} ${months} month${
-      months === 1 ? "" : "s"
-    }`;
+    return t("duration.yearsMonths", {
+      years: t("duration.years", { count: years }),
+      months: t("duration.months", { count: months }),
+    });
   }
-  return `${year.toFixed(1)} years`;
+  // A fractional year never reads as singular, so this has its own key rather
+  // than routing a non-integer through plural selection.
+  return t("duration.yearsDecimal", { value: year.toFixed(1) });
 };

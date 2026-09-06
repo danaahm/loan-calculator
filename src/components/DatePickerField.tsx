@@ -12,13 +12,15 @@ import {
   View,
 } from "react-native";
 
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { formatDisplayDate, formatLocalDate, isValidIsoDate, parseIsoDate } from "../utils/dateIso";
 
 interface DatePickerFieldProps {
   value: string | null;
   onChange: (iso: string) => void;
-  placeholder?: string;
+  /** Catalogue key for the empty-state text. */
+  placeholderKey?: string;
   minimumDate?: Date;
 }
 
@@ -32,10 +34,12 @@ const toDate = (iso: string | null): Date => {
 export const DatePickerField = ({
   value,
   onChange,
-  placeholder = "Select date",
+  placeholderKey = "datePicker.selectDate",
   minimumDate,
 }: DatePickerFieldProps) => {
   const { colors, isDark } = useTheme();
+  const t = useTranslation();
+  const placeholder = t(placeholderKey);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Date>(toDate(value));
   const styles = useMemo(() => createStyles(), []);
@@ -109,7 +113,7 @@ export const DatePickerField = ({
               ]}
               onPress={() => {}}
             >
-              <Text style={[styles.sheetTitle, { color: colors.text }]}>Choose date</Text>
+              <Text style={[styles.sheetTitle, { color: colors.text }]}>{t("datePicker.chooseDate")}</Text>
               <DateTimePicker
                 value={draft}
                 mode="date"
@@ -125,13 +129,13 @@ export const DatePickerField = ({
                   onPress={() => setOpen(false)}
                   style={[styles.sheetButton, { borderColor: colors.borderStrong }]}
                 >
-                  <Text style={{ color: colors.textSecondary, fontWeight: "700" }}>Cancel</Text>
+                  <Text style={{ color: colors.textSecondary, fontWeight: "700" }}>{t("common.cancel")}</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => applyDate(draft)}
                   style={[styles.sheetButton, { backgroundColor: colors.primary, borderColor: colors.primary }]}
                 >
-                  <Text style={{ color: colors.textInverse, fontWeight: "700" }}>Done</Text>
+                  <Text style={{ color: colors.textInverse, fontWeight: "700" }}>{t("common.done")}</Text>
                 </Pressable>
               </View>
             </Pressable>

@@ -1,7 +1,9 @@
+import { t } from "../i18n/translate";
 import { type LoanInput, type SavedLoanProfile } from "../types/loan";
 import {
   formatCurrency,
   formatFrequencyLabel,
+  formatLoanLengthLabel,
   formatPercent,
 } from "./format";
 import { normalizeInput } from "./loanMath";
@@ -15,26 +17,7 @@ export interface SavedProfileCardSummary {
 }
 
 export const formatLoanTermLabel = (loanLengthYears: number): string => {
-  if (!Number.isFinite(loanLengthYears) || loanLengthYears <= 0) {
-    return "—";
-  }
-
-  if (loanLengthYears < 1) {
-    const months = Math.max(1, Math.round(loanLengthYears * 12));
-    return `${months} month${months === 1 ? "" : "s"}`;
-  }
-
-  const roundedYears = Number.isInteger(loanLengthYears)
-    ? `${loanLengthYears}`
-    : `${loanLengthYears.toFixed(1)}`;
-  return `${roundedYears} year${Number(roundedYears) === 1 ? "" : "s"}`;
-};
-
-const pluralizeUnit = (value: number, unit: "months" | "years"): string => {
-  if (value === 1) {
-    return unit === "months" ? "month" : "year";
-  }
-  return unit;
+  return formatLoanLengthLabel(loanLengthYears) || t("common.emptyValue");
 };
 
 const extraRepaymentTag = (input: LoanInput): string | null => {
@@ -42,26 +25,32 @@ const extraRepaymentTag = (input: LoanInput): string | null => {
     return null;
   }
 
-  let label = `Extra ${formatCurrency(
-    input.extraRepayment.amount,
-    input.currencyCode
-  )} ${formatFrequencyLabel(input.extraRepayment.frequency).toLowerCase()}`;
+  const label = t("profileTag.extra", {
+    amount: formatCurrency(input.extraRepayment.amount, input.currencyCode),
+    frequency: formatFrequencyLabel(input.extraRepayment.frequency).toLowerCase(),
+  });
 
-  if (input.extraRepayment.startAfterValue > 0) {
-    label += ` after ${input.extraRepayment.startAfterValue} ${pluralizeUnit(
-      input.extraRepayment.startAfterValue,
-      input.extraRepayment.startAfterUnit
-    )}`;
+  if (input.extraRepayment.startAfterValue <= 0) {
+    return label;
   }
 
-  return label;
+  const unitKey =
+    input.extraRepayment.startAfterUnit === "months"
+      ? "duration.months"
+      : "duration.years";
+  return t("profileTag.extraAfter", {
+    label,
+    after: t(unitKey, { count: input.extraRepayment.startAfterValue }),
+  });
 };
 
 const lumpSumTag = (input: LoanInput): string | null => {
   if (!input.lumpSum.enabled || input.lumpSum.amount <= 0) {
     return null;
   }
-  return `Lump sum ${formatCurrency(input.lumpSum.amount, input.currencyCode)}`;
+  return t("profileTag.lumpSum", {
+    amount: formatCurrency(input.lumpSum.amount, input.currencyCode),
+  });
 };
 
 const offsetTag = (input: LoanInput): string | null => {
@@ -85,16 +74,19 @@ const offsetTag = (input: LoanInput): string | null => {
     );
   }
 
-  return parts.length > 0 ? `Offset ${parts.join(" ")}` : "Offset";
+  return parts.length > 0
+    ? t("profileTag.offsetWithParts", { parts: parts.join(" ") })
+    : t("profileTag.offset");
 };
 
 const accountFeeTag = (input: LoanInput): string | null => {
-  if (input.accountFee <= 0) {
+  if (!input.accountFeeEnabled || input.accountFee <= 0) {
     return null;
   }
-  return `Fee ${formatCurrency(input.accountFee, input.currencyCode)} ${formatFrequencyLabel(
-    input.accountFeeFrequency
-  ).toLowerCase()}`;
+  return t("profileTag.fee", {
+    amount: formatCurrency(input.accountFee, input.currencyCode),
+    frequency: formatFrequencyLabel(input.accountFeeFrequency).toLowerCase(),
+  });
 };
 
 export const buildSavedProfileCardSummary = (
@@ -105,7 +97,9 @@ export const buildSavedProfileCardSummary = (
   const termLabel = formatLoanTermLabel(input.loanLengthYears);
   const rateLabel = formatPercent(input.annualInterestRatePercent);
   const tags = [
-    `${formatFrequencyLabel(input.repaymentFrequency)} repayments`,
+    t("profileTag.repayments", {
+      frequency: formatFrequencyLabel(input.repaymentFrequency),
+    }),
     extraRepaymentTag(input),
     lumpSumTag(input),
     offsetTag(input),
@@ -116,7 +110,11 @@ export const buildSavedProfileCardSummary = (
     amountLabel,
     termLabel,
     rateLabel,
-    headline: `${amountLabel} | ${termLabel} | ${rateLabel}`,
+    headline: t("profileTag.headline", {
+      amount: amountLabel,
+      term: termLabel,
+      rate: rateLabel,
+    }),
     tags,
   };
 };
