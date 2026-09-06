@@ -56,8 +56,12 @@ export const buildBalanceChartPoints = (
   result: LoanCalculationResult,
   periodsPerYear: number
 ): BalanceChartPoint[] => {
-  const baselineRows = result.baseline.periodRows;
-  const extraRows = result.withExtra?.periodRows ?? [];
+  // `baseline` here is the chart's reference series: the contracted loan with
+  // no extra repayment, offset or lump sum. `extra` is the user's full plan.
+  const baselineRows = result.contracted.periodRows;
+  const extraRows = result.hasPlanComparison
+    ? result.activeSchedule.periodRows
+    : [];
   const opening = clampNonNegative(baselineRows[0]?.openingBalance, 0);
   const count = Math.max(baselineRows.length, extraRows.length);
   const hasExtra = extraRows.length > 0;

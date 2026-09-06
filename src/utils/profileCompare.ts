@@ -84,10 +84,10 @@ export const buildComparedProfile = (profile: SavedLoanProfile): ComparedProfile
     /^over /,
     ""
   );
-  const extraSavingsLabel = extraEnabled
+  const extraSavingsLabel = result.hasPlanComparison
     ? `${formatCurrency(result.savings.moneySaved, input.currencyCode)} · ${formatYearsAndPeriods(
-        result.savings.yearsSaved,
-        result.savings.periodsSaved,
+        Math.abs(result.savings.yearsSaved),
+        Math.abs(result.savings.periodsSaved),
         periodsPerYear
       )}`
     : "—";
@@ -103,9 +103,9 @@ export const buildComparedProfile = (profile: SavedLoanProfile): ComparedProfile
     payoffYears: schedule.summary.payoffYears,
     payoffPeriods: schedule.summary.payoffPeriods,
     extraEnabled,
-    extraSavingsMoney: extraEnabled ? result.savings.moneySaved : 0,
-    extraSavingsPeriods: extraEnabled ? result.savings.periodsSaved : 0,
-    extraSavingsYears: extraEnabled ? result.savings.yearsSaved : 0,
+    extraSavingsMoney: result.savings.moneySaved,
+    extraSavingsPeriods: result.savings.periodsSaved,
+    extraSavingsYears: result.savings.yearsSaved,
     extraLabel,
     offsetLabel: offsetParts.length > 0 ? offsetParts.join(" · ") : "None",
     amountLabel: formatCurrency(input.amountBorrowed, input.currencyCode),

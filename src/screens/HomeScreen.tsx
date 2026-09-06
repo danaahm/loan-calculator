@@ -61,10 +61,10 @@ export const HomeScreen = ({
     : (upcoming[0]?.key ?? null);
   const periodsPerYear = PERIODS_PER_YEAR[input.repaymentFrequency];
   const extraSavings =
-    result && input.extraRepayment.enabled && result.savings.moneySaved > 0
+    result && result.hasPlanComparison && result.savings.moneySaved > 0
       ? `${formatCurrency(result.savings.moneySaved, input.currencyCode)} and ${formatYearsAndPeriods(
-          result.savings.yearsSaved,
-          result.savings.periodsSaved,
+          Math.max(0, result.savings.yearsSaved),
+          Math.max(0, result.savings.periodsSaved),
           periodsPerYear
         )}`
       : null;
@@ -139,7 +139,7 @@ export const HomeScreen = ({
           </Text>
           {extraSavings ? (
             <Text style={[styles.liveMeta, { color: colors.textSecondary }]}>
-              Extra repayments save {extraSavings}
+              Your plan saves {extraSavings}
             </Text>
           ) : null}
           {offsetNote ? (

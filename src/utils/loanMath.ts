@@ -276,6 +276,27 @@ const computeSchedule = (
   };
 };
 
+/** Anything the user adds on top of the contracted loan terms. */
+export const hasPlanAdjustments = (input: LoanInput): boolean => {
+  return (
+    input.extraRepayment.enabled ||
+    input.lumpSum.enabled ||
+    input.offsetSavings.enabled
+  );
+};
+
+/** Strips every optional feature back to the plain contracted loan. */
+const withoutPlanAdjustments = (input: LoanInput): LoanInput => ({
+  ...input,
+  extraRepayment: { ...input.extraRepayment, enabled: false },
+  lumpSum: { ...input.lumpSum, enabled: false },
+  offsetSavings: {
+    ...input.offsetSavings,
+    enabled: false,
+    contribution: { ...input.offsetSavings.contribution, enabled: false },
+  },
+});
+
 export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
   const baseline = computeSchedule(input, false);
   const withExtra = input.extraRepayment.enabled
@@ -283,22 +304,40 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
     : undefined;
   const activeSchedule = withExtra ?? baseline;
 
-  const moneySaved = withExtra
-    ? safeRound(baseline.summary.totalPaid - withExtra.summary.totalPaid)
+  const hasPlanComparison = hasPlanAdjustments(input);
+  // With nothing switched on the contracted loan *is* the baseline, so skip
+  // simulating an identical schedule.
+  const contracted = hasPlanComparison
+    ? computeSchedule(withoutPlanAdjustments(input), false)
+    : baseline;
+
+  // Signed on purpose: a lump-sum residual lowers the repayment but raises the
+  // total cost, so the difference can legitimately be negative.
+  const moneySaved = hasPlanComparison
+    ? safeRound(contracted.summary.totalPaid - activeSchedule.summary.totalPaid)
     : 0;
-  const periodsSaved = withExtra
-    ? Math.max(0, baseline.summary.payoffPeriods - withExtra.summary.payoffPeriods)
+  const interestSaved = hasPlanComparison
+    ? safeRound(
+        contracted.summary.totalInterestPaid -
+          activeSchedule.summary.totalInterestPaid
+      )
     : 0;
-  const yearsSaved = withExtra
-    ? baseline.summary.payoffYears - withExtra.summary.payoffYears
+  const periodsSaved = hasPlanComparison
+    ? contracted.summary.payoffPeriods - activeSchedule.summary.payoffPeriods
+    : 0;
+  const yearsSaved = hasPlanComparison
+    ? contracted.summary.payoffYears - activeSchedule.summary.payoffYears
     : 0;
 
   return {
+    contracted,
     baseline,
     withExtra,
     activeSchedule,
+    hasPlanComparison,
     savings: {
       moneySaved,
+      interestSaved,
       periodsSaved,
       yearsSaved,
     },
