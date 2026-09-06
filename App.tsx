@@ -45,6 +45,11 @@ import {
   saveSavedLoanProfiles,
 } from "./src/storage/localState";
 import { LocaleProvider, useLocale } from "./src/i18n/LocaleProvider";
+import {
+  DueThresholdsProvider,
+  useDueThresholds,
+} from "./src/settings/DueThresholdsProvider";
+import { strongestDueTone } from "./src/utils/dueTone";
 import { ThemeProvider, useTheme } from "./src/theme/ThemeProvider";
 import { type ThemeColors } from "./src/theme/tokens";
 import {
@@ -171,7 +176,9 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <LocaleProvider>
-          <AppContent />
+          <DueThresholdsProvider>
+            <AppContent />
+          </DueThresholdsProvider>
         </LocaleProvider>
       </ThemeProvider>
     </SafeAreaProvider>
@@ -181,6 +188,7 @@ export default function App() {
 function AppContent() {
   const { colors, isDark } = useTheme();
   const { t, defaultCurrencyCode } = useLocale();
+  const { thresholds: dueThresholds } = useDueThresholds();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [screen, setScreen] = useState<AppScreen>("home");
   const previousScreenRef = useRef<Exclude<AppScreen, "settings">>("home");
@@ -200,6 +208,7 @@ function AppContent() {
   const [compareSelection, setCompareSelection] = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [loanFormMode, setLoanFormMode] = useState<"chooser" | "form">("chooser");
+  const [loanPickerVisible, setLoanPickerVisible] = useState(false);
   const [profileName, setProfileName] = useState(() => t("profiles.defaultName"));
   const [saveDialogVisible, setSaveDialogVisible] = useState(false);
   const [renameDialogVisible, setRenameDialogVisible] = useState(false);
@@ -258,6 +267,14 @@ function AppContent() {
     (minimumMonthlyRepayment + extraMonthlyRepayment) * 100
   ) / 100;
   const activeReminders = reminders.filter((item) => item.status === "active");
+  // The header shows a state, not a count: a number there reads as unread mail
+  // and never falls, whereas this clears itself once payments move out of range.
+  // Deliberately not memoized: the tone depends on today's date, so a cached
+  // value would go stale on an app left open across midnight.
+  const dueAlertTone = strongestDueTone(
+    activeReminders.map((item) => item.nextPaymentDate),
+    dueThresholds
+  );
   // Projecting cycles simulates payments per reminder, so keep it memoized.
   const upcomingRepayments = useMemo(
     () => buildUpcomingRepayments(reminders, 3),
@@ -764,19 +781,31 @@ function AppContent() {
                 onPress={openReminders}
                 style={styles.settingsButton}
                 accessibilityRole="button"
-                accessibilityLabel={t("a11y.repaymentReminders")}
+                accessibilityLabel={
+                  dueAlertTone === "urgent"
+                    ? t("a11y.repaymentRemindersDueNow")
+                    : dueAlertTone === "soon"
+                      ? t("a11y.repaymentRemindersDueSoon")
+                      : t("a11y.repaymentReminders")
+                }
               >
                 <Ionicons
                   name={remindersSectionActive ? "notifications" : "notifications-outline"}
                   size={22}
                   color={remindersSectionActive ? colors.accentTextStrong : colors.text}
                 />
-                {activeReminders.length > 0 ? (
-                  <View style={styles.headerBadge}>
-                    <Text style={styles.headerBadgeText}>
-                      {activeReminders.length > 9 ? "9+" : String(activeReminders.length)}
-                    </Text>
-                  </View>
+                {dueAlertTone ? (
+                  <View
+                    style={[
+                      styles.headerDueDot,
+                      {
+                        backgroundColor:
+                          dueAlertTone === "urgent"
+                            ? colors.dueDotUrgent
+                            : colors.dueDotSoon,
+                      },
+                    ]}
+                  />
                 ) : null}
               </Pressable>
               <Pressable
@@ -845,11 +874,29 @@ function AppContent() {
             nestedScrollEnabled
           >
             <View style={styles.activeLoanRow}>
-              <Text style={styles.activeLoanName} numberOfLines={1}>
-                {selectedProfileId ? profileName : t("app.newLoan")}
-              </Text>
-              <Pressable onPress={() => setLoanFormMode("chooser")}>
-                <Text style={styles.activeLoanChange}>{t("common.change")}</Text>
+              <Pressable
+                style={styles.loanPickerButton}
+                accessibilityRole="button"
+                accessibilityLabel={t("loanPicker.switchLabel")}
+                onPress={() => setLoanPickerVisible(true)}
+              >
+                <Text style={styles.loanPickerName} numberOfLines={1}>
+                  {selectedProfileId ? profileName : t("app.newLoan")}
+                </Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={16}
+                  color={colors.accentTextStrong}
+                />
+              </Pressable>
+              <Pressable
+                style={styles.newLoanButton}
+                accessibilityRole="button"
+                accessibilityLabel={t("app.newLoan")}
+                onPress={startNewLoan}
+              >
+                <Ionicons name="add" size={16} color={colors.textInverse} />
+                <Text style={styles.newLoanButtonText}>{t("app.newLoan")}</Text>
               </Pressable>
             </View>
 
@@ -916,7 +963,7 @@ function AppContent() {
                   fees={result.activeSchedule.summary.totalFeesPaid}
                   extraRepayment={result.activeSchedule.summary.totalExtraPaid}
                   currencyCode={input.currencyCode}
-                  loanLengthYears={input.loanLengthYears}
+                  payoffYears={result.activeSchedule.summary.payoffYears}
                 />
 
                 <BalanceComparisonChart
@@ -1303,6 +1350,69 @@ function AppContent() {
         ) : null}
 
         <Modal
+          visible={loanPickerVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLoanPickerVisible(false)}
+        >
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setLoanPickerVisible(false)}
+          >
+            <Pressable style={styles.modalCard} onPress={() => {}}>
+              <Text style={styles.modalTitle}>{t("loanPicker.title")}</Text>
+              {savedProfiles.length === 0 ? (
+                <Text style={styles.loanPickerEmpty}>{t("loanPicker.empty")}</Text>
+              ) : (
+                <FlatList
+                  style={styles.loanPickerList}
+                  data={savedProfiles}
+                  keyExtractor={(profile) => profile.id}
+                  showsVerticalScrollIndicator={false}
+                  renderItem={({ item: profile }) => {
+                    const isCurrent = profile.id === selectedProfileId;
+                    return (
+                      <Pressable
+                        style={[
+                          styles.loanPickerRow,
+                          isCurrent && styles.loanPickerRowCurrent,
+                        ]}
+                        onPress={() => {
+                          setLoanPickerVisible(false);
+                          openProfile(profile);
+                        }}
+                      >
+                        <View style={styles.loanPickerRowText}>
+                          <Text style={styles.loanPickerRowName} numberOfLines={1}>
+                            {profile.name}
+                          </Text>
+                          <Text style={styles.loanPickerRowMeta} numberOfLines={1}>
+                            {buildSavedProfileCardSummary(profile).headline}
+                          </Text>
+                        </View>
+                        {isCurrent ? (
+                          <Ionicons
+                            name="checkmark"
+                            size={18}
+                            color={colors.accentTextStrong}
+                          />
+                        ) : null}
+                      </Pressable>
+                    );
+                  }}
+                />
+              )}
+              <Pressable
+                style={styles.cancelButton}
+                onPress={() => setLoanPickerVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>{t("common.cancel")}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        <Modal
           visible={renameDialogVisible}
           transparent
           animationType="fade"
@@ -1425,15 +1535,72 @@ const createStyles = (colors: ThemeColors) =>
       gap: 12,
       marginBottom: 10,
     },
-    activeLoanName: {
+    loanPickerButton: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.inputBg,
+    },
+    loanPickerName: {
       flex: 1,
       fontSize: 15,
       fontWeight: "800",
       color: colors.text,
     },
-    activeLoanChange: {
-      fontWeight: "700",
-      color: colors.accentTextStrong,
+    newLoanButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingVertical: 9,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+    },
+    newLoanButtonText: {
+      fontWeight: "800",
+      color: colors.textInverse,
+    },
+    loanPickerList: {
+      maxHeight: 320,
+    },
+    loanPickerEmpty: {
+      color: colors.textMuted,
+      fontWeight: "600",
+      paddingVertical: 8,
+    },
+    loanPickerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBg,
+      marginBottom: 8,
+    },
+    loanPickerRowCurrent: {
+      borderColor: colors.accentTextStrong,
+    },
+    loanPickerRowText: {
+      flex: 1,
+    },
+    loanPickerRowName: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    loanPickerRowMeta: {
+      marginTop: 2,
+      fontWeight: "600",
+      color: colors.textMuted,
     },
     pageContent: {
       flex: 1,
@@ -1467,22 +1634,19 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
     },
-    headerBadge: {
+    headerDueDot: {
       position: "absolute",
-      top: 4,
-      right: 2,
-      minWidth: 16,
-      height: 16,
-      paddingHorizontal: 4,
-      borderRadius: 8,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerBadgeText: {
-      color: colors.textInverse,
-      fontSize: 9,
-      fontWeight: "800",
+      // Sits over the bell's top-right, where the old count badge was centred.
+      top: 6,
+      right: 4,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      // Ringed in the header fill so the dot stays readable where it overlaps
+      // the bell glyph rather than blending into the icon strokes. React Native
+      // draws the border inside the box, leaving an 8px core.
+      borderWidth: 2,
+      borderColor: colors.header,
     },
     calculateStickyBar: {
       paddingHorizontal: 16,

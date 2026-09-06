@@ -26,12 +26,19 @@
     "saved": "Saved"
   },
   "a11y": {
-    "repaymentReminders": "Repayment reminders"
+    "repaymentReminders": "Repayment reminders",
+    "repaymentRemindersDueSoon": "Repayment reminders, a payment is due soon",
+    "repaymentRemindersDueNow": "Repayment reminders, a payment is due"
   },
   "app": {
     "calculate": "Calculate",
     "calculating": "Calculating your loan...",
     "newLoan": "New loan"
+  },
+  "loanPicker": {
+    "title": "Your saved loans",
+    "switchLabel": "Switch loan",
+    "empty": "No saved loans yet. Tap New loan to start one."
   },
   "snackbar": {
     "calculationReady": "Your loan calculation is ready"
@@ -427,7 +434,20 @@
     "remindersHint": "Your phone will show the reminder at the time you chose, even if you have not opened this app.",
     "reminderNotifications": "Reminder notifications",
     "openPhoneSettings": "Open phone Settings",
-    "defaultAlertTime": "Default alert time"
+    "defaultAlertTime": "Default alert time",
+    "dueColours": "Due date colours",
+    "dueColoursHint": "Sets when a repayment starts looking urgent, on its due chips and on the bell in the header. Red always starts closer to the due date than amber.",
+    "dueSoonFrom": "Amber from",
+    "dueUrgentFrom": "Red from",
+    "duePreviewUrgentToday": "Overdue, or due today",
+    "duePreviewUrgent_one": "Overdue, or due within {count} day",
+    "duePreviewUrgent_other": "Overdue, or due within {count} days",
+    "duePreviewSoon_one": "Due within {count} day",
+    "duePreviewSoon_other": "Due within {count} days",
+    "duePreviewNormal": "Everything further out",
+    "dueDaysBefore_one": "{count} day before",
+    "dueDaysBefore_other": "{count} days before",
+    "dueOnTheDay": "On the day it is due"
   },
   "notifications": {
     "channelName": "Loan repayment reminders",

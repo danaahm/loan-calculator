@@ -1,8 +1,20 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeColors } from "../theme/tokens";
+import { COLLAPSE_DURATION_MS, COLLAPSE_EASING } from "./CollapsibleSection";
+
+/** Card padding the header bleeds into, so a collapsed header fills the card. */
+const CARD_PADDING = 16;
+const CARD_RADIUS = 14;
+const EXPANDED_GAP = 12;
 
 interface CardHeaderProps {
   title: string;
@@ -19,45 +31,69 @@ export const CardHeader = ({
 }: CardHeaderProps) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const progress = useSharedValue(collapsed ? 1 : 0);
+
+  useEffect(() => {
+    progress.value = withTiming(collapsed ? 1 : 0, {
+      duration: COLLAPSE_DURATION_MS,
+      easing: COLLAPSE_EASING,
+    });
+  }, [collapsed, progress]);
+
+  /**
+   * Collapsed, the header is the whole card: the gap below it turns into a
+   * negative margin that eats the card's bottom padding, and the bottom
+   * corners round to match the card.
+   */
+  const animatedStyle = useAnimatedStyle(() => ({
+    marginBottom: interpolate(progress.value, [0, 1], [EXPANDED_GAP, -CARD_PADDING]),
+    borderBottomLeftRadius: interpolate(progress.value, [0, 1], [0, CARD_RADIUS]),
+    borderBottomRightRadius: interpolate(progress.value, [0, 1], [0, CARD_RADIUS]),
+    borderBottomWidth: interpolate(progress.value, [0, 1], [1, 0]),
+  }));
 
   return (
-    <View style={styles.wrap}>
-      <View style={styles.topRow}>
-        <Text style={styles.title}>{title}</Text>
+    <Animated.View style={[styles.wrap, animatedStyle]}>
+      <View style={styles.row}>
+        <View style={styles.textColumn}>
+          <Text style={styles.title}>{title}</Text>
+          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        </View>
         {onToggleCollapse ? (
           <Pressable onPress={onToggleCollapse} style={styles.toggleButton}>
             <Text style={styles.toggleText}>{collapsed ? "+" : "-"}</Text>
           </Pressable>
         ) : null}
       </View>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-    </View>
+    </Animated.View>
   );
 };
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     wrap: {
-      marginHorizontal: -16,
-      marginTop: -16,
-      marginBottom: 12,
-      paddingHorizontal: 16,
+      marginHorizontal: -CARD_PADDING,
+      marginTop: -CARD_PADDING,
+      paddingHorizontal: CARD_PADDING,
       paddingVertical: 12,
       backgroundColor: colors.headerTint,
-      borderBottomWidth: 1,
       borderBottomColor: colors.headerTintBorder,
-      borderTopLeftRadius: 14,
-      borderTopRightRadius: 14,
+      borderTopLeftRadius: CARD_RADIUS,
+      borderTopRightRadius: CARD_RADIUS,
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    textColumn: {
+      flex: 1,
     },
     title: {
       fontSize: 20,
       fontWeight: "700",
       color: colors.accentText,
-    },
-    topRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
     },
     toggleButton: {
       borderWidth: 1,

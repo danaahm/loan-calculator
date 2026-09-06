@@ -15,6 +15,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeColors } from "../theme/tokens";
 import { formatDurationLabel, getCurrencySymbol } from "../utils/format";
 import { CardHeader } from "./CardHeader";
+import { CollapsibleSection } from "./CollapsibleSection";
 
 interface PieBreakdownChartProps {
   principal: number;
@@ -22,7 +23,12 @@ interface PieBreakdownChartProps {
   fees: number;
   extraRepayment: number;
   currencyCode: string;
-  loanLengthYears: number;
+  /**
+   * Length of the schedule the slices come from, not the contracted term. With
+   * extra repayments, a lump sum or an offset the loan finishes early, and the
+   * totals shown here are the ones actually paid over that shorter run.
+   */
+  payoffYears: number;
 }
 
 type SeriesId = "principal" | "interest" | "fees" | "extra";
@@ -76,7 +82,7 @@ export const PieBreakdownChart = ({
   fees,
   extraRepayment,
   currencyCode,
-  loanLengthYears,
+  payoffYears,
 }: PieBreakdownChartProps) => {
   const { colors } = useTheme();
   const t = useTranslation();
@@ -197,13 +203,13 @@ export const PieBreakdownChart = ({
       <CardHeader
         title={t("breakdown.title")}
         subtitle={t("breakdown.subtitle", {
-          duration: formatDurationLabel(loanLengthYears),
+          duration: formatDurationLabel(payoffYears),
         })}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
 
-      {!collapsed ? (
+      <CollapsibleSection collapsed={collapsed}>
         <View>
           <Animated.View
             style={[styles.chartWrap, { opacity }]}
@@ -308,7 +314,7 @@ export const PieBreakdownChart = ({
             </View>
           </View>
         </View>
-      ) : null}
+      </CollapsibleSection>
     </View>
   );
 };

@@ -33,6 +33,13 @@ import {
   formatMonthAnchorLabel,
   getCurrencySymbol,
 } from "../utils/format";
+import {
+  formatGroupedNumberInput,
+  formatGroupedNumberValue,
+  formatGroupedNumberValueOrBlank,
+  formatNumberForInput,
+  formatNumberForInputOrBlank,
+} from "../utils/numberInput";
 import { buildSavedProfileCardSummary } from "../utils/profileSummary";
 import { createEmptyReminder, draftFromSavedProfile } from "../utils/reminderMath";
 import { normalizeCustomDates } from "../utils/reminderSchedule";
@@ -45,24 +52,6 @@ interface ReminderEditorScreenProps {
   onSave: (reminder: LoanReminder) => void;
   onRequestEnableNotifications: () => Promise<boolean>;
 }
-
-const formatGroupedNumberInput = (value: string): string => {
-  const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
-  if (!cleaned) {
-    return "";
-  }
-  const firstDotIndex = cleaned.indexOf(".");
-  const integerRaw =
-    firstDotIndex >= 0 ? cleaned.slice(0, firstDotIndex) : cleaned;
-  const decimalRaw =
-    firstDotIndex >= 0 ? cleaned.slice(firstDotIndex + 1).replace(/\./g, "") : "";
-  const integerPart = integerRaw.replace(/^0+(?=\d)/, "") || "0";
-  const groupedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  if (firstDotIndex >= 0) {
-    return `${groupedInteger}.${decimalRaw}`;
-  }
-  return groupedInteger;
-};
 
 const parseAmount = (value: string): number => {
   const parsed = Number(value.replace(/,/g, ""));
@@ -272,23 +261,21 @@ export const ReminderEditorScreen = ({
   );
   const [currencyCode, setCurrencyCode] = useState(initialReminder.currencyCode);
   const [originalAmount, setOriginalAmount] = useState(
-    formatGroupedNumberInput(String(initialReminder.originalAmount || ""))
+    formatGroupedNumberValueOrBlank(initialReminder.originalAmount)
   );
   const [alreadyPaid, setAlreadyPaid] = useState(
-    formatGroupedNumberInput(
-      String(
-        Math.max(0, initialReminder.originalAmount - initialReminder.remainingBalance)
-      )
+    formatGroupedNumberValueOrBlank(
+      Math.max(0, initialReminder.originalAmount - initialReminder.remainingBalance)
     )
   );
   const [remainingBalance, setRemainingBalance] = useState(
-    formatGroupedNumberInput(String(initialReminder.remainingBalance || ""))
+    formatGroupedNumberValueOrBlank(initialReminder.remainingBalance)
   );
   const [interestRate, setInterestRate] = useState(
-    String(initialReminder.annualInterestRatePercent || "")
+    formatNumberForInputOrBlank(initialReminder.annualInterestRatePercent)
   );
   const [repaymentAmount, setRepaymentAmount] = useState(
-    formatGroupedNumberInput(String(initialReminder.repaymentAmount || ""))
+    formatGroupedNumberValueOrBlank(initialReminder.repaymentAmount)
   );
   const [repaymentFrequency, setRepaymentFrequency] = useState(
     initialReminder.repaymentFrequency
@@ -300,7 +287,7 @@ export const ReminderEditorScreen = ({
     initialReminder.nextPaymentDate
   );
   const [accountFee, setAccountFee] = useState(
-    formatGroupedNumberInput(String(initialReminder.accountFee || ""))
+    formatGroupedNumberValueOrBlank(initialReminder.accountFee)
   );
   const [accountFeeFrequency, setAccountFeeFrequency] = useState(
     initialReminder.accountFeeFrequency
@@ -322,29 +309,27 @@ export const ReminderEditorScreen = ({
     setLinkedProfileId(initialReminder.linkedProfileId ?? null);
     setCurrencyCode(initialReminder.currencyCode);
     setOriginalAmount(
-      formatGroupedNumberInput(String(initialReminder.originalAmount || ""))
+      formatGroupedNumberValueOrBlank(initialReminder.originalAmount)
     );
     setAlreadyPaid(
-      formatGroupedNumberInput(
-        String(
-          Math.max(
-            0,
-            initialReminder.originalAmount - initialReminder.remainingBalance
-          )
+      formatGroupedNumberValueOrBlank(
+        Math.max(
+          0,
+          initialReminder.originalAmount - initialReminder.remainingBalance
         )
       )
     );
     setRemainingBalance(
-      formatGroupedNumberInput(String(initialReminder.remainingBalance || ""))
+      formatGroupedNumberValueOrBlank(initialReminder.remainingBalance)
     );
-    setInterestRate(String(initialReminder.annualInterestRatePercent || ""));
+    setInterestRate(formatNumberForInputOrBlank(initialReminder.annualInterestRatePercent));
     setRepaymentAmount(
-      formatGroupedNumberInput(String(initialReminder.repaymentAmount || ""))
+      formatGroupedNumberValueOrBlank(initialReminder.repaymentAmount)
     );
     setRepaymentFrequency(initialReminder.repaymentFrequency);
     setMonthlyAnchor(initialReminder.monthlyAnchor);
     setNextPaymentIso(initialReminder.nextPaymentDate);
-    setAccountFee(formatGroupedNumberInput(String(initialReminder.accountFee || "")));
+    setAccountFee(formatGroupedNumberValueOrBlank(initialReminder.accountFee));
     setAccountFeeFrequency(initialReminder.accountFeeFrequency);
     setCustomUpcomingDates(initialReminder.customUpcomingDates);
     setNotes(initialReminder.notes);
@@ -364,13 +349,13 @@ export const ReminderEditorScreen = ({
     setLinkedProfileId(profile.id);
     setName(draft.name);
     setCurrencyCode(draft.currencyCode);
-    setOriginalAmount(formatGroupedNumberInput(String(draft.originalAmount)));
+    setOriginalAmount(formatGroupedNumberValue(draft.originalAmount));
     setAlreadyPaid("0");
-    setRemainingBalance(formatGroupedNumberInput(String(draft.remainingBalance)));
-    setInterestRate(String(draft.annualInterestRatePercent));
-    setRepaymentAmount(formatGroupedNumberInput(String(draft.repaymentAmount)));
+    setRemainingBalance(formatGroupedNumberValue(draft.remainingBalance));
+    setInterestRate(formatNumberForInput(draft.annualInterestRatePercent));
+    setRepaymentAmount(formatGroupedNumberValue(draft.repaymentAmount));
     setRepaymentFrequency(draft.repaymentFrequency);
-    setAccountFee(formatGroupedNumberInput(String(draft.accountFee || "")));
+    setAccountFee(formatGroupedNumberValueOrBlank(draft.accountFee));
     setAccountFeeFrequency(draft.accountFeeFrequency);
     setError(null);
   };
@@ -402,7 +387,7 @@ export const ReminderEditorScreen = ({
     const original = parseAmount(formatted);
     const paid = parseAmount(alreadyPaid);
     setRemainingBalance(
-      formatGroupedNumberInput(String(Math.max(0, original - paid)))
+      formatGroupedNumberValue(Math.max(0, original - paid))
     );
   };
 
@@ -412,7 +397,7 @@ export const ReminderEditorScreen = ({
     const original = parseAmount(originalAmount);
     const paid = parseAmount(formatted);
     setRemainingBalance(
-      formatGroupedNumberInput(String(Math.max(0, original - paid)))
+      formatGroupedNumberValue(Math.max(0, original - paid))
     );
   };
 
@@ -422,7 +407,7 @@ export const ReminderEditorScreen = ({
     const original = parseAmount(originalAmount);
     const remaining = parseAmount(formatted);
     setAlreadyPaid(
-      formatGroupedNumberInput(String(Math.max(0, original - remaining)))
+      formatGroupedNumberValue(Math.max(0, original - remaining))
     );
   };
 

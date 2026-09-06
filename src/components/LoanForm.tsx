@@ -11,6 +11,14 @@ import {
 } from "react-native";
 
 import { useTranslation } from "../i18n/LocaleProvider";
+import {
+  formatGroupedNumberInput,
+  formatGroupedNumberValue,
+  formatGroupedNumberValueOrBlank,
+  formatNumberForInput,
+  formatNumberForInputOrBlank,
+  formatPlainNumberInput,
+} from "../utils/numberInput";
 import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeColors } from "../theme/tokens";
 import {
@@ -28,6 +36,7 @@ import {
   formatFrequencyLabel,
 } from "../utils/format";
 import { CardHeader } from "./CardHeader";
+import { CollapsibleSection } from "./CollapsibleSection";
 
 type FormStyles = ReturnType<typeof createStyles>;
 
@@ -74,30 +83,6 @@ const defaultOffsetContribution = (value: LoanInput) =>
     frequency: "monthly" as RepaymentFrequency,
   };
 
-/** Zero means "not filled in yet", so show an empty field rather than "0". */
-const blankIfZero = (value: number): string => (value > 0 ? String(value) : "");
-
-const formatGroupedNumberInput = (value: string): string => {
-  const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
-  if (!cleaned) {
-    return "";
-  }
-
-  const firstDotIndex = cleaned.indexOf(".");
-  const integerRaw =
-    firstDotIndex >= 0 ? cleaned.slice(0, firstDotIndex) : cleaned;
-  const decimalRaw =
-    firstDotIndex >= 0 ? cleaned.slice(firstDotIndex + 1).replace(/\./g, "") : "";
-
-  const integerPart = integerRaw.replace(/^0+(?=\d)/, "") || "0";
-  const groupedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-
-  if (firstDotIndex >= 0) {
-    return `${groupedInteger}.${decimalRaw}`;
-  }
-  return groupedInteger;
-};
-
 const FrequencySelector = ({
   value,
   onChange,
@@ -137,22 +122,22 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
   const currencies = useMemo(() => getAvailableCurrencies(), []);
 
   const [amountBorrowed, setAmountBorrowed] = useState(
-    formatGroupedNumberInput(blankIfZero(initialValue.amountBorrowed))
+    formatGroupedNumberValueOrBlank(initialValue.amountBorrowed)
   );
   const [currencyCode, setCurrencyCode] = useState(initialValue.currencyCode);
   const [interestRate, setInterestRate] = useState(
-    blankIfZero(initialValue.annualInterestRatePercent)
+    formatNumberForInputOrBlank(initialValue.annualInterestRatePercent)
   );
   const [loanLengthYears, setLoanLengthYears] = useState(
-    blankIfZero(decomposeLoanYears(initialValue.loanLengthYears).years)
+    formatNumberForInputOrBlank(decomposeLoanYears(initialValue.loanLengthYears).years)
   );
   const [loanLengthMonths, setLoanLengthMonths] = useState(
-    blankIfZero(decomposeLoanYears(initialValue.loanLengthYears).months)
+    formatNumberForInputOrBlank(decomposeLoanYears(initialValue.loanLengthYears).months)
   );
   const [accountFeeEnabled, setAccountFeeEnabled] = useState(
     initialValue.accountFeeEnabled
   );
-  const [accountFee, setAccountFee] = useState(String(initialValue.accountFee));
+  const [accountFee, setAccountFee] = useState(formatNumberForInput(initialValue.accountFee));
   const [repaymentFrequency, setRepaymentFrequency] = useState(
     initialValue.repaymentFrequency
   );
@@ -161,62 +146,58 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
   );
   const [extraEnabled, setExtraEnabled] = useState(initialValue.extraRepayment.enabled);
   const [extraAmount, setExtraAmount] = useState(
-    formatGroupedNumberInput(String(initialValue.extraRepayment.amount))
+    formatGroupedNumberValue(initialValue.extraRepayment.amount)
   );
   const [extraFrequency, setExtraFrequency] = useState(
     initialValue.extraRepayment.frequency
   );
   const [extraStartAfter, setExtraStartAfter] = useState(
-    String(initialValue.extraRepayment.startAfterValue)
+    formatNumberForInput(initialValue.extraRepayment.startAfterValue, 0)
   );
   const [extraStartAfterUnit, setExtraStartAfterUnit] =
     useState<ExtraRepaymentStartUnit>(initialValue.extraRepayment.startAfterUnit);
   const [lumpSumEnabled, setLumpSumEnabled] = useState(initialValue.lumpSum.enabled);
   const [lumpSumAmount, setLumpSumAmount] = useState(
-    formatGroupedNumberInput(String(initialValue.lumpSum.amount))
+    formatGroupedNumberValue(initialValue.lumpSum.amount)
   );
   const [offsetEnabled, setOffsetEnabled] = useState(initialValue.offsetSavings.enabled);
   const [offsetAmount, setOffsetAmount] = useState(
-    formatGroupedNumberInput(String(initialValue.offsetSavings.amount))
+    formatGroupedNumberValue(initialValue.offsetSavings.amount)
   );
   const [offsetContributionEnabled, setOffsetContributionEnabled] = useState(
     defaultOffsetContribution(initialValue).enabled
   );
   const [offsetContributionAmount, setOffsetContributionAmount] = useState(
-    formatGroupedNumberInput(
-      String(defaultOffsetContribution(initialValue).amount || 0)
-    )
+    formatGroupedNumberValue(defaultOffsetContribution(initialValue).amount || 0)
   );
   const [offsetContributionFrequency, setOffsetContributionFrequency] =
     useState<RepaymentFrequency>(defaultOffsetContribution(initialValue).frequency);
 
   useEffect(() => {
     setCurrencyCode(initialValue.currencyCode);
-    setAmountBorrowed(formatGroupedNumberInput(blankIfZero(initialValue.amountBorrowed)));
-    setInterestRate(blankIfZero(initialValue.annualInterestRatePercent));
+    setAmountBorrowed(formatGroupedNumberValueOrBlank(initialValue.amountBorrowed));
+    setInterestRate(formatNumberForInputOrBlank(initialValue.annualInterestRatePercent));
     const loanLength = decomposeLoanYears(initialValue.loanLengthYears);
-    setLoanLengthYears(blankIfZero(loanLength.years));
-    setLoanLengthMonths(blankIfZero(loanLength.months));
+    setLoanLengthYears(formatNumberForInputOrBlank(loanLength.years));
+    setLoanLengthMonths(formatNumberForInputOrBlank(loanLength.months));
     setAccountFeeEnabled(initialValue.accountFeeEnabled);
-    setAccountFee(String(initialValue.accountFee));
+    setAccountFee(formatNumberForInput(initialValue.accountFee));
     setRepaymentFrequency(initialValue.repaymentFrequency);
     setAccountFeeFrequency(initialValue.accountFeeFrequency);
     setExtraEnabled(initialValue.extraRepayment.enabled);
-    setExtraAmount(formatGroupedNumberInput(String(initialValue.extraRepayment.amount)));
+    setExtraAmount(formatGroupedNumberValue(initialValue.extraRepayment.amount));
     setExtraFrequency(initialValue.extraRepayment.frequency);
-    setExtraStartAfter(String(initialValue.extraRepayment.startAfterValue));
+    setExtraStartAfter(formatNumberForInput(initialValue.extraRepayment.startAfterValue, 0));
     setExtraStartAfterUnit(initialValue.extraRepayment.startAfterUnit);
     setLumpSumEnabled(initialValue.lumpSum.enabled);
-    setLumpSumAmount(formatGroupedNumberInput(String(initialValue.lumpSum.amount)));
+    setLumpSumAmount(formatGroupedNumberValue(initialValue.lumpSum.amount));
     setOffsetEnabled(initialValue.offsetSavings.enabled);
     setOffsetAmount(
-      formatGroupedNumberInput(String(initialValue.offsetSavings.amount))
+      formatGroupedNumberValue(initialValue.offsetSavings.amount)
     );
     setOffsetContributionEnabled(defaultOffsetContribution(initialValue).enabled);
     setOffsetContributionAmount(
-      formatGroupedNumberInput(
-        String(defaultOffsetContribution(initialValue).amount || 0)
-      )
+      formatGroupedNumberValue(defaultOffsetContribution(initialValue).amount || 0)
     );
     setOffsetContributionFrequency(defaultOffsetContribution(initialValue).frequency);
   }, [initialValue]);
@@ -324,7 +305,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
 
-      {!collapsed ? (
+      <CollapsibleSection collapsed={collapsed}>
         <View>
           <Text style={styles.label}>{t("loanForm.currency")}</Text>
           <Pressable
@@ -353,7 +334,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           <TextInput
             keyboardType="decimal-pad"
             value={interestRate}
-            onChangeText={setInterestRate}
+            onChangeText={(value) => setInterestRate(formatPlainNumberInput(value))}
             style={styles.simpleInput}
             placeholder={t("loanForm.interestPlaceholder")}
             placeholderTextColor={colors.textMuted}
@@ -417,7 +398,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
                 <TextInput
                   keyboardType="decimal-pad"
                   value={accountFee}
-                  onChangeText={setAccountFee}
+                  onChangeText={(value) => setAccountFee(formatGroupedNumberInput(value))}
                   style={styles.input}
                   placeholder={t("loanForm.accountFeePlaceholder")}
                   placeholderTextColor={colors.textMuted}
@@ -471,7 +452,9 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
                   <TextInput
                     keyboardType="number-pad"
                     value={extraStartAfter}
-                    onChangeText={setExtraStartAfter}
+                    onChangeText={(value) =>
+                      setExtraStartAfter(formatPlainNumberInput(value, 0))
+                    }
                     style={styles.simpleInput}
                     placeholder={t("loanForm.startAfterPlaceholder")}
                     placeholderTextColor={colors.textMuted}
@@ -615,7 +598,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           ) : null}
 
         </View>
-      ) : null}
+      </CollapsibleSection>
 
       <Modal
         visible={currencyModalVisible}
