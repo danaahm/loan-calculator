@@ -324,6 +324,15 @@ export const applyExtraPayment = (
   };
 };
 
+// Weekly repayments run 52 periods a year, so a 30-year loan is already 1560
+// cycles. Sized to cover ~100 years of weekly repayments.
+const MAX_PAYOFF_PERIODS = 5200;
+
+/**
+ * The date the final scheduled repayment lands on, or null when that cannot be
+ * determined - a loan whose repayment never covers the interest, or one that
+ * runs past the projection limit.
+ */
 export const estimatePayoffDate = (reminder: LoanReminder): string | null => {
   if (reminder.status !== "active" || reminder.remainingBalance <= ZERO_EPSILON) {
     return reminder.status === "completed" ? reminder.nextPaymentDate : null;
@@ -333,13 +342,27 @@ export const estimatePayoffDate = (reminder: LoanReminder): string | null => {
   }
 
   let current: LoanReminder = { ...reminder, payments: [] };
+  let lastPaymentDate: string | null = null;
   let guard = 0;
-  while (current.status === "active" && guard < 600) {
-    current = applyScheduledPayment(current, "auto");
+
+  while (current.status === "active" && guard < MAX_PAYOFF_PERIODS) {
+    const balanceBefore = current.remainingBalance;
+    const dueDate = current.nextPaymentDate;
+    // Discard each payment record as we go; only the final date matters, and
+    // keeping thousands of them (with undo snapshots) is pure waste.
+    current = { ...applyScheduledPayment(current, "auto"), payments: [] };
+
+    if (current.remainingBalance >= balanceBefore - ZERO_EPSILON) {
+      // The repayment does not dent the principal, so the loan never clears.
+      return null;
+    }
+
+    lastPaymentDate = dueDate;
     guard += 1;
   }
-  const last = current.payments[current.payments.length - 1];
-  return last?.date ?? null;
+
+  // Still active means the projection limit was hit rather than a real payoff.
+  return current.status === "active" ? null : lastPaymentDate;
 };
 
 export interface UpcomingCycle {

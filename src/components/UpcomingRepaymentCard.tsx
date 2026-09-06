@@ -1,9 +1,14 @@
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useTheme } from "../theme/ThemeProvider";
 import { formatDisplayDate } from "../utils/dateIso";
 import { formatCurrency } from "../utils/format";
-import { payoffProgress, type UpcomingRepayment } from "../utils/reminderMath";
+import {
+  estimatePayoffDate,
+  payoffProgress,
+  type UpcomingRepayment,
+} from "../utils/reminderMath";
 import { DueChip } from "./DueChip";
 import { ProgressBar } from "./ProgressBar";
 
@@ -23,6 +28,14 @@ export const UpcomingRepaymentCard = ({
 }: UpcomingRepaymentCardProps) => {
   const { colors } = useTheme();
   const { reminder } = item;
+  // Projecting to payoff walks the whole schedule, so only pay for it on the
+  // card that is actually showing it.
+  const payoffDate = useMemo(
+    () => (expanded ? estimatePayoffDate(reminder) : null),
+    [expanded, reminder]
+  );
+  // Redundant when this repayment is itself the last one.
+  const showPayoffDate = payoffDate !== null && payoffDate !== item.date;
 
   if (!expanded) {
     return (
@@ -75,6 +88,11 @@ export const UpcomingRepaymentCard = ({
       <Text style={[styles.liveMeta, { color: colors.textSecondary }]}>
         Due {formatDisplayDate(item.date)}
       </Text>
+      {showPayoffDate ? (
+        <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
+          Loan paid off {formatDisplayDate(payoffDate)}
+        </Text>
+      ) : null}
       <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
         Remaining {formatCurrency(reminder.remainingBalance, reminder.currencyCode)} of{" "}
         {formatCurrency(reminder.originalAmount, reminder.currencyCode)}
