@@ -37,6 +37,7 @@ export interface LoanInput {
   annualInterestRatePercent: number;
   repaymentFrequency: RepaymentFrequency;
   loanLengthYears: number;
+  accountFeeEnabled: boolean;
   accountFee: number;
   accountFeeFrequency: RepaymentFrequency;
   extraRepayment: ExtraRepaymentConfig;

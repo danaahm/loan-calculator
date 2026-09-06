@@ -2,6 +2,7 @@ import { type LoanInput, type SavedLoanProfile } from "../types/loan";
 import {
   formatCurrency,
   formatFrequencyLabel,
+  formatLoanLengthLabel,
   formatPercent,
 } from "./format";
 import { normalizeInput } from "./loanMath";
@@ -15,19 +16,7 @@ export interface SavedProfileCardSummary {
 }
 
 export const formatLoanTermLabel = (loanLengthYears: number): string => {
-  if (!Number.isFinite(loanLengthYears) || loanLengthYears <= 0) {
-    return "—";
-  }
-
-  if (loanLengthYears < 1) {
-    const months = Math.max(1, Math.round(loanLengthYears * 12));
-    return `${months} month${months === 1 ? "" : "s"}`;
-  }
-
-  const roundedYears = Number.isInteger(loanLengthYears)
-    ? `${loanLengthYears}`
-    : `${loanLengthYears.toFixed(1)}`;
-  return `${roundedYears} year${Number(roundedYears) === 1 ? "" : "s"}`;
+  return formatLoanLengthLabel(loanLengthYears) || "—";
 };
 
 const pluralizeUnit = (value: number, unit: "months" | "years"): string => {
@@ -89,7 +78,7 @@ const offsetTag = (input: LoanInput): string | null => {
 };
 
 const accountFeeTag = (input: LoanInput): string | null => {
-  if (input.accountFee <= 0) {
+  if (!input.accountFeeEnabled || input.accountFee <= 0) {
     return null;
   }
   return `Fee ${formatCurrency(input.accountFee, input.currencyCode)} ${formatFrequencyLabel(

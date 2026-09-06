@@ -19,6 +19,8 @@ import {
   type RepaymentFrequency,
 } from "../types/loan";
 import {
+  composeLoanYears,
+  decomposeLoanYears,
   getAvailableCurrencies,
   getCurrencySymbol,
   type CurrencyOption,
@@ -39,6 +41,20 @@ const parsePositiveNumber = (value: string): number => {
     return 0;
   }
   return parsed;
+};
+
+const digitsOnly = (value: string): string => value.replace(/[^0-9]/g, "");
+
+/** Digits only, capped at `max`, and blank is allowed while editing. */
+const clampWholeNumberInput = (value: string, max?: number): string => {
+  const digits = digitsOnly(value).replace(/^0+(?=\d)/, "");
+  if (digits === "") {
+    return "";
+  }
+  if (max !== undefined && Number(digits) > max) {
+    return String(max);
+  }
+  return digits;
 };
 
 const parsePositiveInt = (value: string): number => {
@@ -122,7 +138,13 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     String(initialValue.annualInterestRatePercent)
   );
   const [loanLengthYears, setLoanLengthYears] = useState(
-    String(initialValue.loanLengthYears)
+    String(decomposeLoanYears(initialValue.loanLengthYears).years)
+  );
+  const [loanLengthMonths, setLoanLengthMonths] = useState(
+    String(decomposeLoanYears(initialValue.loanLengthYears).months)
+  );
+  const [accountFeeEnabled, setAccountFeeEnabled] = useState(
+    initialValue.accountFeeEnabled
   );
   const [accountFee, setAccountFee] = useState(String(initialValue.accountFee));
   const [repaymentFrequency, setRepaymentFrequency] = useState(
@@ -167,7 +189,10 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     setCurrencyCode(initialValue.currencyCode);
     setAmountBorrowed(formatGroupedNumberInput(String(initialValue.amountBorrowed)));
     setInterestRate(String(initialValue.annualInterestRatePercent));
-    setLoanLengthYears(String(initialValue.loanLengthYears));
+    const loanLength = decomposeLoanYears(initialValue.loanLengthYears);
+    setLoanLengthYears(String(loanLength.years));
+    setLoanLengthMonths(String(loanLength.months));
+    setAccountFeeEnabled(initialValue.accountFeeEnabled);
     setAccountFee(String(initialValue.accountFee));
     setRepaymentFrequency(initialValue.repaymentFrequency);
     setAccountFeeFrequency(initialValue.accountFeeFrequency);
@@ -197,7 +222,11 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
       amountBorrowed: parsePositiveNumber(amountBorrowed),
       annualInterestRatePercent: parsePositiveNumber(interestRate),
       repaymentFrequency,
-      loanLengthYears: parsePositiveNumber(loanLengthYears),
+      loanLengthYears: composeLoanYears(
+        parsePositiveInt(loanLengthYears),
+        parsePositiveInt(loanLengthMonths)
+      ),
+      accountFeeEnabled,
       accountFee: parsePositiveNumber(accountFee),
       accountFeeFrequency,
       extraRepayment: {
@@ -223,6 +252,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     };
   }, [
     accountFee,
+    accountFeeEnabled,
     accountFeeFrequency,
     amountBorrowed,
     currencyCode,
@@ -234,6 +264,7 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
     lumpSumAmount,
     lumpSumEnabled,
     interestRate,
+    loanLengthMonths,
     loanLengthYears,
     offsetAmount,
     offsetContributionAmount,
@@ -276,6 +307,14 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
   const submit = () => {
     if (fieldValue.amountBorrowed <= 0) {
       setError("Amount borrowed must be greater than zero.");
+      return;
+    }
+
+    if (
+      parsePositiveInt(loanLengthYears) === 0 &&
+      parsePositiveInt(loanLengthMonths) === 0
+    ) {
+      setError("Loan length must be at least 1 month.");
       return;
     }
 
@@ -365,35 +404,72 @@ export const LoanForm = ({ initialValue, onSubmit }: LoanFormProps) => {
             styles={styles}
           />
 
-          <Text style={styles.label}>Loan Length (years)</Text>
-          <TextInput
-            keyboardType="decimal-pad"
-            value={loanLengthYears}
-            onChangeText={setLoanLengthYears}
-            style={styles.simpleInput}
-            placeholder="e.g. 30"
-            placeholderTextColor={colors.textMuted}
-          />
-
-          <Text style={styles.label}>Account Fee (per fee event)</Text>
-          <View style={styles.inputWrap}>
-            <Text style={styles.prefixText}>{moneySymbol}</Text>
-            <TextInput
-              keyboardType="decimal-pad"
-              value={accountFee}
-              onChangeText={setAccountFee}
-              style={styles.input}
-              placeholder="e.g. 10"
-              placeholderTextColor={colors.textMuted}
-            />
+          <Text style={styles.label}>Loan Length</Text>
+          <View style={styles.loanLengthRow}>
+            <View style={styles.startAfterInputWrap}>
+              <TextInput
+                keyboardType="number-pad"
+                value={loanLengthYears}
+                onChangeText={(value) =>
+                  setLoanLengthYears(clampWholeNumberInput(value))
+                }
+                style={styles.simpleInput}
+                placeholder="e.g. 30"
+                placeholderTextColor={colors.textMuted}
+              />
+              <Text style={styles.fieldUnitText}>Years</Text>
+            </View>
+            <View style={styles.startAfterInputWrap}>
+              <TextInput
+                keyboardType="number-pad"
+                value={loanLengthMonths}
+                onChangeText={(value) =>
+                  setLoanLengthMonths(clampWholeNumberInput(value, 11))
+                }
+                style={styles.simpleInput}
+                placeholder="0"
+                placeholderTextColor={colors.textMuted}
+              />
+              <Text style={styles.fieldUnitText}>Months (optional)</Text>
+            </View>
           </View>
 
-          <Text style={styles.label}>Account Fee Frequency</Text>
-          <FrequencySelector
-            value={accountFeeFrequency}
-            onChange={setAccountFeeFrequency}
-            styles={styles}
-          />
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Enable Account Fee</Text>
+            <Switch
+              value={accountFeeEnabled}
+              onValueChange={setAccountFeeEnabled}
+              trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
+              thumbColor={colors.switchThumb}
+            />
+          </View>
+          <Text style={styles.hintText}>
+            Turn on if your lender charges an ongoing account or service fee.
+          </Text>
+
+          {accountFeeEnabled ? (
+            <View>
+              <Text style={styles.label}>Account Fee (per fee event)</Text>
+              <View style={styles.inputWrap}>
+                <Text style={styles.prefixText}>{moneySymbol}</Text>
+                <TextInput
+                  keyboardType="decimal-pad"
+                  value={accountFee}
+                  onChangeText={setAccountFee}
+                  style={styles.input}
+                  placeholder="e.g. 10"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+
+              <Text style={styles.label}>Account Fee Frequency</Text>
+              <FrequencySelector
+                value={accountFeeFrequency}
+                onChange={setAccountFeeFrequency}
+                styles={styles}
+              />
+            </View>
+          ) : null}
 
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Enable Extra Repayment</Text>
@@ -738,6 +814,17 @@ const createStyles = (colors: ThemeColors) =>
     },
     startAfterInputWrap: {
       flex: 1,
+    },
+    loanLengthRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+    },
+    fieldUnitText: {
+      marginTop: 4,
+      fontSize: 12,
+      color: colors.textMuted,
+      fontWeight: "600",
     },
     startAfterToggle: {
       flexDirection: "row",

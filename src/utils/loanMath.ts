@@ -19,6 +19,10 @@ const FREQUENCY_PER_YEAR: Record<RepaymentFrequency, number> = {
 
 const ZERO_EPSILON = 1e-7;
 
+// Loan length is stored as decimal years but entered as whole years + months,
+// so the smallest expressible term is one month.
+export const MIN_LOAN_LENGTH_YEARS = 1 / 12;
+
 const safeRound = (value: number): number => {
   return Math.round(value * 100) / 100;
 };
@@ -89,6 +93,9 @@ const computeSchedule = (
 ): LoanSchedule => {
   const periodsPerYear = getPeriodsPerYear(input.repaymentFrequency);
   const feeEventsPerYear = getPeriodsPerYear(input.accountFeeFrequency);
+  const accountFeeAmount = input.accountFeeEnabled
+    ? Math.max(0, input.accountFee)
+    : 0;
   const extraEventsPerYear = getPeriodsPerYear(input.extraRepayment.frequency);
   const extraStartAfterPeriods = getExtraRepaymentStartAfterPeriods(
     input.extraRepayment.startAfterValue,
@@ -143,7 +150,7 @@ const computeSchedule = (
 
     feeEventCarry += feeEventsPerYear / periodsPerYear;
     const feeEventsThisPeriod = Math.floor(feeEventCarry + ZERO_EPSILON);
-    const feePaid = input.accountFee * feeEventsThisPeriod;
+    const feePaid = accountFeeAmount * feeEventsThisPeriod;
     feeEventCarry -= feeEventsThisPeriod;
 
     let extraPaid = 0;
@@ -315,7 +322,13 @@ export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
     amountBorrowed: Math.max(0, input.amountBorrowed ?? 0),
     annualInterestRatePercent: Math.max(0, input.annualInterestRatePercent ?? 0),
     repaymentFrequency,
-    loanLengthYears: Math.max(0.5, input.loanLengthYears ?? 0.5),
+    loanLengthYears: Math.max(
+      MIN_LOAN_LENGTH_YEARS,
+      input.loanLengthYears ?? 1
+    ),
+    // Older saved profiles predate the toggle: a stored fee above zero means
+    // the fee was in effect, so preserve that behaviour on load.
+    accountFeeEnabled: input.accountFeeEnabled ?? (input.accountFee ?? 0) > 0,
     accountFee: Math.max(0, input.accountFee ?? 0),
     accountFeeFrequency: input.accountFeeFrequency ?? "monthly",
     extraRepayment: {

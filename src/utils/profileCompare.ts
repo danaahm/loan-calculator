@@ -1,5 +1,6 @@
 import { type LoanInput, type SavedLoanProfile } from "../types/loan";
 import { calculateLoan, normalizeInput } from "./loanMath";
+import { formatLoanTermLabel } from "./profileSummary";
 import {
   formatCurrency,
   formatDurationLabel,
@@ -109,7 +110,7 @@ export const buildComparedProfile = (profile: SavedLoanProfile): ComparedProfile
     offsetLabel: offsetParts.length > 0 ? offsetParts.join(" · ") : "None",
     amountLabel: formatCurrency(input.amountBorrowed, input.currencyCode),
     rateLabel: formatPercent(input.annualInterestRatePercent),
-    termLabel: `${input.loanLengthYears} year${input.loanLengthYears === 1 ? "" : "s"}`,
+    termLabel: formatLoanTermLabel(input.loanLengthYears),
     frequencyLabel: formatFrequencyLabel(input.repaymentFrequency),
     periodRepaymentLabel: `${formatCurrency(periodRepayment, input.currencyCode)} / ${formatFrequencyLabel(
       input.repaymentFrequency

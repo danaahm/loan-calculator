@@ -367,7 +367,7 @@ export const ReminderEditorScreen = ({
     setInterestRate(String(draft.annualInterestRatePercent));
     setRepaymentAmount(formatGroupedNumberInput(String(draft.repaymentAmount)));
     setRepaymentFrequency(draft.repaymentFrequency);
-    setAccountFee(formatGroupedNumberInput(String(draft.accountFee)));
+    setAccountFee(formatGroupedNumberInput(String(draft.accountFee || "")));
     setAccountFeeFrequency(draft.accountFeeFrequency);
     setError(null);
   };

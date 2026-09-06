@@ -119,18 +119,48 @@ export const formatMonthAnchorLabel = (
   }
 };
 
+export interface LoanLengthParts {
+  years: number;
+  months: number;
+}
+
+export const composeLoanYears = (years: number, months: number): number => {
+  return (Math.max(0, years) * 12 + Math.max(0, months)) / 12;
+};
+
+/**
+ * Split decimal years into whole years and months. Rounding the *total* months
+ * is deliberate: 30 + 7 / 12 is 30.583333333333332, so flooring the fractional
+ * remainder would yield 6 months instead of 7.
+ */
+export const decomposeLoanYears = (value: number): LoanLengthParts => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return { years: 0, months: 0 };
+  }
+  const totalMonths = Math.max(0, Math.round(value * 12));
+  return { years: Math.floor(totalMonths / 12), months: totalMonths % 12 };
+};
+
+const pluralize = (value: number, unit: string): string => {
+  return `${value} ${unit}${value === 1 ? "" : "s"}`;
+};
+
+export const formatLoanLengthLabel = (loanLengthYears: number): string => {
+  const { years, months } = decomposeLoanYears(loanLengthYears);
+
+  if (years === 0 && months === 0) {
+    return "";
+  }
+  if (years === 0) {
+    return pluralize(months, "month");
+  }
+  if (months === 0) {
+    return pluralize(years, "year");
+  }
+  return `${pluralize(years, "year")} ${pluralize(months, "month")}`;
+};
+
 export const formatDurationLabel = (loanLengthYears: number): string => {
-  if (!Number.isFinite(loanLengthYears) || loanLengthYears <= 0) {
-    return "over loan term";
-  }
-
-  if (loanLengthYears < 1) {
-    const months = Math.max(1, Math.round(loanLengthYears * 12));
-    return `over ${months} month${months === 1 ? "" : "s"}`;
-  }
-
-  const roundedYears = Number.isInteger(loanLengthYears)
-    ? `${loanLengthYears}`
-    : `${loanLengthYears.toFixed(1)}`;
-  return `over ${roundedYears} year${Number(roundedYears) === 1 ? "" : "s"}`;
+  const label = formatLoanLengthLabel(loanLengthYears);
+  return label ? `over ${label}` : "over loan term";
 };

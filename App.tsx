@@ -24,6 +24,7 @@ import {
 import { AmortizationGrid } from "./src/components/AmortizationGrid";
 import { BalanceComparisonChart } from "./src/components/BalanceComparisonChart";
 import { LoanForm } from "./src/components/LoanForm";
+import { LoanStartChooser } from "./src/components/LoanStartChooser";
 import { PieBreakdownChart } from "./src/components/PieBreakdownChart";
 import { SwipeBackView } from "./src/components/SwipeBackView";
 import { BasicCalculatorScreen } from "./src/screens/BasicCalculatorScreen";
@@ -60,6 +61,7 @@ import { todayLocalIso } from "./src/utils/dateIso";
 import {
   addRateChange,
   applyExtraPayment,
+  buildUpcomingRepayments,
   catchUpReminders,
   createEmptyReminder,
   draftFromSavedProfile,
@@ -68,6 +70,7 @@ import {
   setReminderStatus,
   undoLastPayment,
 } from "./src/utils/reminderMath";
+import { detectCurrencyCode } from "./src/utils/locale";
 import {
   getOsPermissionStatus,
   notificationUnavailableHint,
@@ -105,6 +108,7 @@ const DEFAULT_INPUT: LoanInput = {
   annualInterestRatePercent: 6.2,
   repaymentFrequency: "monthly",
   loanLengthYears: 30,
+  accountFeeEnabled: false,
   accountFee: 8,
   accountFeeFrequency: "monthly",
   extraRepayment: {
@@ -165,6 +169,7 @@ function AppContent() {
   const [compareSelectMode, setCompareSelectMode] = useState(false);
   const [compareSelection, setCompareSelection] = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [loanFormMode, setLoanFormMode] = useState<"chooser" | "form">("chooser");
   const [profileName, setProfileName] = useState("My Loan Profile");
   const [saveDialogVisible, setSaveDialogVisible] = useState(false);
   const [renameDialogVisible, setRenameDialogVisible] = useState(false);
@@ -182,6 +187,7 @@ function AppContent() {
   const remindersRef = useRef(reminders);
   remindersRef.current = reminders;
   const editorBackRef = useRef<AppScreen>("reminders");
+  const detailBackRef = useRef<AppScreen>("reminders");
   const remindersReturnRef = useRef<TabScreen>("home");
   const insets = useSafeAreaInsets();
 
@@ -214,9 +220,11 @@ function AppContent() {
     (minimumMonthlyRepayment + extraMonthlyRepayment) * 100
   ) / 100;
   const activeReminders = reminders.filter((item) => item.status === "active");
-  const nextDueReminder = [...activeReminders].sort((a, b) =>
-    a.nextPaymentDate.localeCompare(b.nextPaymentDate)
-  )[0];
+  // Projecting cycles simulates payments per reminder, so keep it memoized.
+  const upcomingRepayments = useMemo(
+    () => buildUpcomingRepayments(reminders, 3),
+    [reminders]
+  );
   const detailReminder =
     reminders.find((item) => item.id === detailReminderId) ?? null;
   const compareLeftProfile =
@@ -292,7 +300,11 @@ function AppContent() {
           loadLoanReminders(),
           loadAppSettings(),
         ]);
-      const initial = normalizeInput(savedInput ?? DEFAULT_INPUT);
+      const initial = normalizeInput(
+        savedInput ?? { ...DEFAULT_INPUT, currencyCode: detectCurrencyCode() }
+      );
+      // A persisted input means work in progress: skip straight past the chooser.
+      setLoanFormMode(savedInput ? "form" : "chooser");
       const initialHash = JSON.stringify(initial);
       setInput(initial);
       setResult(calculateLoan(initial));
@@ -379,7 +391,23 @@ function AppContent() {
     setSelectedProfileId(profile.id);
     setLastCalculatedHash(hash);
     setLastSavedHash(hash);
+    setLoanFormMode("form");
     setScreen("calculator");
+  };
+
+  const startNewLoan = () => {
+    const fresh = normalizeInput({
+      ...DEFAULT_INPUT,
+      currencyCode: detectCurrencyCode(),
+    });
+    const hash = JSON.stringify(fresh);
+    setInput(fresh);
+    setResult(null);
+    setProfileName("My Loan Profile");
+    setSelectedProfileId(null);
+    setLastCalculatedHash(hash);
+    setLastSavedHash(hash);
+    setLoanFormMode("form");
   };
 
   const saveCurrentProfile = async (asNew: boolean) => {
@@ -535,7 +563,8 @@ function AppContent() {
     setScreen("compare");
   };
 
-  const openReminderDetail = (reminder: LoanReminder) => {
+  const openReminderDetail = (reminder: LoanReminder, from: AppScreen = "reminders") => {
+    detailBackRef.current = from;
     setDetailReminderId(reminder.id);
     setScreen("reminder-detail");
   };
@@ -705,7 +734,7 @@ function AppContent() {
           </View>
         </View>
 
-        {screen === "calculator" && canSaveCalculatedProfile ? (
+        {screen === "calculator" && loanFormMode === "form" && canSaveCalculatedProfile ? (
           <View style={styles.saveStickyBar}>
             <Pressable
               style={styles.saveStickyPrimaryButton}
@@ -725,7 +754,7 @@ function AppContent() {
         <View style={styles.screenBody}>
         {screen === "home" ? (
           <HomeScreen
-            nextReminder={nextDueReminder ?? null}
+            upcoming={upcomingRepayments}
             activeReminderCount={activeReminders.length}
             input={input}
             result={result}
@@ -735,17 +764,34 @@ function AppContent() {
             onOpenBasic={() => setScreen("basic")}
             onOpenSaved={() => setScreen("saved")}
             onOpenReminders={openReminders}
-            onOpenReminder={openReminderDetail}
+            onOpenReminder={(reminder) => openReminderDetail(reminder, "home")}
           />
         ) : null}
 
-        {screen === "calculator" ? (
+        {screen === "calculator" && loanFormMode === "chooser" ? (
+          <LoanStartChooser
+            savedProfiles={savedProfiles}
+            onCreateNew={startNewLoan}
+            onSelectProfile={openProfile}
+          />
+        ) : null}
+
+        {screen === "calculator" && loanFormMode === "form" ? (
           <ScrollView
             style={styles.screenBody}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
           >
+            <View style={styles.activeLoanRow}>
+              <Text style={styles.activeLoanName} numberOfLines={1}>
+                {selectedProfileId ? profileName : "New loan"}
+              </Text>
+              <Pressable onPress={() => setLoanFormMode("chooser")}>
+                <Text style={styles.activeLoanChange}>Change</Text>
+              </Pressable>
+            </View>
+
             <LoanForm initialValue={input} onSubmit={handleSubmit} />
 
             {result ? (
@@ -898,7 +944,7 @@ function AppContent() {
         ) : null}
 
         {screen === "reminder-detail" && detailReminder ? (
-          <SwipeBackView onBack={() => setScreen("reminders")}>
+          <SwipeBackView onBack={() => setScreen(detailBackRef.current)}>
             <ReminderDetailScreen
             reminder={detailReminder}
             linkedProfile={
@@ -906,7 +952,7 @@ function AppContent() {
               null
             }
             notificationsSupported={reminderNotificationsSupported}
-            onBack={() => setScreen("reminders")}
+            onBack={() => setScreen(detailBackRef.current)}
             onEdit={() => openReminderEditor(detailReminder, "reminder-detail")}
             onToggleNotifications={(enabled) => {
               toggleReminderNotifications(detailReminder, enabled).catch(() => {});
@@ -1283,6 +1329,23 @@ const createStyles = (colors: ThemeColors) =>
     scrollContent: {
       padding: 16,
       paddingBottom: 24,
+    },
+    activeLoanRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      marginBottom: 10,
+    },
+    activeLoanName: {
+      flex: 1,
+      fontSize: 15,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    activeLoanChange: {
+      fontWeight: "700",
+      color: colors.accentTextStrong,
     },
     pageContent: {
       flex: 1,

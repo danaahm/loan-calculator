@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { DatePickerField } from "../components/DatePickerField";
+import { ProgressBar } from "../components/ProgressBar";
 import { notificationUnavailableHint } from "../notifications/reminderNotifications";
 import { useTheme } from "../theme/ThemeProvider";
 import { type SavedLoanProfile } from "../types/loan";
@@ -27,6 +28,7 @@ import {
   amountDueForReminder,
   estimatePayoffDate,
   listUpcomingDates,
+  payoffProgress,
   rateAsOf,
 } from "../utils/reminderMath";
 
@@ -74,10 +76,7 @@ export const ReminderDetailScreen = ({
   const rateChanges = [...(reminder.rateChanges ?? [])].sort((left, right) =>
     left.effectiveDate.localeCompare(right.effectiveDate)
   );
-  const progress =
-    reminder.originalAmount > 0
-      ? Math.min(1, Math.max(0, 1 - reminder.remainingBalance / reminder.originalAmount))
-      : 0;
+  const progress = payoffProgress(reminder);
   const lastPayments = useMemo(
     () => [...reminder.payments].reverse().slice(0, 8),
     [reminder.payments]
@@ -124,17 +123,11 @@ export const ReminderDetailScreen = ({
           <Text style={[styles.meta, { color: colors.textSecondary }]}>
             of {formatCurrency(reminder.originalAmount, reminder.currencyCode)}
           </Text>
-          <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${Math.round(progress * 100)}%`, backgroundColor: colors.primary },
-              ]}
-            />
-          </View>
-          <Text style={[styles.meta, { color: colors.textMuted }]}>
-            {Math.round(progress * 100)}% estimated paid down
-          </Text>
+          <ProgressBar
+            progress={progress}
+            showPercent
+            percentLabelSuffix="estimated paid down"
+          />
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -416,16 +409,6 @@ const styles = StyleSheet.create({
   meta: {
     marginTop: 4,
     fontWeight: "600",
-  },
-  progressTrack: {
-    height: 8,
-    borderRadius: 999,
-    overflow: "hidden",
-    marginTop: 12,
-  },
-  progressFill: {
-    height: 8,
-    borderRadius: 999,
   },
   rowLabel: {
     marginTop: 8,

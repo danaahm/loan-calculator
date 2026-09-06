@@ -1,20 +1,21 @@
+import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { UpcomingRepaymentCard } from "../components/UpcomingRepaymentCard";
 import { useTheme } from "../theme/ThemeProvider";
 import {
   type LoanCalculationResult,
   type LoanInput,
 } from "../types/loan";
 import { type LoanReminder } from "../types/reminder";
-import { formatDisplayDate } from "../utils/dateIso";
 import {
   formatCurrency,
   formatDurationLabel,
   formatFrequencyLabel,
   formatYearsAndPeriods,
 } from "../utils/format";
-import { amountDueForReminder } from "../utils/reminderMath";
+import { type UpcomingRepayment } from "../utils/reminderMath";
 
 const PERIODS_PER_YEAR: Record<LoanInput["repaymentFrequency"], number> = {
   yearly: 1,
@@ -25,7 +26,7 @@ const PERIODS_PER_YEAR: Record<LoanInput["repaymentFrequency"], number> = {
 };
 
 interface HomeScreenProps {
-  nextReminder: LoanReminder | null;
+  upcoming: UpcomingRepayment[];
   activeReminderCount: number;
   input: LoanInput;
   result: LoanCalculationResult | null;
@@ -39,7 +40,7 @@ interface HomeScreenProps {
 }
 
 export const HomeScreen = ({
-  nextReminder,
+  upcoming,
   activeReminderCount,
   input,
   result,
@@ -52,14 +53,12 @@ export const HomeScreen = ({
   onOpenReminder,
 }: HomeScreenProps) => {
   const { colors } = useTheme();
-  const due = nextReminder ? amountDueForReminder(nextReminder) : 0;
-  const progress =
-    nextReminder && nextReminder.originalAmount > 0
-      ? Math.min(
-          1,
-          Math.max(0, 1 - nextReminder.remainingBalance / nextReminder.originalAmount)
-        )
-      : 0;
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // Derive rather than sync via an effect, so a reminder disappearing from the
+  // list silently falls back to expanding the soonest one.
+  const activeKey = upcoming.some((item) => item.key === expandedKey)
+    ? expandedKey
+    : (upcoming[0]?.key ?? null);
   const periodsPerYear = PERIODS_PER_YEAR[input.repaymentFrequency];
   const extraSavings =
     result && input.extraRepayment.enabled && result.savings.moneySaved > 0
@@ -87,35 +86,23 @@ export const HomeScreen = ({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {nextReminder ? (
-        <Pressable
-          style={[styles.liveCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-          onPress={() => onOpenReminder(nextReminder)}
-        >
-          <Text style={[styles.liveKicker, { color: colors.accentText }]}>Next repayment</Text>
-          <Text style={[styles.liveTitle, { color: colors.text }]}>{nextReminder.name}</Text>
-          <Text style={[styles.liveHero, { color: colors.text }]}>
-            {formatCurrency(due, nextReminder.currencyCode)}
-          </Text>
-          <Text style={[styles.liveMeta, { color: colors.textSecondary }]}>
-            Due {formatDisplayDate(nextReminder.nextPaymentDate)}
-          </Text>
-          <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
-            Remaining {formatCurrency(nextReminder.remainingBalance, nextReminder.currencyCode)} of{" "}
-            {formatCurrency(nextReminder.originalAmount, nextReminder.currencyCode)}
-          </Text>
-          <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${Math.round(progress * 100)}%`, backgroundColor: colors.primary },
-              ]}
-            />
-          </View>
-          <Text style={[styles.liveHint, { color: colors.accentTextStrong }]}>
-            {activeReminderCount} active reminder{activeReminderCount === 1 ? "" : "s"} · Open
-          </Text>
-        </Pressable>
+      {upcoming.length > 0 ? (
+        upcoming.map((item, index) => (
+          <UpcomingRepaymentCard
+            key={item.key}
+            item={item}
+            expanded={item.key === activeKey}
+            isNext={index === 0}
+            activeReminderCount={activeReminderCount}
+            onPress={() => {
+              if (item.key === activeKey) {
+                onOpenReminder(item.reminder);
+              } else {
+                setExpandedKey(item.key);
+              }
+            }}
+          />
+        ))
       ) : (
         <Pressable
           style={[styles.liveCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
@@ -257,16 +244,6 @@ const styles = StyleSheet.create({
   liveHint: {
     marginTop: 10,
     fontWeight: "700",
-  },
-  progressTrack: {
-    height: 8,
-    borderRadius: 999,
-    overflow: "hidden",
-    marginTop: 12,
-  },
-  progressFill: {
-    height: 8,
-    borderRadius: 999,
   },
   dashboardGrid: {
     flexDirection: "row",

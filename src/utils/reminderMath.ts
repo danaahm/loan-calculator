@@ -82,7 +82,7 @@ export const draftFromSavedProfile = (
     annualInterestRatePercent: input.annualInterestRatePercent,
     repaymentAmount: estimatePeriodRepaymentFromProfile(profile),
     repaymentFrequency: input.repaymentFrequency,
-    accountFee: input.accountFee,
+    accountFee: input.accountFeeEnabled ? input.accountFee : 0,
     accountFeeFrequency: input.accountFeeFrequency,
     updatedAt: new Date().toISOString(),
   };
@@ -96,7 +96,7 @@ export const refreshTermsFromProfile = (
   return {
     ...reminder,
     annualInterestRatePercent: input.annualInterestRatePercent,
-    accountFee: input.accountFee,
+    accountFee: input.accountFeeEnabled ? input.accountFee : 0,
     accountFeeFrequency: input.accountFeeFrequency,
     repaymentFrequency: input.repaymentFrequency,
     updatedAt: new Date().toISOString(),
@@ -119,6 +119,17 @@ const feeForCycle = (
 export const amountDueForReminder = (reminder: LoanReminder): number => {
   const { feePortion } = feeForCycle(reminder);
   return safeRound(reminder.repaymentAmount + feePortion);
+};
+
+/** Fraction of the original balance paid down so far, clamped to 0..1. */
+export const payoffProgress = (reminder: LoanReminder): number => {
+  if (reminder.originalAmount <= 0) {
+    return 0;
+  }
+  return Math.min(
+    1,
+    Math.max(0, 1 - reminder.remainingBalance / reminder.originalAmount)
+  );
 };
 
 export const rateAsOf = (reminder: LoanReminder, isoDate: string): number => {
@@ -379,6 +390,48 @@ export const listUpcomingDates = (
   count = 6
 ): string[] => {
   return projectUpcomingCycles(reminder, 365 * 2, count).map((cycle) => cycle.date);
+};
+
+export interface UpcomingRepayment {
+  key: string;
+  reminder: LoanReminder;
+  date: string;
+  amountDue: number;
+  remainingAfter: number;
+}
+
+/**
+ * The next `count` repayments across every active reminder, in date order.
+ * Each reminder contributes up to `count` of its own cycles, so a single
+ * tracked loan fills the list with its own upcoming cycles while several
+ * loans naturally interleave.
+ */
+export const buildUpcomingRepayments = (
+  reminders: LoanReminder[],
+  count = 3
+): UpcomingRepayment[] => {
+  const occurrences: UpcomingRepayment[] = [];
+
+  reminders
+    .filter((reminder) => reminder.status === "active")
+    .forEach((reminder) => {
+      projectUpcomingCycles(reminder, 365 * 2, count).forEach((cycle) => {
+        occurrences.push({
+          key: `${reminder.id}:${cycle.date}`,
+          reminder,
+          date: cycle.date,
+          amountDue: cycle.amountDue,
+          remainingAfter: cycle.remainingAfter,
+        });
+      });
+    });
+
+  return occurrences
+    .sort((a, b) => {
+      const byDate = a.date.localeCompare(b.date);
+      return byDate !== 0 ? byDate : a.reminder.name.localeCompare(b.reminder.name);
+    })
+    .slice(0, count);
 };
 
 export const setReminderStatus = (
