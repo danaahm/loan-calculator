@@ -13,6 +13,7 @@ import {
   MAX_BASIC_CALC_HISTORY,
   saveBasicCalcHistory,
 } from "../storage/localState";
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeColors } from "../theme/tokens";
 import { type BasicCalcHistoryEntry } from "../types/basicCalculator";
@@ -77,6 +78,7 @@ const persistHistory = (entries: BasicCalcHistoryEntry[]) => {
 
 export const BasicCalculatorScreen = () => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [calc, setCalc] = useState<CalcState>(createInitialCalcState);
   const [history, setHistory] = useState<BasicCalcHistoryEntry[]>([]);
@@ -150,7 +152,9 @@ export const BasicCalculatorScreen = () => {
             onPress={() => setHistoryOpen((open) => !open)}
             style={styles.historyToggle}
             accessibilityRole="button"
-            accessibilityLabel={historyOpen ? "Hide history" : "Show history"}
+            accessibilityLabel={
+              historyOpen ? t("basicCalc.hideHistory") : t("basicCalc.showHistory")
+            }
           >
             <Ionicons
               name={historyOpen ? "keypad-outline" : "time-outline"}
@@ -158,12 +162,12 @@ export const BasicCalculatorScreen = () => {
               color={colors.accentTextStrong}
             />
             <Text style={styles.historyToggleText}>
-              {historyOpen ? "Keypad" : "History"}
+              {historyOpen ? t("basicCalc.keypad") : t("basicCalc.history")}
             </Text>
           </Pressable>
           {historyOpen && history.length > 0 ? (
             <Pressable onPress={clearHistory} accessibilityRole="button">
-              <Text style={styles.clearAllText}>Clear all</Text>
+              <Text style={styles.clearAllText}>{t("basicCalc.clearAll")}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -175,7 +179,7 @@ export const BasicCalculatorScreen = () => {
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
-              <Text style={styles.emptyHistory}>No calculations yet.</Text>
+              <Text style={styles.emptyHistory}>{t("basicCalc.emptyHistory")}</Text>
             }
             renderItem={({ item }) => (
               <View style={styles.historyRow}>
@@ -187,7 +191,7 @@ export const BasicCalculatorScreen = () => {
                   onPress={() => deleteEntry(item.id)}
                   style={styles.historyDelete}
                   accessibilityRole="button"
-                  accessibilityLabel="Delete history item"
+                  accessibilityLabel={t("basicCalc.deleteHistoryItem")}
                 >
                   <Ionicons name="close-circle-outline" size={20} color={colors.danger} />
                 </Pressable>
@@ -226,7 +230,7 @@ export const BasicCalculatorScreen = () => {
                     { backgroundColor: palette.backgroundColor, opacity: pressed ? 0.72 : 1 },
                   ]}
                   accessibilityRole="button"
-                  accessibilityLabel={item.key === "⌫" ? "Backspace" : item.label}
+                  accessibilityLabel={item.key === "⌫" ? t("basicCalc.backspace") : item.label}
                 >
                   {item.key === "⌫" ? (
                     <Ionicons name="backspace-outline" size={26} color={palette.color} />

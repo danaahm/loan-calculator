@@ -1,3 +1,4 @@
+import { t } from "../i18n/translate";
 import { type RepaymentFrequency } from "./loan";
 
 export type ReminderStatus = "active" | "archived" | "completed";
@@ -65,8 +66,8 @@ export interface LoanReminder {
   updatedAt: string;
 }
 
-export const REMINDER_DISCLAIMER =
-  "Estimates only, based on your inputs. This is not financial advice and is not a bank balance.";
+/** Resolved per call so a language change reaches it. */
+export const REMINDER_DISCLAIMER = (): string => t("reminders.disclaimer");
 
 export const DEFAULT_NOTIFY_LEADS: NotifyLead[] = [{ value: 1, unit: "days" }];
 
@@ -86,11 +87,11 @@ export const MONTHLY_ANCHORS: MonthlyAnchor[] = [
 export const leadKey = (lead: NotifyLead): string => `${lead.value}-${lead.unit}`;
 
 export const formatLeadLabel = (lead: NotifyLead): string => {
-  if (lead.value === 0) {
-    return "Morning of";
+  if (lead.value <= 0) {
+    return t("reminders.lead.morningOf");
   }
   if (lead.unit === "weeks") {
-    return lead.value === 1 ? "1 week before" : `${lead.value} weeks before`;
+    return t("reminders.lead.weeksBefore", { count: lead.value });
   }
-  return lead.value === 1 ? "1 day before" : `${lead.value} days before`;
+  return t("reminders.lead.daysBefore", { count: lead.value });
 };

@@ -1,9 +1,10 @@
+import { t } from "../i18n/translate";
 import { type LoanInput, type SavedLoanProfile } from "../types/loan";
 import { calculateLoan, normalizeInput } from "./loanMath";
 import { formatLoanTermLabel } from "./profileSummary";
 import {
   formatCurrency,
-  formatDurationLabel,
+  formatLoanLengthLabel,
   formatFrequencyLabel,
   formatPercent,
   formatYearsAndPeriods,
@@ -62,35 +63,46 @@ export const buildComparedProfile = (profile: SavedLoanProfile): ComparedProfile
   const schedule = result.activeSchedule;
   const extraEnabled = input.extraRepayment.enabled;
   const extraLabel = extraEnabled
-    ? `${formatCurrency(input.extraRepayment.amount, input.currencyCode)} ${formatFrequencyLabel(
-        input.extraRepayment.frequency
-      ).toLowerCase()}`
-    : "None";
+    ? t("compare.amountPerFrequency", {
+        amount: formatCurrency(input.extraRepayment.amount, input.currencyCode),
+        frequency: formatFrequencyLabel(
+          input.extraRepayment.frequency
+        ).toLowerCase(),
+      })
+    : t("common.none");
   const offsetParts: string[] = [];
   if (input.offsetSavings.enabled) {
     offsetParts.push(
-      formatCurrency(input.offsetSavings.amount, input.currencyCode) + " start"
+      t("compare.offsetStart", {
+        amount: formatCurrency(input.offsetSavings.amount, input.currencyCode),
+      })
     );
     if (input.offsetSavings.contribution.enabled) {
       offsetParts.push(
-        `+${formatCurrency(
-          input.offsetSavings.contribution.amount,
-          input.currencyCode
-        )} ${formatFrequencyLabel(input.offsetSavings.contribution.frequency).toLowerCase()}`
+        t("compare.offsetContribution", {
+          amount: formatCurrency(
+            input.offsetSavings.contribution.amount,
+            input.currencyCode
+          ),
+          frequency: formatFrequencyLabel(
+            input.offsetSavings.contribution.frequency
+          ).toLowerCase(),
+        })
       );
     }
   }
-  const payoffLabel = formatDurationLabel(schedule.summary.payoffYears).replace(
-    /^over /,
-    ""
-  );
+  const payoffLabel =
+    formatLoanLengthLabel(schedule.summary.payoffYears) || t("common.emptyValue");
   const extraSavingsLabel = result.hasPlanComparison
-    ? `${formatCurrency(result.savings.moneySaved, input.currencyCode)} · ${formatYearsAndPeriods(
-        Math.abs(result.savings.yearsSaved),
-        Math.abs(result.savings.periodsSaved),
-        periodsPerYear
-      )}`
-    : "—";
+    ? t("compare.savingsPair", {
+        money: formatCurrency(result.savings.moneySaved, input.currencyCode),
+        time: formatYearsAndPeriods(
+          Math.abs(result.savings.yearsSaved),
+          Math.abs(result.savings.periodsSaved),
+          periodsPerYear
+        ),
+      })
+    : t("common.emptyValue");
 
   return {
     profile,
@@ -107,14 +119,15 @@ export const buildComparedProfile = (profile: SavedLoanProfile): ComparedProfile
     extraSavingsPeriods: result.savings.periodsSaved,
     extraSavingsYears: result.savings.yearsSaved,
     extraLabel,
-    offsetLabel: offsetParts.length > 0 ? offsetParts.join(" · ") : "None",
+    offsetLabel: offsetParts.length > 0 ? offsetParts.join(" · ") : t("common.none"),
     amountLabel: formatCurrency(input.amountBorrowed, input.currencyCode),
     rateLabel: formatPercent(input.annualInterestRatePercent),
     termLabel: formatLoanTermLabel(input.loanLengthYears),
     frequencyLabel: formatFrequencyLabel(input.repaymentFrequency),
-    periodRepaymentLabel: `${formatCurrency(periodRepayment, input.currencyCode)} / ${formatFrequencyLabel(
-      input.repaymentFrequency
-    ).toLowerCase()}`,
+    periodRepaymentLabel: t("compare.perFrequency", {
+      amount: formatCurrency(periodRepayment, input.currencyCode),
+      frequency: formatFrequencyLabel(input.repaymentFrequency).toLowerCase(),
+    }),
     monthlyEquivalentLabel: formatCurrency(monthlyEquivalent, input.currencyCode),
     totalInterestLabel: formatCurrency(schedule.summary.totalInterestPaid, input.currencyCode),
     totalPaidLabel: formatCurrency(schedule.summary.totalPaid, input.currencyCode),

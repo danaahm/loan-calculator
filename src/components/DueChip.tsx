@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type ReminderStatus } from "../types/reminder";
 import { daysUntil } from "../utils/dateIso";
@@ -43,18 +44,19 @@ export const dueTone = (dateIso: string, status: ReminderStatus): DueTone => {
 
 export const DueChip = ({ dateIso, status }: DueChipProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const until = daysUntil(dateIso);
   const paidOff = status === "completed";
   const overdue = isReminderOverdue(dateIso, status);
   const label = paidOff
-    ? "Paid off"
+    ? t("due.paidOff")
     : overdue
-      ? "Overdue"
+      ? t("due.overdue")
       : until === 0
-        ? "Due today"
+        ? t("due.today")
         : until === 1
-          ? "Due tomorrow"
-          : `Due in ${until} days`;
+          ? t("due.tomorrow")
+          : t("due.inDays", { count: until });
 
   const tone = dueTone(dateIso, status);
   const backgroundColor =

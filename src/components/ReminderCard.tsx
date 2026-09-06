@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type LoanReminder } from "../types/reminder";
 import { formatDisplayDate } from "../utils/dateIso";
@@ -25,6 +26,7 @@ export const ReminderCard = ({
   onDelete,
 }: ReminderCardProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const due = amountDueForReminder(reminder);
   const overdue = isReminderOverdue(reminder.nextPaymentDate, reminder.status);
   const paidOff = reminder.status === "completed";
@@ -47,17 +49,21 @@ export const ReminderCard = ({
         <DueChip dateIso={reminder.nextPaymentDate} status={reminder.status} />
       </View>
       <Text style={[styles.meta, { color: colors.textMuted }]}>
-        Remaining {formatCurrency(reminder.remainingBalance, reminder.currencyCode)} of{" "}
-        {formatCurrency(reminder.originalAmount, reminder.currencyCode)}
+        {t("reminderCard.remainingOf", {
+          remaining: formatCurrency(reminder.remainingBalance, reminder.currencyCode),
+          original: formatCurrency(reminder.originalAmount, reminder.currencyCode),
+        })}
       </Text>
       <Text style={[styles.meta, { color: colors.textSecondary }]}>
-        Next {formatDisplayDate(reminder.nextPaymentDate)} ·{" "}
-        {formatCurrency(due, reminder.currencyCode)} ·{" "}
-        {formatFrequencyLabel(reminder.repaymentFrequency)}
+        {t("reminderCard.nextLine", {
+          date: formatDisplayDate(reminder.nextPaymentDate),
+          amount: formatCurrency(due, reminder.currencyCode),
+          frequency: formatFrequencyLabel(reminder.repaymentFrequency),
+        })}
       </Text>
 
       <View style={styles.switchRow}>
-        <Text style={[styles.switchLabel, { color: colors.text }]}>Notifications</Text>
+        <Text style={[styles.switchLabel, { color: colors.text }]}>{t("reminderCard.notifications")}</Text>
         <Switch
           value={reminder.notificationsEnabled && notificationsAvailable}
           disabled={!notificationsAvailable || paidOff || reminder.status === "archived"}
@@ -73,14 +79,14 @@ export const ReminderCard = ({
             onPress={onArchive}
             style={[styles.actionBtn, { borderColor: colors.borderStrong, backgroundColor: colors.inputBg }]}
           >
-            <Text style={[styles.actionText, { color: colors.textSecondary }]}>Archive</Text>
+            <Text style={[styles.actionText, { color: colors.textSecondary }]}>{t("common.archive")}</Text>
           </Pressable>
         ) : null}
         <Pressable
           onPress={onDelete}
           style={[styles.actionBtn, { borderColor: colors.dangerBorder, backgroundColor: colors.dangerBg }]}
         >
-          <Text style={[styles.actionText, { color: colors.danger }]}>Delete</Text>
+          <Text style={[styles.actionText, { color: colors.danger }]}>{t("common.delete")}</Text>
         </Pressable>
       </View>
     </Pressable>

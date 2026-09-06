@@ -1,3 +1,4 @@
+import { t } from "../i18n/translate";
 import { type RepaymentFrequency } from "../types/loan";
 import {
   formatCurrency as formatWithLibrary,
@@ -62,24 +63,13 @@ export const formatCurrency = (value: number, currencyCode: string): string => {
 };
 
 export const formatPercent = (value: number): string => {
-  return `${(Number.isFinite(value) ? value : 0).toFixed(2)}%`;
+  return t("format.percent", {
+    value: (Number.isFinite(value) ? value : 0).toFixed(2),
+  });
 };
 
 export const formatFrequencyLabel = (frequency: RepaymentFrequency): string => {
-  switch (frequency) {
-    case "yearly":
-      return "Yearly";
-    case "quarterly":
-      return "Quarterly";
-    case "monthly":
-      return "Monthly";
-    case "fortnightly":
-      return "Fortnightly";
-    case "weekly":
-      return "Weekly";
-    default:
-      return frequency;
-  }
+  return t(`frequency.${frequency}`);
 };
 
 export const formatYearsAndPeriods = (
@@ -88,7 +78,7 @@ export const formatYearsAndPeriods = (
   periodsPerYear: number
 ): string => {
   if (periods <= 0 || periodsPerYear <= 0) {
-    return "No time saved";
+    return t("duration.noTimeSaved");
   }
 
   const wholeYears = Math.floor(years);
@@ -100,23 +90,19 @@ export const formatYearsAndPeriods = (
   );
 
   if (wholeYears === 0) {
-    return `${remainingMonths} month${remainingMonths === 1 ? "" : "s"}`;
+    return t("duration.months", { count: remainingMonths });
   }
 
-  return `${wholeYears} year${wholeYears === 1 ? "" : "s"} and ${remainingMonths} month${remainingMonths === 1 ? "" : "s"}`;
+  return t("duration.yearsAndMonths", {
+    years: t("duration.years", { count: wholeYears }),
+    months: t("duration.months", { count: remainingMonths }),
+  });
 };
 
 export const formatMonthAnchorLabel = (
   anchor: "onDate" | "startOfMonth" | "endOfMonth"
 ): string => {
-  switch (anchor) {
-    case "startOfMonth":
-      return "Start of month";
-    case "endOfMonth":
-      return "End of month";
-    default:
-      return "Same day each month";
-  }
+  return t(`monthAnchor.${anchor}`);
 };
 
 export interface LoanLengthParts {
@@ -141,10 +127,6 @@ export const decomposeLoanYears = (value: number): LoanLengthParts => {
   return { years: Math.floor(totalMonths / 12), months: totalMonths % 12 };
 };
 
-const pluralize = (value: number, unit: string): string => {
-  return `${value} ${unit}${value === 1 ? "" : "s"}`;
-};
-
 export const formatLoanLengthLabel = (loanLengthYears: number): string => {
   const { years, months } = decomposeLoanYears(loanLengthYears);
 
@@ -152,15 +134,20 @@ export const formatLoanLengthLabel = (loanLengthYears: number): string => {
     return "";
   }
   if (years === 0) {
-    return pluralize(months, "month");
+    return t("duration.months", { count: months });
   }
   if (months === 0) {
-    return pluralize(years, "year");
+    return t("duration.years", { count: years });
   }
-  return `${pluralize(years, "year")} ${pluralize(months, "month")}`;
+  return t("duration.yearsMonths", {
+    years: t("duration.years", { count: years }),
+    months: t("duration.months", { count: months }),
+  });
 };
 
 export const formatDurationLabel = (loanLengthYears: number): string => {
   const label = formatLoanLengthLabel(loanLengthYears);
-  return label ? `over ${label}` : "over loan term";
+  return label
+    ? t("duration.overLength", { length: label })
+    : t("duration.overLoanTerm");
 };

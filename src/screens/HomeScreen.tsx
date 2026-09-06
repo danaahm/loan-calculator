@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { UpcomingRepaymentCard } from "../components/UpcomingRepaymentCard";
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import {
   type LoanCalculationResult,
@@ -53,6 +54,7 @@ export const HomeScreen = ({
   onOpenReminder,
 }: HomeScreenProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   // Derive rather than sync via an effect, so a reminder disappearing from the
   // list silently falls back to expanding the soonest one.
@@ -62,22 +64,30 @@ export const HomeScreen = ({
   const periodsPerYear = PERIODS_PER_YEAR[input.repaymentFrequency];
   const extraSavings =
     result && result.hasPlanComparison && result.savings.moneySaved > 0
-      ? `${formatCurrency(result.savings.moneySaved, input.currencyCode)} and ${formatYearsAndPeriods(
-          Math.max(0, result.savings.yearsSaved),
-          Math.max(0, result.savings.periodsSaved),
-          periodsPerYear
-        )}`
+      ? t("home.savingsValue", {
+          money: formatCurrency(result.savings.moneySaved, input.currencyCode),
+          time: formatYearsAndPeriods(
+            Math.max(0, result.savings.yearsSaved),
+            Math.max(0, result.savings.periodsSaved),
+            periodsPerYear
+          ),
+        })
       : null;
   const offsetNote =
     input.offsetSavings.enabled && input.offsetSavings.contribution?.enabled
-      ? `${formatCurrency(
-          input.offsetSavings.contribution.amount,
-          input.currencyCode
-        )} ${formatFrequencyLabel(
-          input.offsetSavings.contribution.frequency
-        ).toLowerCase()} offset deposits`
+      ? t("home.offsetDeposits", {
+          amount: formatCurrency(
+            input.offsetSavings.contribution.amount,
+            input.currencyCode
+          ),
+          frequency: formatFrequencyLabel(
+            input.offsetSavings.contribution.frequency
+          ).toLowerCase(),
+        })
       : input.offsetSavings.enabled
-        ? `${formatCurrency(input.offsetSavings.amount, input.currencyCode)} offset`
+        ? t("home.offsetAmount", {
+            amount: formatCurrency(input.offsetSavings.amount, input.currencyCode),
+          })
         : null;
 
   return (
@@ -107,13 +117,13 @@ export const HomeScreen = ({
           style={[styles.liveCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
           onPress={onOpenReminders}
         >
-          <Text style={[styles.liveKicker, { color: colors.accentText }]}>Next repayment</Text>
-          <Text style={[styles.liveTitle, { color: colors.text }]}>No active reminders</Text>
+          <Text style={[styles.liveKicker, { color: colors.accentText }]}>{t("upcoming.next")}</Text>
+          <Text style={[styles.liveTitle, { color: colors.text }]}>{t("home.noActiveReminders")}</Text>
           <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
-            Add a repayment reminder to track a loan and get due-date alerts.
+            {t("home.noRemindersHint")}
           </Text>
           <Text style={[styles.liveHint, { color: colors.accentTextStrong }]}>
-            Add a repayment reminder
+            {t("home.addReminder")}
           </Text>
         </Pressable>
       )}
@@ -123,42 +133,48 @@ export const HomeScreen = ({
           style={[styles.liveCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
           onPress={onOpenCalculator}
         >
-          <Text style={[styles.liveKicker, { color: colors.accentText }]}>Last calculation</Text>
-          <Text style={[styles.liveTitle, { color: colors.text }]}>Minimum monthly</Text>
+          <Text style={[styles.liveKicker, { color: colors.accentText }]}>{t("home.lastCalculation")}</Text>
+          <Text style={[styles.liveTitle, { color: colors.text }]}>{t("home.minimumMonthly")}</Text>
           <Text style={[styles.liveHero, { color: colors.text }]}>
             {formatCurrency(minimumMonthlyRepayment, input.currencyCode)}
           </Text>
           <Text style={[styles.liveMeta, { color: colors.textSecondary }]}>
-            Total interest {formatCurrency(
-              result.activeSchedule.summary.totalInterestPaid,
-              input.currencyCode
-            )}
+            {t("home.totalInterest", {
+              amount: formatCurrency(
+                result.activeSchedule.summary.totalInterestPaid,
+                input.currencyCode
+              ),
+            })}
           </Text>
           <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
-            Payoff {formatDurationLabel(result.activeSchedule.summary.payoffYears)}
+            {t("home.payoff", {
+              duration: formatDurationLabel(
+                result.activeSchedule.summary.payoffYears
+              ),
+            })}
           </Text>
           {extraSavings ? (
             <Text style={[styles.liveMeta, { color: colors.textSecondary }]}>
-              Your plan saves {extraSavings}
+              {t("home.planSaves", { value: extraSavings })}
             </Text>
           ) : null}
           {offsetNote ? (
             <Text style={[styles.liveMeta, { color: colors.textMuted }]}>{offsetNote}</Text>
           ) : null}
-          <Text style={[styles.liveHint, { color: colors.accentTextStrong }]}>Open loan calculator</Text>
+          <Text style={[styles.liveHint, { color: colors.accentTextStrong }]}>{t("home.openCalculator")}</Text>
         </Pressable>
       ) : (
         <Pressable
           style={[styles.liveCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
           onPress={onOpenCalculator}
         >
-          <Text style={[styles.liveKicker, { color: colors.accentText }]}>Last calculation</Text>
-          <Text style={[styles.liveTitle, { color: colors.text }]}>No calculation yet</Text>
+          <Text style={[styles.liveKicker, { color: colors.accentText }]}>{t("home.lastCalculation")}</Text>
+          <Text style={[styles.liveTitle, { color: colors.text }]}>{t("home.noCalculation")}</Text>
           <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
-            Enter a loan to see repayments, interest, and payoff.
+            {t("home.noCalculationHint")}
           </Text>
           <Text style={[styles.liveHint, { color: colors.accentTextStrong }]}>
-            Open loan calculator
+            {t("home.openCalculator")}
           </Text>
         </Pressable>
       )}
@@ -169,25 +185,25 @@ export const HomeScreen = ({
           onPress={onOpenCalculator}
         >
           <Ionicons name="cash-outline" size={22} color={colors.accentTextStrong} />
-          <Text style={[styles.dashboardTitle, { color: colors.text }]}>Loan calculator</Text>
-          <Text style={[styles.dashboardHint, { color: colors.textMuted }]}>Model a loan</Text>
+          <Text style={[styles.dashboardTitle, { color: colors.text }]}>{t("home.tileCalculator")}</Text>
+          <Text style={[styles.dashboardHint, { color: colors.textMuted }]}>{t("home.tileCalculatorHint")}</Text>
         </Pressable>
         <Pressable
           style={[styles.dashboardCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
           onPress={onOpenBasic}
         >
           <Ionicons name="calculator-outline" size={22} color={colors.accentTextStrong} />
-          <Text style={[styles.dashboardTitle, { color: colors.text }]}>Calculator</Text>
-          <Text style={[styles.dashboardHint, { color: colors.textMuted }]}>Basic calculator</Text>
+          <Text style={[styles.dashboardTitle, { color: colors.text }]}>{t("home.tileBasic")}</Text>
+          <Text style={[styles.dashboardHint, { color: colors.textMuted }]}>{t("home.tileBasicHint")}</Text>
         </Pressable>
         <Pressable
           style={[styles.dashboardCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
           onPress={onOpenSaved}
         >
           <Ionicons name="document-text-outline" size={22} color={colors.accentTextStrong} />
-          <Text style={[styles.dashboardTitle, { color: colors.text }]}>My Saved Loans</Text>
+          <Text style={[styles.dashboardTitle, { color: colors.text }]}>{t("home.tileSaved")}</Text>
           <Text style={[styles.dashboardHint, { color: colors.textMuted }]}>
-            {savedProfileCount} profile{savedProfileCount === 1 ? "" : "s"}
+            {t("home.profileCount", { count: savedProfileCount })}
           </Text>
         </Pressable>
         <Pressable
@@ -195,11 +211,11 @@ export const HomeScreen = ({
           onPress={onOpenReminders}
         >
           <Ionicons name="notifications-outline" size={22} color={colors.accentTextStrong} />
-          <Text style={[styles.dashboardTitle, { color: colors.text }]}>Reminders</Text>
+          <Text style={[styles.dashboardTitle, { color: colors.text }]}>{t("reminders.title")}</Text>
           <Text style={[styles.dashboardHint, { color: colors.textMuted }]}>
             {activeReminderCount > 0
-              ? `${activeReminderCount} active`
-              : "Track due dates"}
+              ? t("home.activeCount", { count: activeReminderCount })
+              : t("home.tileRemindersHint")}
           </Text>
         </Pressable>
       </View>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type SavedLoanProfile } from "../types/loan";
 import { buildSavedProfileCardSummary } from "../utils/profileSummary";
@@ -18,6 +19,7 @@ export const LoanStartChooser = ({
   onSelectProfile,
 }: LoanStartChooserProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const [listOpen, setListOpen] = useState(false);
   const hasProfiles = savedProfiles.length > 0;
 
@@ -27,9 +29,9 @@ export const LoanStartChooser = ({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={[styles.heading, { color: colors.text }]}>Start a loan</Text>
+      <Text style={[styles.heading, { color: colors.text }]}>{t("loanStart.heading")}</Text>
       <Text style={[styles.subheading, { color: colors.textMuted }]}>
-        Begin from scratch, or pick up a loan you already saved.
+        {t("loanStart.subheading")}
       </Text>
 
       <Pressable
@@ -38,9 +40,9 @@ export const LoanStartChooser = ({
       >
         <Ionicons name="add-circle-outline" size={26} color={colors.accentTextStrong} />
         <View style={styles.optionText}>
-          <Text style={[styles.optionTitle, { color: colors.text }]}>Create new loan</Text>
+          <Text style={[styles.optionTitle, { color: colors.text }]}>{t("loanStart.createNew")}</Text>
           <Text style={[styles.optionHint, { color: colors.textMuted }]}>
-            Start with an empty form.
+            {t("loanStart.createNewHint")}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
@@ -57,13 +59,11 @@ export const LoanStartChooser = ({
       >
         <Ionicons name="document-text-outline" size={26} color={colors.accentTextStrong} />
         <View style={styles.optionText}>
-          <Text style={[styles.optionTitle, { color: colors.text }]}>Select existing loan</Text>
+          <Text style={[styles.optionTitle, { color: colors.text }]}>{t("loanStart.selectExisting")}</Text>
           <Text style={[styles.optionHint, { color: colors.textMuted }]}>
             {hasProfiles
-              ? `Prefill from one of your ${savedProfiles.length} saved loan${
-                  savedProfiles.length === 1 ? "" : "s"
-                }.`
-              : "No saved loans yet."}
+              ? t("loanStart.prefillHint", { count: savedProfiles.length })
+              : t("loanStart.noSavedLoans")}
           </Text>
         </View>
         {hasProfiles ? (

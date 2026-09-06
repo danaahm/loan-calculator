@@ -1,5 +1,10 @@
 import * as Localization from "expo-localization";
 
+import {
+  FALLBACK_LANGUAGE,
+  isSupportedLanguage,
+  type LanguageCode,
+} from "../i18n/languages";
 import { getAvailableCurrencies } from "./format";
 
 export const FALLBACK_CURRENCY_CODE = "AUD";
@@ -52,5 +57,24 @@ export const detectCurrencyCode = (
     return fallback;
   } catch {
     return fallback;
+  }
+};
+
+/**
+ * Best-effort language for the device, used only when the user has not picked
+ * one in Settings. Matches on the base tag so "en-AU" resolves to "en".
+ */
+export const detectLanguageCode = (): LanguageCode => {
+  try {
+    for (const locale of Localization.getLocales()) {
+      const tag = locale.languageCode ?? locale.languageTag?.split("-")[0];
+      const code = tag?.toLowerCase();
+      if (isSupportedLanguage(code)) {
+        return code;
+      }
+    }
+    return FALLBACK_LANGUAGE;
+  } catch {
+    return FALLBACK_LANGUAGE;
   }
 };

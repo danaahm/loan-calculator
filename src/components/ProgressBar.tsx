@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 
 interface ProgressBarProps {
@@ -7,15 +8,17 @@ interface ProgressBarProps {
   progress: number;
   /** Render an "N% paid" label under the bar. */
   showPercent?: boolean;
-  percentLabelSuffix?: string;
+  /** Catalogue key for the word after the percentage. */
+  percentLabelKey?: string;
 }
 
 export const ProgressBar = ({
   progress,
   showPercent = false,
-  percentLabelSuffix = "paid",
+  percentLabelKey = "progress.paid",
 }: ProgressBarProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const clamped = Math.min(1, Math.max(0, Number.isFinite(progress) ? progress : 0));
   const percent = Math.round(clamped * 100);
 
@@ -28,7 +31,7 @@ export const ProgressBar = ({
       </View>
       {showPercent ? (
         <Text style={[styles.percent, { color: colors.textSecondary }]}>
-          {percent}% {percentLabelSuffix}
+          {t("progress.percentLabel", { percent, label: t(percentLabelKey) })}
         </Text>
       ) : null}
     </View>

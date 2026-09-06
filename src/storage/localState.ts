@@ -17,6 +17,11 @@ import {
   type ReminderStatus,
 } from "../types/reminder";
 import {
+  FALLBACK_LANGUAGE,
+  isSupportedLanguage,
+  type LanguageCode,
+} from "../i18n/languages";
+import {
   DEFAULT_APP_SETTINGS,
   type AppSettings,
   type ThemeMode,
@@ -32,6 +37,18 @@ const MAX_BASIC_HISTORY = 50;
 
 const isThemeMode = (value: unknown): value is ThemeMode =>
   value === "auto" || value === "light" || value === "dark";
+
+const normalizeLanguage = (value: unknown): LanguageCode =>
+  isSupportedLanguage(value) ? value : FALLBACK_LANGUAGE;
+
+/**
+ * `null` means "not chosen", which leaves the device region to decide, so an
+ * unreadable stored value must normalize to null rather than to a real code.
+ */
+const normalizeCurrencyCode = (value: unknown): string | null =>
+  typeof value === "string" && /^[A-Za-z]{3}$/.test(value.trim())
+    ? value.trim().toUpperCase()
+    : null;
 
 const clampHour = (value: unknown): number => {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -226,6 +243,8 @@ export const loadAppSettings = async (): Promise<AppSettings> => {
       themeMode: isThemeMode(parsed.themeMode)
         ? parsed.themeMode
         : DEFAULT_APP_SETTINGS.themeMode,
+      language: normalizeLanguage(parsed.language),
+      defaultCurrencyCode: normalizeCurrencyCode(parsed.defaultCurrencyCode),
       reminderNotificationsEnabled: Boolean(parsed.reminderNotificationsEnabled),
       defaultNotifyHour: clampHour(parsed.defaultNotifyHour),
     };

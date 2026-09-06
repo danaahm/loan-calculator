@@ -14,6 +14,7 @@ import {
 import { DatePickerField } from "../components/DatePickerField";
 import { ProgressBar } from "../components/ProgressBar";
 import { notificationUnavailableHint } from "../notifications/reminderNotifications";
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type SavedLoanProfile } from "../types/loan";
 import { REMINDER_DISCLAIMER, type LoanReminder } from "../types/reminder";
@@ -66,6 +67,7 @@ export const ReminderDetailScreen = ({
   onRefreshFromProfile,
 }: ReminderDetailScreenProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const [extraInput, setExtraInput] = useState("");
   const [rateDate, setRateDate] = useState(todayLocalIso());
   const [rateInput, setRateInput] = useState("");
@@ -85,7 +87,7 @@ export const ReminderDetailScreen = ({
   const submitExtra = () => {
     const amount = Number(extraInput.replace(/,/g, ""));
     if (!Number.isFinite(amount) || amount <= 0) {
-      Alert.alert("Amount required", "Enter an extra payment amount.");
+      Alert.alert(t("detail.amountRequired"), t("detail.amountRequiredBody"));
       return;
     }
     onExtraPayment(amount);
@@ -95,7 +97,7 @@ export const ReminderDetailScreen = ({
   const submitRateChange = () => {
     const rate = Number(rateInput.replace(/,/g, ""));
     if (!Number.isFinite(rate) || rate < 0) {
-      Alert.alert("Rate required", "Enter the new interest rate.");
+      Alert.alert(t("detail.rateRequired"), t("detail.rateRequiredBody"));
       return;
     }
     onAddRateChange(rateDate, rate);
@@ -106,54 +108,56 @@ export const ReminderDetailScreen = ({
     <View style={[styles.page, { backgroundColor: colors.page }]}>
       <Pressable onPress={onBack} style={styles.backRow} accessibilityRole="button">
         <Ionicons name="chevron-back" size={22} color={colors.accentTextStrong} />
-        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>Back</Text>
+        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>{t("common.back")}</Text>
       </Pressable>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={[styles.title, { color: colors.text }]}>{reminder.name}</Text>
         <Text style={[styles.disclaimer, { color: colors.textMuted }]}>
-          {REMINDER_DISCLAIMER}
+          {REMINDER_DISCLAIMER()}
         </Text>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <Text style={[styles.cardLabel, { color: colors.textMuted }]}>Remaining</Text>
+          <Text style={[styles.cardLabel, { color: colors.textMuted }]}>{t("detail.remaining")}</Text>
           <Text style={[styles.hero, { color: colors.text }]}>
             {formatCurrency(reminder.remainingBalance, reminder.currencyCode)}
           </Text>
           <Text style={[styles.meta, { color: colors.textSecondary }]}>
-            of {formatCurrency(reminder.originalAmount, reminder.currencyCode)}
+            {t("detail.ofOriginal", {
+              amount: formatCurrency(reminder.originalAmount, reminder.currencyCode),
+            })}
           </Text>
           <ProgressBar
             progress={progress}
             showPercent
-            percentLabelSuffix="estimated paid down"
+            percentLabelKey="progress.estimatedPaidDown"
           />
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>Next payment</Text>
+          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{t("detail.nextPayment")}</Text>
           <Text style={[styles.rowValue, { color: colors.text }]}>
             {formatDisplayDate(reminder.nextPaymentDate)}
           </Text>
-          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>Amount due</Text>
+          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{t("detail.amountDue")}</Text>
           <Text style={[styles.rowValue, { color: colors.text }]}>
             {formatCurrency(due, reminder.currencyCode)}
           </Text>
-          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>Frequency</Text>
+          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{t("detail.frequency")}</Text>
           <Text style={[styles.rowValue, { color: colors.text }]}>
             {formatFrequencyLabel(reminder.repaymentFrequency)}
             {reminder.repaymentFrequency === "monthly"
               ? ` · ${formatMonthAnchorLabel(reminder.monthlyAnchor)}`
               : ""}
           </Text>
-          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>Interest rate</Text>
+          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{t("detail.interestRate")}</Text>
           <Text style={[styles.rowValue, { color: colors.text }]}>
-            {formatPercent(currentRate)} as of today
+            {t("detail.rateAsOfToday", { rate: formatPercent(currentRate) })}
           </Text>
           {payoff ? (
             <>
               <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
-                Estimated payoff
+                {t("detail.estimatedPayoff")}
               </Text>
               <Text style={[styles.rowValue, { color: colors.text }]}>
                 {formatDisplayDate(payoff)}
@@ -163,16 +167,15 @@ export const ReminderDetailScreen = ({
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>Rate changes</Text>
+          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>{t("detail.rateChanges")}</Text>
           <Text style={[styles.hint, { color: colors.textMuted }]}>
-            Dated rates apply to new payments and payoff estimates. Past recorded
-            payments are not rewritten. Update repayment in Edit if your lender
-            changed the minimum.
+            {t("detail.rateChangesHint")}
           </Text>
           {rateChanges.length === 0 ? (
             <Text style={[styles.hint, { color: colors.textMuted }]}>
-              Starting rate {formatPercent(reminder.annualInterestRatePercent)}. No dated
-              changes yet.
+              {t("detail.noRateChanges", {
+                rate: formatPercent(reminder.annualInterestRatePercent),
+              })}
             </Text>
           ) : (
             rateChanges.map((change) => (
@@ -191,22 +194,22 @@ export const ReminderDetailScreen = ({
                     style={[styles.secondaryBtn, { borderColor: colors.borderStrong, marginTop: 0 }]}
                   >
                     <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
-                      Remove
+                      {t("common.remove")}
                     </Text>
                   </Pressable>
                 </View>
               </View>
             ))
           )}
-          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>Effective date</Text>
+          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{t("detail.effectiveDate")}</Text>
           <DatePickerField value={rateDate} onChange={setRateDate} />
-          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>New rate (% per year)</Text>
+          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{t("detail.newRate")}</Text>
           <View style={styles.row}>
             <TextInput
               keyboardType="decimal-pad"
               value={rateInput}
               onChangeText={setRateInput}
-              placeholder="e.g. 5.99"
+              placeholder={t("detail.ratePlaceholder")}
               placeholderTextColor={colors.textMuted}
               style={[
                 styles.input,
@@ -221,14 +224,14 @@ export const ReminderDetailScreen = ({
               onPress={submitRateChange}
               style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
             >
-              <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>Add</Text>
+              <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>{t("common.add")}</Text>
             </Pressable>
           </View>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.switchRow}>
-            <Text style={[styles.switchLabel, { color: colors.text }]}>Notifications</Text>
+            <Text style={[styles.switchLabel, { color: colors.text }]}>{t("reminderCard.notifications")}</Text>
             <Switch
               value={reminder.notificationsEnabled && notificationsSupported}
               disabled={!notificationsSupported || reminder.status !== "active"}
@@ -239,15 +242,15 @@ export const ReminderDetailScreen = ({
           </View>
           {!notificationsSupported ? (
             <Text style={[styles.hint, { color: colors.textMuted }]}>
-              {notificationUnavailableHint}
+              {notificationUnavailableHint()}
             </Text>
           ) : null}
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>Upcoming dates</Text>
+          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>{t("detail.upcomingDates")}</Text>
           {upcoming.length === 0 ? (
-            <Text style={[styles.hint, { color: colors.textMuted }]}>No upcoming dates.</Text>
+            <Text style={[styles.hint, { color: colors.textMuted }]}>{t("detail.noUpcomingDates")}</Text>
           ) : (
             upcoming.map((date) => (
               <Text key={date} style={[styles.listLine, { color: colors.text }]}>
@@ -258,16 +261,16 @@ export const ReminderDetailScreen = ({
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>Extra payment</Text>
+          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>{t("detail.extraPayment")}</Text>
           <Text style={[styles.hint, { color: colors.textMuted }]}>
-            Reduces remaining now. Does not skip the next scheduled date.
+            {t("detail.extraPaymentHint")}
           </Text>
           <View style={styles.row}>
             <TextInput
               keyboardType="decimal-pad"
               value={extraInput}
               onChangeText={setExtraInput}
-              placeholder="Amount"
+              placeholder={t("detail.amountPlaceholder")}
               placeholderTextColor={colors.textMuted}
               style={[
                 styles.input,
@@ -282,24 +285,32 @@ export const ReminderDetailScreen = ({
               onPress={submitExtra}
               style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
             >
-              <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>Apply</Text>
+              <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>{t("common.apply")}</Text>
             </Pressable>
           </View>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>Payment history</Text>
+          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>{t("detail.paymentHistory")}</Text>
           {lastPayments.length === 0 ? (
-            <Text style={[styles.hint, { color: colors.textMuted }]}>No payments recorded yet.</Text>
+            <Text style={[styles.hint, { color: colors.textMuted }]}>{t("detail.noPayments")}</Text>
           ) : (
             lastPayments.map((item) => (
               <View key={item.id} style={styles.historyRow}>
                 <Text style={[styles.listLine, { color: colors.text }]}>
-                  {formatDisplayDate(item.date)} · {item.source}
+                  {t("detail.historyLine", {
+                    date: formatDisplayDate(item.date),
+                    source: t(`detail.source.${item.source}`),
+                  })}
                 </Text>
                 <Text style={[styles.hint, { color: colors.textMuted }]}>
-                  Paid {formatCurrency(item.amountPaid, reminder.currencyCode)} · remaining{" "}
-                  {formatCurrency(item.remainingAfter, reminder.currencyCode)}
+                  {t("detail.historyAmounts", {
+                    paid: formatCurrency(item.amountPaid, reminder.currencyCode),
+                    remaining: formatCurrency(
+                      item.remainingAfter,
+                      reminder.currencyCode
+                    ),
+                  })}
                 </Text>
               </View>
             ))
@@ -310,7 +321,7 @@ export const ReminderDetailScreen = ({
               style={[styles.secondaryBtn, { borderColor: colors.borderStrong }]}
             >
               <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
-                Undo last payment
+                {t("detail.undoLast")}
               </Text>
             </Pressable>
           ) : null}
@@ -320,7 +331,7 @@ export const ReminderDetailScreen = ({
           onPress={onEdit}
           style={[styles.primaryBtnFull, { backgroundColor: colors.primary }]}
         >
-          <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>Edit details</Text>
+          <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>{t("detail.editDetails")}</Text>
         </Pressable>
 
         {linkedProfile ? (
@@ -329,7 +340,7 @@ export const ReminderDetailScreen = ({
             style={[styles.secondaryBtnFull, { borderColor: colors.borderStrong }]}
           >
             <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
-              Refresh terms from {linkedProfile.name}
+              {t("detail.refreshFrom", { name: linkedProfile.name })}
             </Text>
           </Pressable>
         ) : null}
@@ -340,7 +351,7 @@ export const ReminderDetailScreen = ({
             style={[styles.secondaryBtnFull, { borderColor: colors.borderStrong }]}
           >
             <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
-              Unarchive
+              {t("common.unarchive")}
             </Text>
           </Pressable>
         ) : (
@@ -348,7 +359,7 @@ export const ReminderDetailScreen = ({
             onPress={onArchive}
             style={[styles.secondaryBtnFull, { borderColor: colors.borderStrong }]}
           >
-            <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>Archive</Text>
+            <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>{t("common.archive")}</Text>
           </Pressable>
         )}
 
@@ -356,7 +367,7 @@ export const ReminderDetailScreen = ({
           onPress={onDelete}
           style={[styles.dangerBtn, { borderColor: colors.dangerBorder, backgroundColor: colors.dangerBg }]}
         >
-          <Text style={[styles.dangerBtnText, { color: colors.danger }]}>Delete reminder</Text>
+          <Text style={[styles.dangerBtnText, { color: colors.danger }]}>{t("detail.deleteReminder")}</Text>
         </Pressable>
       </ScrollView>
     </View>

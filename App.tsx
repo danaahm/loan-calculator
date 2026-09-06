@@ -44,6 +44,7 @@ import {
   saveLoanReminders,
   saveSavedLoanProfiles,
 } from "./src/storage/localState";
+import { LocaleProvider, useLocale } from "./src/i18n/LocaleProvider";
 import { ThemeProvider, useTheme } from "./src/theme/ThemeProvider";
 import { type ThemeColors } from "./src/theme/tokens";
 import {
@@ -97,14 +98,19 @@ type AppScreen =
 
 const NAV_TABS: {
   id: TabScreen;
-  label: string;
+  labelKey: string;
   icon: keyof typeof Ionicons.glyphMap;
   iconActive: keyof typeof Ionicons.glyphMap;
 }[] = [
-  { id: "home", label: "Home", icon: "home-outline", iconActive: "home" },
-  { id: "calculator", label: "Loan", icon: "cash-outline", iconActive: "cash" },
-  { id: "basic", label: "Calc", icon: "calculator-outline", iconActive: "calculator" },
-  { id: "saved", label: "Saved", icon: "document-text-outline", iconActive: "document-text" },
+  { id: "home", labelKey: "tabs.home", icon: "home-outline", iconActive: "home" },
+  { id: "calculator", labelKey: "tabs.loan", icon: "cash-outline", iconActive: "cash" },
+  { id: "basic", labelKey: "tabs.calc", icon: "calculator-outline", iconActive: "calculator" },
+  {
+    id: "saved",
+    labelKey: "tabs.saved",
+    icon: "document-text-outline",
+    iconActive: "document-text",
+  },
 ];
 
 const DEFAULT_INPUT: LoanInput = {
@@ -144,9 +150,9 @@ const DEFAULT_INPUT: LoanInput = {
  * Deliberately NOT run through normalizeInput, which would clamp the zeroed
  * loan length up to one month.
  */
-const emptyInput = (): LoanInput => ({
+const emptyInput = (currencyCode: string): LoanInput => ({
   ...DEFAULT_INPUT,
-  currencyCode: detectCurrencyCode(),
+  currencyCode,
   amountBorrowed: 0,
   annualInterestRatePercent: 0,
   loanLengthYears: 0,
@@ -164,7 +170,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AppContent />
+        <LocaleProvider>
+          <AppContent />
+        </LocaleProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
@@ -172,6 +180,7 @@ export default function App() {
 
 function AppContent() {
   const { colors, isDark } = useTheme();
+  const { t, defaultCurrencyCode } = useLocale();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [screen, setScreen] = useState<AppScreen>("home");
   const previousScreenRef = useRef<Exclude<AppScreen, "settings">>("home");
@@ -191,7 +200,7 @@ function AppContent() {
   const [compareSelection, setCompareSelection] = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [loanFormMode, setLoanFormMode] = useState<"chooser" | "form">("chooser");
-  const [profileName, setProfileName] = useState("My Loan Profile");
+  const [profileName, setProfileName] = useState(() => t("profiles.defaultName"));
   const [saveDialogVisible, setSaveDialogVisible] = useState(false);
   const [renameDialogVisible, setRenameDialogVisible] = useState(false);
   const [renameProfileId, setRenameProfileId] = useState<string | null>(null);
@@ -321,7 +330,9 @@ function AppContent() {
     if (summaries.length > 0) {
       showSnackbar(
         summaries
-          .map((item) => `Applied ${item.appliedCount} payment(s) on ${item.name}`)
+          .map((item) =>
+            t("catchUp.applied", { count: item.appliedCount, name: item.name })
+          )
           .join(" · ")
       );
     }
@@ -337,7 +348,10 @@ function AppContent() {
           loadAppSettings(),
         ]);
       const initial = normalizeInput(
-        savedInput ?? { ...DEFAULT_INPUT, currencyCode: detectCurrencyCode() }
+        savedInput ?? {
+          ...DEFAULT_INPUT,
+          currencyCode: loadedSettings.defaultCurrencyCode ?? detectCurrencyCode(),
+        }
       );
       // A persisted input means work in progress: skip straight past the chooser.
       setLoanFormMode(savedInput ? "form" : "chooser");
@@ -366,7 +380,9 @@ function AppContent() {
       if (summaries.length > 0) {
         showSnackbar(
           summaries
-            .map((item) => `Applied ${item.appliedCount} payment(s) on ${item.name}`)
+            .map((item) =>
+              t("catchUp.applied", { count: item.appliedCount, name: item.name })
+            )
             .join(" · ")
         );
       }
@@ -393,7 +409,7 @@ function AppContent() {
     setLastCalculatedHash(JSON.stringify(normalized));
     await saveLoanInput(normalized);
     setIsCalculating(false);
-    showSnackbar("Your loan calculation is ready");
+    showSnackbar(t("snackbar.calculationReady"));
   };
 
   useEffect(() => {
@@ -436,12 +452,12 @@ function AppContent() {
   };
 
   const startNewLoan = () => {
-    const fresh = emptyInput();
+    const fresh = emptyInput(defaultCurrencyCode);
     const hash = JSON.stringify(normalizeInput(fresh));
     setInput(fresh);
     setDraftInput(fresh);
     setResult(null);
-    setProfileName("My Loan Profile");
+    setProfileName(t("profiles.defaultName"));
     setSelectedProfileId(null);
     setLastCalculatedHash(hash);
     setLastSavedHash(hash);
@@ -451,7 +467,7 @@ function AppContent() {
   const saveCurrentProfile = async (asNew: boolean) => {
     const name = profileName.trim();
     if (!name) {
-      Alert.alert("Profile name required", "Please enter a profile name.");
+      Alert.alert(t("profiles.nameRequired"), t("profiles.nameRequiredBody"));
       return;
     }
 
@@ -465,10 +481,10 @@ function AppContent() {
       await persistProfiles(updated);
       setLastSavedHash(inputHash);
       setSaveDialogVisible(false);
-      Alert.alert("Updated", "Loan profile updated.", [
-        { text: "OK" },
+      Alert.alert(t("profiles.updated"), t("profiles.updatedBody"), [
+        { text: t("common.ok") },
         {
-          text: "Create reminder",
+          text: t("profiles.createReminder"),
           onPress: () => {
             const profile = updated.find((item) => item.id === selectedProfileId);
             if (profile) {
@@ -491,10 +507,10 @@ function AppContent() {
     setSelectedProfileId(newProfile.id);
     setLastSavedHash(inputHash);
     setSaveDialogVisible(false);
-    Alert.alert("Saved", "Loan profile saved.", [
-      { text: "OK" },
+    Alert.alert(t("profiles.saved"), t("profiles.savedBody"), [
+      { text: t("common.ok") },
       {
-        text: "Create reminder",
+        text: t("profiles.createReminder"),
         onPress: () => openReminderFromProfile(newProfile),
       },
     ]);
@@ -510,10 +526,13 @@ function AppContent() {
   };
 
   const confirmDeleteProfile = (profile: SavedLoanProfile) => {
-    Alert.alert("Delete profile", `Are you sure you want to delete "${profile.name}"?`, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(
+      t("profiles.deleteTitle"),
+      t("profiles.deleteBody", { name: profile.name }),
+      [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("common.delete"),
         style: "destructive",
         onPress: () => {
           deleteProfile(profile.id).catch(() => {});
@@ -534,7 +553,7 @@ function AppContent() {
     }
     const trimmed = renameProfileName.trim();
     if (!trimmed) {
-      Alert.alert("Profile name required", "Please enter a profile name.");
+      Alert.alert(t("profiles.nameRequired"), t("profiles.nameRequiredBody"));
       return;
     }
     const now = new Date().toISOString();
@@ -640,10 +659,10 @@ function AppContent() {
       const allowed = await enableMasterNotifications();
       if (!allowed) {
         Alert.alert(
-          "Notifications are off",
+          t("notifications.offTitle"),
           reminderNotificationsSupported
-            ? "Allow notifications in your phone settings to get repayment reminders."
-            : notificationUnavailableHint
+            ? t("notifications.offBodyReminder")
+            : notificationUnavailableHint()
         );
         return;
       }
@@ -656,10 +675,13 @@ function AppContent() {
   };
 
   const confirmDeleteReminder = (reminder: LoanReminder) => {
-    Alert.alert("Delete reminder", `Delete "${reminder.name}"? This cannot be undone.`, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(
+      t("reminders.deleteTitle"),
+      t("reminders.deleteBody", { name: reminder.name }),
+      [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("common.delete"),
         style: "destructive",
         onPress: () => {
           const next = remindersRef.current.filter((item) => item.id !== reminder.id);
@@ -685,10 +707,10 @@ function AppContent() {
       const allowed = await enableMasterNotifications();
       if (!allowed) {
         Alert.alert(
-          "Notifications are off",
+          t("notifications.offTitle"),
           reminderNotificationsSupported
-            ? "Allow notifications in your phone settings, then turn them on here."
-            : notificationUnavailableHint
+            ? t("notifications.offBodyMaster")
+            : notificationUnavailableHint()
         );
         return;
       }
@@ -742,7 +764,7 @@ function AppContent() {
                 onPress={openReminders}
                 style={styles.settingsButton}
                 accessibilityRole="button"
-                accessibilityLabel="Repayment reminders"
+                accessibilityLabel={t("a11y.repaymentReminders")}
               >
                 <Ionicons
                   name={remindersSectionActive ? "notifications" : "notifications-outline"}
@@ -761,7 +783,7 @@ function AppContent() {
                 onPress={openSettings}
                 style={styles.settingsButton}
                 accessibilityRole="button"
-                accessibilityLabel="Settings"
+                accessibilityLabel={t("settings.title")}
               >
                 <Ionicons
                   name={screen === "settings" ? "settings" : "settings-outline"}
@@ -779,13 +801,13 @@ function AppContent() {
               style={styles.saveStickyPrimaryButton}
               onPress={() => setSaveDialogVisible(true)}
             >
-              <Text style={styles.primaryButtonText}>Save</Text>
+              <Text style={styles.primaryButtonText}>{t("common.save")}</Text>
             </Pressable>
             <Pressable
               style={styles.saveStickySecondaryButton}
               onPress={ignoreCurrentCalculationSavePrompt}
             >
-              <Text style={styles.secondaryButtonText}>Ignore</Text>
+              <Text style={styles.secondaryButtonText}>{t("common.ignore")}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -824,10 +846,10 @@ function AppContent() {
           >
             <View style={styles.activeLoanRow}>
               <Text style={styles.activeLoanName} numberOfLines={1}>
-                {selectedProfileId ? profileName : "New loan"}
+                {selectedProfileId ? profileName : t("app.newLoan")}
               </Text>
               <Pressable onPress={() => setLoanFormMode("chooser")}>
-                <Text style={styles.activeLoanChange}>Change</Text>
+                <Text style={styles.activeLoanChange}>{t("common.change")}</Text>
               </Pressable>
             </View>
 
@@ -948,7 +970,12 @@ function AppContent() {
                 osPermissionStatus === "granted"
               }
               onBack={() => setScreen(remindersReturnRef.current)}
-              onAdd={() => openReminderEditor(createEmptyReminder(), "reminders")}
+              onAdd={() =>
+                openReminderEditor(
+                  createEmptyReminder(defaultCurrencyCode),
+                  "reminders"
+                )
+              }
               onOpen={openReminderDetail}
               onToggleNotifications={(reminder, enabled) => {
                 toggleReminderNotifications(reminder, enabled).catch(() => {});
@@ -1022,7 +1049,7 @@ function AppContent() {
                 (item) => item.id === detailReminder.linkedProfileId
               );
               if (!profile) {
-                Alert.alert("Profile missing", "The linked saved loan is no longer available.");
+                Alert.alert(t("profiles.missingTitle"), t("profiles.missingBody"));
                 return;
               }
               updateReminder(refreshTermsFromProfile(detailReminder, profile)).catch(
@@ -1058,8 +1085,8 @@ function AppContent() {
                 <>
                   <Text style={styles.compareHint}>
                     {compareSelection.length === 2
-                      ? "Two loans selected"
-                      : "Select two saved loans"}
+                      ? t("compare.twoSelected")
+                      : t("compare.selectTwo")}
                   </Text>
                   <View style={styles.compareBarActions}>
                     <Pressable
@@ -1071,13 +1098,13 @@ function AppContent() {
                       onPress={openCompareScreen}
                       disabled={compareSelection.length !== 2}
                     >
-                      <Text style={styles.primaryButtonText}>Compare</Text>
+                      <Text style={styles.primaryButtonText}>{t("compare.action")}</Text>
                     </Pressable>
                     <Pressable
                       style={[styles.secondaryButton, { flex: 1 }]}
                       onPress={exitCompareSelectMode}
                     >
-                      <Text style={styles.secondaryButtonText}>Cancel</Text>
+                      <Text style={styles.secondaryButtonText}>{t("common.cancel")}</Text>
                     </Pressable>
                   </View>
                 </>
@@ -1085,8 +1112,8 @@ function AppContent() {
                 <>
                   <Text style={styles.compareHint}>
                     {savedProfiles.length < 2
-                      ? "Save at least two loans to compare offers."
-                      : "Compare two saved loans side by side."}
+                      ? t("compare.needTwo")
+                      : t("compare.hint")}
                   </Text>
                   <Pressable
                     style={[
@@ -1096,7 +1123,7 @@ function AppContent() {
                     onPress={() => setCompareSelectMode(true)}
                     disabled={savedProfiles.length < 2}
                   >
-                    <Text style={styles.primaryButtonText}>Compare</Text>
+                    <Text style={styles.primaryButtonText}>{t("compare.action")}</Text>
                   </Pressable>
                 </>
               )}
@@ -1107,7 +1134,7 @@ function AppContent() {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.savedListWrap}
               ListEmptyComponent={
-                <Text style={styles.emptyText}>No saved loan profiles yet.</Text>
+                <Text style={styles.emptyText}>{t("profiles.empty")}</Text>
               }
               renderItem={({ item, index }) => {
                 const selectedIndex = compareSelection.indexOf(item.id);
@@ -1185,7 +1212,7 @@ function AppContent() {
                         openRenameDialog(item);
                       }}
                     >
-                      <Text style={styles.secondaryButtonSmallText}>Rename</Text>
+                      <Text style={styles.secondaryButtonSmallText}>{t("common.rename")}</Text>
                     </Pressable>
 
                     <Pressable
@@ -1194,7 +1221,7 @@ function AppContent() {
                         openReminderFromProfile(item);
                       }}
                     >
-                      <Text style={styles.secondaryButtonSmallText}>Remind</Text>
+                      <Text style={styles.secondaryButtonSmallText}>{t("profiles.remind")}</Text>
                     </Pressable>
                     <Pressable
                       style={styles.deleteButtonSmall}
@@ -1202,7 +1229,7 @@ function AppContent() {
                         confirmDeleteProfile(item);
                       }}
                     >
-                      <Text style={styles.deleteButtonSmallText}>Delete</Text>
+                      <Text style={styles.deleteButtonSmallText}>{t("common.delete")}</Text>
                     </Pressable>
                   </View>
                   )}
@@ -1237,7 +1264,7 @@ function AppContent() {
               accessibilityRole="button"
               accessibilityState={{ disabled: Boolean(draftValidation.error) }}
             >
-              <Text style={styles.calculateStickyButtonText}>Calculate</Text>
+              <Text style={styles.calculateStickyButtonText}>{t("app.calculate")}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -1257,7 +1284,7 @@ function AppContent() {
                     setScreen(tab.id);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={tab.label}
+                  accessibilityLabel={t(tab.labelKey)}
                 >
                   <Ionicons
                     name={active ? tab.iconActive : tab.icon}
@@ -1267,7 +1294,7 @@ function AppContent() {
                   <Text
                     style={[styles.bottomNavText, active && styles.bottomNavTextActive]}
                   >
-                    {tab.label}
+                    {t(tab.labelKey)}
                   </Text>
                 </Pressable>
               );
@@ -1283,12 +1310,12 @@ function AppContent() {
         >
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Rename Profile</Text>
+              <Text style={styles.modalTitle}>{t("profiles.renameTitle")}</Text>
               <TextInput
                 style={styles.saveProfileInput}
                 value={renameProfileName}
                 onChangeText={setRenameProfileName}
-                placeholder="Profile name"
+                placeholder={t("profiles.namePlaceholder")}
                 placeholderTextColor={colors.textMuted}
               />
               <View style={styles.topActionRow}>
@@ -1298,13 +1325,13 @@ function AppContent() {
                     saveRenamedProfile().catch(() => {});
                   }}
                 >
-                  <Text style={styles.primaryButtonText}>Save Name</Text>
+                  <Text style={styles.primaryButtonText}>{t("profiles.saveName")}</Text>
                 </Pressable>
                 <Pressable
                   style={styles.secondaryButton}
                   onPress={() => setRenameDialogVisible(false)}
                 >
-                  <Text style={styles.secondaryButtonText}>Cancel</Text>
+                  <Text style={styles.secondaryButtonText}>{t("common.cancel")}</Text>
                 </Pressable>
               </View>
             </View>
@@ -1319,12 +1346,12 @@ function AppContent() {
         >
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Save Loan Profile</Text>
+              <Text style={styles.modalTitle}>{t("profiles.saveTitle")}</Text>
               <TextInput
                 style={styles.saveProfileInput}
                 value={profileName}
                 onChangeText={setProfileName}
-                placeholder="Profile name"
+                placeholder={t("profiles.namePlaceholder")}
                 placeholderTextColor={colors.textMuted}
               />
               <View style={styles.topActionRow}>
@@ -1335,7 +1362,7 @@ function AppContent() {
                   }}
                 >
                   <Text style={styles.primaryButtonText}>
-                    {selectedProfileId ? "Save Profile" : "Save"}
+                    {selectedProfileId ? t("profiles.saveProfile") : t("common.save")}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -1345,14 +1372,14 @@ function AppContent() {
                     saveCurrentProfile(true).catch(() => {});
                   }}
                 >
-                  <Text style={styles.secondaryButtonText}>Save As New</Text>
+                  <Text style={styles.secondaryButtonText}>{t("profiles.saveAsNew")}</Text>
                 </Pressable>
               </View>
               <Pressable
                 style={styles.cancelButton}
                 onPress={() => setSaveDialogVisible(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>{t("common.cancel")}</Text>
               </Pressable>
             </View>
           </View>
@@ -1362,7 +1389,7 @@ function AppContent() {
           <View style={styles.calculatingBackdrop}>
             <View style={styles.calculatingCard}>
               <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.calculatingText}>Calculating your loan...</Text>
+              <Text style={styles.calculatingText}>{t("app.calculating")}</Text>
             </View>
           </View>
         </Modal>

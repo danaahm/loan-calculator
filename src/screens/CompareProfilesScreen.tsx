@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type SavedLoanProfile } from "../types/loan";
 import {
@@ -77,24 +78,25 @@ export const CompareProfilesScreen = ({
   onOpenProfile,
 }: CompareProfilesScreenProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const left = buildComparedProfile(leftProfile);
   const right = buildComparedProfile(rightProfile);
   const sameCurrency = left.input.currencyCode === right.input.currencyCode;
 
   const rows: Array<{
-    label: string;
+    labelKey: string;
     leftText: string;
     rightText: string;
     winner: WinnerSide;
   }> = [
     {
-      label: "Amount",
+      labelKey: "compare.row.amount",
       leftText: left.amountLabel,
       rightText: right.amountLabel,
       winner: null,
     },
     {
-      label: "Interest rate",
+      labelKey: "compare.row.interestRate",
       leftText: left.rateLabel,
       rightText: right.rateLabel,
       winner: betterLower(
@@ -104,67 +106,67 @@ export const CompareProfilesScreen = ({
       ),
     },
     {
-      label: "Term",
+      labelKey: "compare.row.term",
       leftText: left.termLabel,
       rightText: right.termLabel,
       winner: null,
     },
     {
-      label: "Frequency",
+      labelKey: "compare.row.frequency",
       leftText: left.frequencyLabel,
       rightText: right.frequencyLabel,
       winner: null,
     },
     {
-      label: "Min repayment",
+      labelKey: "compare.row.minRepayment",
       leftText: left.periodRepaymentLabel,
       rightText: right.periodRepaymentLabel,
       winner: betterLower(left.periodRepayment, right.periodRepayment, sameCurrency),
     },
     {
-      label: "Monthly equivalent",
+      labelKey: "compare.row.monthlyEquivalent",
       leftText: left.monthlyEquivalentLabel,
       rightText: right.monthlyEquivalentLabel,
       winner: betterLower(left.monthlyEquivalent, right.monthlyEquivalent, sameCurrency),
     },
     {
-      label: "Extra repayment",
+      labelKey: "compare.row.extraRepayment",
       leftText: left.extraLabel,
       rightText: right.extraLabel,
       winner: null,
     },
     {
-      label: "Offset",
+      labelKey: "compare.row.offset",
       leftText: left.offsetLabel,
       rightText: right.offsetLabel,
       winner: null,
     },
     {
-      label: "Total interest",
+      labelKey: "compare.row.totalInterest",
       leftText: left.totalInterestLabel,
       rightText: right.totalInterestLabel,
       winner: betterLower(left.totalInterest, right.totalInterest, sameCurrency),
     },
     {
-      label: "Total paid",
+      labelKey: "compare.row.totalPaid",
       leftText: left.totalPaidLabel,
       rightText: right.totalPaidLabel,
       winner: betterLower(left.totalPaid, right.totalPaid, sameCurrency),
     },
     {
-      label: "Total fees",
+      labelKey: "compare.row.totalFees",
       leftText: left.totalFeesLabel,
       rightText: right.totalFeesLabel,
       winner: betterLower(left.totalFees, right.totalFees, sameCurrency),
     },
     {
-      label: "Payoff",
+      labelKey: "compare.row.payoff",
       leftText: left.payoffLabel,
       rightText: right.payoffLabel,
       winner: betterLower(left.payoffYears, right.payoffYears, true),
     },
     {
-      label: "Extra savings",
+      labelKey: "compare.row.extraSavings",
       leftText: left.extraSavingsLabel,
       rightText: right.extraSavingsLabel,
       winner:
@@ -180,13 +182,13 @@ export const CompareProfilesScreen = ({
         onPress={onBack}
         style={styles.backRow}
         accessibilityRole="button"
-        accessibilityLabel="Back"
+        accessibilityLabel={t("common.back")}
       >
         <Ionicons name="chevron-back" size={22} color={colors.accentTextStrong} />
-        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>Back</Text>
+        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>{t("common.back")}</Text>
       </Pressable>
 
-      <Text style={[styles.title, { color: colors.text }]}>Compare loans</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{t("compare.title")}</Text>
       <Text style={[styles.hint, { color: colors.textMuted }]}>
         Highlighted values are lower cost, lower repayment, or an earlier payoff.
         {sameCurrency ? "" : " Currencies differ, so money totals are not ranked."}
@@ -200,7 +202,7 @@ export const CompareProfilesScreen = ({
           <Text style={[styles.nameTitle, { color: colors.text }]} numberOfLines={2}>
             {left.profile.name}
           </Text>
-          <Text style={[styles.nameAction, { color: colors.accentTextStrong }]}>Open</Text>
+          <Text style={[styles.nameAction, { color: colors.accentTextStrong }]}>{t("common.open")}</Text>
         </Pressable>
         <Pressable
           style={[styles.nameCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
@@ -209,7 +211,7 @@ export const CompareProfilesScreen = ({
           <Text style={[styles.nameTitle, { color: colors.text }]} numberOfLines={2}>
             {right.profile.name}
           </Text>
-          <Text style={[styles.nameAction, { color: colors.accentTextStrong }]}>Open</Text>
+          <Text style={[styles.nameAction, { color: colors.accentTextStrong }]}>{t("common.open")}</Text>
         </Pressable>
       </View>
 
@@ -219,8 +221,8 @@ export const CompareProfilesScreen = ({
         >
           {rows.map((row) => (
             <CompareRow
-              key={row.label}
-              label={row.label}
+              key={row.labelKey}
+              label={t(row.labelKey)}
               left={row.leftText}
               right={row.rightText}
               winner={row.winner}

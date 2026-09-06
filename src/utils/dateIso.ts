@@ -1,3 +1,5 @@
+import { getActiveLanguage } from "../i18n/translate";
+
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export const formatLocalDate = (date: Date): string => {
@@ -61,7 +63,9 @@ export const formatDisplayDate = (iso: string): string => {
   if (!isValidIsoDate(iso)) {
     return iso;
   }
-  return parseIsoDate(iso).toLocaleDateString(undefined, {
+  // Explicit language rather than `undefined`: the app's language is a user
+  // setting and may differ from the device locale.
+  return parseIsoDate(iso).toLocaleDateString(getActiveLanguage(), {
     day: "numeric",
     month: "short",
     year: "numeric",

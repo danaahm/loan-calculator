@@ -51,6 +51,7 @@ import {
   getBalanceChartDomain,
 } from "../utils/chartData";
 import { CardHeader } from "./CardHeader";
+import { useLocale } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeColors } from "../theme/tokens";
 
@@ -223,6 +224,7 @@ export const BalanceComparisonChart = ({
   loanLengthYears,
 }: BalanceComparisonChartProps) => {
   const { colors } = useTheme();
+  const { t, language } = useLocale();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [collapsed, setCollapsed] = useState(false);
   const [showBaseline, setShowBaseline] = useState(true);
@@ -292,12 +294,17 @@ export const BalanceComparisonChart = ({
   // minus sign under a "saved" heading.
   const interestDelta = result.savings.interestSaved;
   const periodsDelta = result.savings.periodsSaved;
-  const interestLabel = interestDelta < 0 ? "Extra interest:" : "Interest saved:";
+  const interestLabel =
+    interestDelta < 0 ? t("chart.extraInterest") : t("chart.interestSaved");
   const timeLabel =
-    periodsDelta < 0 ? "Longer by:" : periodsDelta === 0 ? "Term:" : "Time saved:";
+    periodsDelta < 0
+      ? t("chart.longerBy")
+      : periodsDelta === 0
+        ? t("chart.term")
+        : t("chart.timeSaved");
   const timeValue =
     periodsDelta === 0
-      ? "Unchanged"
+      ? t("chart.unchanged")
       : formatYearsAndPeriods(
           Math.abs(result.savings.yearsSaved),
           Math.abs(periodsDelta),
@@ -313,7 +320,7 @@ export const BalanceComparisonChart = ({
 
   const formatMoney = useCallback(
     (value: number): string => {
-      return `${currencySymbol}${Math.round(value).toLocaleString()}`;
+      return `${currencySymbol}${Math.round(value).toLocaleString(language)}`;
     },
     [currencySymbol]
   );
@@ -382,8 +389,10 @@ export const BalanceComparisonChart = ({
   return (
     <View style={styles.card}>
       <CardHeader
-        title="Loan Balance Over Time"
-        subtitle={`(${formatDurationLabel(loanLengthYears)})`}
+        title={t("chart.title")}
+        subtitle={t("chart.subtitle", {
+          duration: formatDurationLabel(loanLengthYears),
+        })}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
@@ -520,12 +529,12 @@ export const BalanceComparisonChart = ({
                 }}
               </CartesianChart>
             ) : (
-              <Text style={styles.chartFallbackText}>Enable at least one series.</Text>
+              <Text style={styles.chartFallbackText}>{t("chart.enableSeries")}</Text>
             )}
           </View>
-          <Text style={styles.xAxisTitle}>{useMonthAxis ? "Months" : "Years"}</Text>
+          <Text style={styles.xAxisTitle}>{useMonthAxis ? t("chart.axisMonths") : t("chart.axisYears")}</Text>
           <Text style={styles.chartHint}>
-            Hold a point for details. Pinch to zoom.
+            {t("chart.hint")}
           </Text>
 
           {activePoint ? (
@@ -535,15 +544,19 @@ export const BalanceComparisonChart = ({
               </Text>
               {showBaseline ? (
                 <Text style={styles.tooltipBaseline}>
-                  Original loan: {formatMoney(activePoint.baseline)}
+                  {t("chart.tooltipOriginal", {
+                    value: formatMoney(activePoint.baseline),
+                  })}
                 </Text>
               ) : null}
               {hasExtraSeries && showExtra ? (
                 <Text style={styles.tooltipExtra}>
-                  With your plan:{" "}
-                  {activePoint.extra === null
-                    ? "Paid off"
-                    : formatMoney(activePoint.extra)}
+                  {t("chart.tooltipPlan", {
+                    value:
+                      activePoint.extra === null
+                        ? t("chart.paidOff")
+                        : formatMoney(activePoint.extra),
+                  })}
                 </Text>
               ) : null}
             </View>
@@ -554,7 +567,7 @@ export const BalanceComparisonChart = ({
             onPress={() => setShowBaseline((prev) => !prev)}
           >
             <View style={[styles.dot, { backgroundColor: "#2563eb" }]} />
-            <Text style={styles.legendText}>Original loan</Text>
+            <Text style={styles.legendText}>{t("chart.legendOriginal")}</Text>
           </Pressable>
           {hasExtraSeries ? (
             <Pressable
@@ -562,20 +575,20 @@ export const BalanceComparisonChart = ({
               onPress={() => setShowExtra((prev) => !prev)}
             >
               <View style={[styles.dot, { backgroundColor: "#10b981" }]} />
-              <Text style={styles.legendText}>With your plan</Text>
+              <Text style={styles.legendText}>{t("chart.legendPlan")}</Text>
             </Pressable>
           ) : null}
 
           {hasExtraSeries ? (
             <View style={styles.savingsWrap}>
-              <Text style={styles.savingsTitle}>Your Plan vs Original Loan</Text>
+              <Text style={styles.savingsTitle}>{t("chart.savingsTitle")}</Text>
               <View style={styles.savingsCardsRow}>
                 <View style={styles.savingsCard}>
                   <Text style={styles.savingsCardLabel}>{interestLabel}</Text>
                   <FitOneLineText
                     value={`${currencySymbol}${Math.abs(
                       Math.round(interestDelta)
-                    ).toLocaleString()}`}
+                    ).toLocaleString(language)}`}
                     style={styles.savingsCardValue}
                   />
                 </View>
@@ -585,7 +598,7 @@ export const BalanceComparisonChart = ({
                 </View>
               </View>
               <View style={styles.savingsCardWide}>
-                <Text style={styles.savingsCardLabel}>Total loan time:</Text>
+                <Text style={styles.savingsCardLabel}>{t("chart.totalLoanTime")}</Text>
                 <FitOneLineText value={totalLoanTime} style={styles.savingsCardValue} />
               </View>
             </View>

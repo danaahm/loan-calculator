@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { formatDisplayDate } from "../utils/dateIso";
 import { formatCurrency } from "../utils/format";
@@ -27,6 +28,7 @@ export const UpcomingRepaymentCard = ({
   onPress,
 }: UpcomingRepaymentCardProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const { reminder } = item;
   // Projecting to payoff walks the whole schedule, so only pay for it on the
   // card that is actually showing it.
@@ -46,10 +48,11 @@ export const UpcomingRepaymentCard = ({
         ]}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`${reminder.name}, ${formatCurrency(
-          item.amountDue,
-          reminder.currencyCode
-        )} due ${formatDisplayDate(item.date)}. Tap to expand.`}
+        accessibilityLabel={t("upcoming.compactA11y", {
+          name: reminder.name,
+          amount: formatCurrency(item.amountDue, reminder.currencyCode),
+          date: formatDisplayDate(item.date),
+        })}
       >
         <View style={styles.compactMain}>
           <Text
@@ -74,7 +77,7 @@ export const UpcomingRepaymentCard = ({
       accessibilityRole="button"
     >
       <Text style={[styles.liveKicker, { color: colors.accentText }]}>
-        {isNext ? "Next repayment" : "Upcoming repayment"}
+        {isNext ? t("upcoming.next") : t("upcoming.upcoming")}
       </Text>
       <View style={styles.titleRow}>
         <Text style={[styles.liveTitle, { color: colors.text }]} numberOfLines={1}>
@@ -86,16 +89,18 @@ export const UpcomingRepaymentCard = ({
         {formatCurrency(item.amountDue, reminder.currencyCode)}
       </Text>
       <Text style={[styles.liveMeta, { color: colors.textSecondary }]}>
-        Due {formatDisplayDate(item.date)}
+        {t("upcoming.due", { date: formatDisplayDate(item.date) })}
       </Text>
       {showPayoffDate ? (
         <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
-          Loan paid off {formatDisplayDate(payoffDate)}
+          {t("upcoming.paidOffOn", { date: formatDisplayDate(payoffDate) })}
         </Text>
       ) : null}
       <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
-        Remaining {formatCurrency(reminder.remainingBalance, reminder.currencyCode)} of{" "}
-        {formatCurrency(reminder.originalAmount, reminder.currencyCode)}
+        {t("reminderCard.remainingOf", {
+          remaining: formatCurrency(reminder.remainingBalance, reminder.currencyCode),
+          original: formatCurrency(reminder.originalAmount, reminder.currencyCode),
+        })}
       </Text>
       <ProgressBar progress={payoffProgress(reminder)} showPercent />
     </Pressable>

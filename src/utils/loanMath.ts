@@ -1,3 +1,4 @@
+import { t } from "../i18n/translate";
 import {
   FREQUENCIES,
   type LoanCalculationResult,
@@ -364,22 +365,22 @@ export const validateLoanInput = (input: LoanInput): LoanInputValidation => {
 
   const error = ((): string | null => {
     if (input.amountBorrowed <= 0) {
-      return "Enter the amount borrowed.";
+      return t("validation.amountBorrowed");
     }
     if (input.loanLengthYears <= 0) {
-      return "Loan length must be at least 1 month.";
+      return t("validation.loanLength");
     }
     if (input.currencyCode.trim().length === 0) {
-      return "Select a currency.";
+      return t("validation.currency");
     }
     if (input.extraRepayment.enabled && input.extraRepayment.amount <= 0) {
-      return "Extra repayment amount must be greater than zero.";
+      return t("validation.extraRepayment");
     }
     if (input.lumpSum.enabled && input.lumpSum.amount <= 0) {
-      return "Lump sum amount must be greater than zero.";
+      return t("validation.lumpSum");
     }
     if (input.accountFeeEnabled && input.accountFee <= 0) {
-      return "Account fee must be greater than zero.";
+      return t("validation.accountFee");
     }
     if (input.offsetSavings.enabled) {
       const hasStart = input.offsetSavings.amount > 0;
@@ -387,13 +388,13 @@ export const validateLoanInput = (input: LoanInput): LoanInputValidation => {
         input.offsetSavings.contribution.enabled &&
         input.offsetSavings.contribution.amount > 0;
       if (!hasStart && !hasDeposit) {
-        return "Enter an offset amount or a regular offset deposit.";
+        return t("validation.offsetEmpty");
       }
       if (
         input.offsetSavings.contribution.enabled &&
         input.offsetSavings.contribution.amount <= 0
       ) {
-        return "Offset deposit amount must be greater than zero.";
+        return t("validation.offsetDeposit");
       }
     }
     return null;

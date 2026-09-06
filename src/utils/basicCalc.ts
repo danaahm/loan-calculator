@@ -1,3 +1,4 @@
+import { t } from "../i18n/translate";
 export type Operator = "+" | "-" | "×" | "÷";
 
 export type CalcKey =
@@ -48,7 +49,7 @@ export const createInitialCalcState = (): CalcState => ({
 
 export const formatCalcNumber = (value: number): string => {
   if (!Number.isFinite(value)) {
-    return "Error";
+    return t("basicCalc.error");
   }
   const rounded = Number(value.toPrecision(12));
   if (Object.is(rounded, -0) || rounded === 0) {
@@ -94,7 +95,7 @@ const isOperatorKey = (key: CalcKey): key is Operator =>
 
 const errorState = (): CalcState => ({
   ...createInitialCalcState(),
-  display: "Error",
+  display: t("basicCalc.error"),
   error: true,
 });
 

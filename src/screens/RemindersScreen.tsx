@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ReminderCard } from "../components/ReminderCard";
+import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { REMINDER_DISCLAIMER, type LoanReminder } from "../types/reminder";
 
@@ -31,13 +32,14 @@ export const RemindersScreen = ({
   onDelete,
 }: RemindersScreenProps) => {
   const { colors } = useTheme();
+  const t = useTranslation();
   const archivedCount = reminders.filter((item) => item.status === "archived").length;
   const activeCount = reminders.length - archivedCount;
   const visible = reminders.filter((item) =>
     showArchived ? item.status === "archived" : item.status !== "archived"
   );
 
-  const renderTab = (label: string, count: number, archivedTab: boolean) => {
+  const renderTab = (labelKey: string, count: number, archivedTab: boolean) => {
     const selected = showArchived === archivedTab;
     return (
       <Pressable
@@ -57,7 +59,7 @@ export const RemindersScreen = ({
             { color: selected ? colors.textInverse : colors.textSecondary },
           ]}
         >
-          {label} ({count})
+          {t("reminders.tabLabel", { label: t(labelKey), count })}
         </Text>
       </Pressable>
     );
@@ -69,24 +71,24 @@ export const RemindersScreen = ({
         onPress={onBack}
         style={styles.backRow}
         accessibilityRole="button"
-        accessibilityLabel="Back"
+        accessibilityLabel={t("common.back")}
       >
         <Ionicons name="chevron-back" size={22} color={colors.accentTextStrong} />
-        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>Back</Text>
+        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>{t("common.back")}</Text>
       </Pressable>
       <View style={styles.headerRow}>
-        <Text style={[styles.title, { color: colors.text }]}>Reminders</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t("reminders.title")}</Text>
         <Pressable
           onPress={onAdd}
           style={[styles.addButton, { backgroundColor: colors.primary }]}
           accessibilityRole="button"
-          accessibilityLabel="Add reminder"
+          accessibilityLabel={t("reminders.addA11y")}
         >
           <Ionicons name="add" size={22} color={colors.textInverse} />
         </Pressable>
       </View>
       <Text style={[styles.disclaimer, { color: colors.textMuted }]}>
-        {REMINDER_DISCLAIMER}
+        {REMINDER_DISCLAIMER()}
       </Text>
       <View
         style={[
@@ -94,8 +96,8 @@ export const RemindersScreen = ({
           { backgroundColor: colors.inputBg, borderColor: colors.border },
         ]}
       >
-        {renderTab("Active", activeCount, false)}
-        {renderTab("Archived", archivedCount, true)}
+        {renderTab("reminders.tabActive", activeCount, false)}
+        {renderTab("reminders.tabArchived", archivedCount, true)}
       </View>
 
       <ScrollView
@@ -105,8 +107,8 @@ export const RemindersScreen = ({
         {visible.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>
             {showArchived
-              ? "No archived reminders."
-              : "No repayment reminders yet. Add one to track a loan and get alerts before it is due."}
+              ? t("reminders.emptyArchived")
+              : t("reminders.emptyActive")}
           </Text>
         ) : (
           visible.map((item) => (

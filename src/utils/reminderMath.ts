@@ -22,14 +22,16 @@ export const safeRound = (value: number): number => {
 const newId = (): string =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-export const createEmptyReminder = (): LoanReminder => {
+export const createEmptyReminder = (
+  defaultCurrencyCode = "AUD"
+): LoanReminder => {
   const today = todayLocalIso();
   const now = new Date().toISOString();
   return {
     id: newId(),
     name: "",
     linkedProfileId: null,
-    currencyCode: "AUD",
+    currencyCode: defaultCurrencyCode,
     originalAmount: 0,
     remainingBalance: 0,
     annualInterestRatePercent: 0,
