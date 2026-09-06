@@ -20,6 +20,10 @@ import { type SavedLoanProfile } from "../types/loan";
 import { REMINDER_DISCLAIMER, type LoanReminder } from "../types/reminder";
 import { formatDisplayDate, todayLocalIso } from "../utils/dateIso";
 import {
+  formatGroupedNumberInput,
+  formatPlainNumberInput,
+} from "../utils/numberInput";
+import {
   formatCurrency,
   formatFrequencyLabel,
   formatMonthAnchorLabel,
@@ -208,7 +212,7 @@ export const ReminderDetailScreen = ({
             <TextInput
               keyboardType="decimal-pad"
               value={rateInput}
-              onChangeText={setRateInput}
+              onChangeText={(value) => setRateInput(formatPlainNumberInput(value))}
               placeholder={t("detail.ratePlaceholder")}
               placeholderTextColor={colors.textMuted}
               style={[
@@ -269,7 +273,7 @@ export const ReminderDetailScreen = ({
             <TextInput
               keyboardType="decimal-pad"
               value={extraInput}
-              onChangeText={setExtraInput}
+              onChangeText={(value) => setExtraInput(formatGroupedNumberInput(value))}
               placeholder={t("detail.amountPlaceholder")}
               placeholderTextColor={colors.textMuted}
               style={[
