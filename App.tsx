@@ -963,7 +963,7 @@ function AppContent() {
                   fees={result.activeSchedule.summary.totalFeesPaid}
                   extraRepayment={result.activeSchedule.summary.totalExtraPaid}
                   currencyCode={input.currencyCode}
-                  loanLengthYears={input.loanLengthYears}
+                  payoffYears={result.activeSchedule.summary.payoffYears}
                 />
 
                 <BalanceComparisonChart

@@ -51,6 +51,7 @@ import {
   getBalanceChartDomain,
 } from "../utils/chartData";
 import { CardHeader } from "./CardHeader";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { useLocale } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeColors } from "../theme/tokens";
@@ -397,7 +398,7 @@ export const BalanceComparisonChart = ({
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
 
-      {!collapsed ? (
+      <CollapsibleSection collapsed={collapsed}>
         <View>
           <View
             style={styles.chartArea}
@@ -604,7 +605,7 @@ export const BalanceComparisonChart = ({
             </View>
           ) : null}
         </View>
-      ) : null}
+      </CollapsibleSection>
     </View>
   );
 };

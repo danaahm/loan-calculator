@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useTranslation } from "../i18n/LocaleProvider";
@@ -17,7 +17,6 @@ export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) 
   const { colors } = useTheme();
   const t = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [collapsed, setCollapsed] = useState(false);
   const showOffset = rows.some((row) => (row.offsetBalance ?? 0) > 0);
 
   return (
@@ -25,71 +24,67 @@ export const AmortizationGrid = ({ rows, currencyCode }: AmortizationGridProps) 
       <CardHeader
         title={t("amortization.title")}
         subtitle={t("amortization.subtitle")}
-        collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
 
-      {!collapsed ? (
-        <View style={styles.gridShell}>
-          <View style={styles.stickyYearColumn}>
-            <View style={[styles.row, styles.headerRow, styles.yearHeaderCellWrap]}>
-              <Text style={[styles.yearCell, styles.headerCell]}>{t("amortization.year")}</Text>
+      <View style={styles.gridShell}>
+        <View style={styles.stickyYearColumn}>
+          <View style={[styles.row, styles.headerRow, styles.yearHeaderCellWrap]}>
+            <Text style={[styles.yearCell, styles.headerCell]}>{t("amortization.year")}</Text>
+          </View>
+          {rows.map((row, index) => (
+            <View
+              key={`year-${row.year}`}
+              style={[styles.row, index % 2 === 0 ? styles.evenRow : styles.oddRow]}
+            >
+              <Text style={styles.yearCell}>{row.year}</Text>
             </View>
+          ))}
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View>
+            <View style={[styles.row, styles.headerRow]}>
+              <Text style={[styles.cell, styles.headerCell]}>{t("amortization.opening")}</Text>
+              <Text style={[styles.cell, styles.headerCell]}>{t("amortization.principal")}</Text>
+              <Text style={[styles.cell, styles.headerCell]}>{t("amortization.interest")}</Text>
+              <Text style={[styles.cell, styles.headerCell]}>{t("amortization.fees")}</Text>
+              <Text style={[styles.cell, styles.headerCell]}>{t("amortization.extra")}</Text>
+              <Text style={[styles.cell, styles.headerCell]}>{t("amortization.closing")}</Text>
+              {showOffset ? (
+                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.offset")}</Text>
+              ) : null}
+            </View>
+
             {rows.map((row, index) => (
               <View
-                key={`year-${row.year}`}
+                key={`data-${row.year}`}
                 style={[styles.row, index % 2 === 0 ? styles.evenRow : styles.oddRow]}
               >
-                <Text style={styles.yearCell}>{row.year}</Text>
+                <Text style={styles.cell}>
+                  {formatCurrency(row.openingBalance, currencyCode)}
+                </Text>
+                <Text style={styles.cell}>
+                  {formatCurrency(row.principalPaid, currencyCode)}
+                </Text>
+                <Text style={styles.cell}>
+                  {formatCurrency(row.interestPaid, currencyCode)}
+                </Text>
+                <Text style={styles.cell}>
+                  {formatCurrency(row.feesPaid, currencyCode)}
+                </Text>
+                <Text style={styles.cell}>{formatCurrency(row.extraPaid, currencyCode)}</Text>
+                <Text style={styles.cell}>
+                  {formatCurrency(row.closingBalance, currencyCode)}
+                </Text>
+                {showOffset ? (
+                  <Text style={styles.cell}>
+                    {formatCurrency(row.offsetBalance ?? 0, currencyCode)}
+                  </Text>
+                ) : null}
               </View>
             ))}
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View>
-              <View style={[styles.row, styles.headerRow]}>
-                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.opening")}</Text>
-                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.principal")}</Text>
-                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.interest")}</Text>
-                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.fees")}</Text>
-                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.extra")}</Text>
-                <Text style={[styles.cell, styles.headerCell]}>{t("amortization.closing")}</Text>
-                {showOffset ? (
-                  <Text style={[styles.cell, styles.headerCell]}>{t("amortization.offset")}</Text>
-                ) : null}
-              </View>
-
-              {rows.map((row, index) => (
-                <View
-                  key={`data-${row.year}`}
-                  style={[styles.row, index % 2 === 0 ? styles.evenRow : styles.oddRow]}
-                >
-                  <Text style={styles.cell}>
-                    {formatCurrency(row.openingBalance, currencyCode)}
-                  </Text>
-                  <Text style={styles.cell}>
-                    {formatCurrency(row.principalPaid, currencyCode)}
-                  </Text>
-                  <Text style={styles.cell}>
-                    {formatCurrency(row.interestPaid, currencyCode)}
-                  </Text>
-                  <Text style={styles.cell}>
-                    {formatCurrency(row.feesPaid, currencyCode)}
-                  </Text>
-                  <Text style={styles.cell}>{formatCurrency(row.extraPaid, currencyCode)}</Text>
-                  <Text style={styles.cell}>
-                    {formatCurrency(row.closingBalance, currencyCode)}
-                  </Text>
-                  {showOffset ? (
-                    <Text style={styles.cell}>
-                      {formatCurrency(row.offsetBalance ?? 0, currencyCode)}
-                    </Text>
-                  ) : null}
-                </View>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
-      ) : null}
+        </ScrollView>
+      </View>
     </View>
   );
 };

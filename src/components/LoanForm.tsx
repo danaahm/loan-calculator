@@ -36,6 +36,7 @@ import {
   formatFrequencyLabel,
 } from "../utils/format";
 import { CardHeader } from "./CardHeader";
+import { CollapsibleSection } from "./CollapsibleSection";
 
 type FormStyles = ReturnType<typeof createStyles>;
 
@@ -304,7 +305,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
 
-      {!collapsed ? (
+      <CollapsibleSection collapsed={collapsed}>
         <View>
           <Text style={styles.label}>{t("loanForm.currency")}</Text>
           <Pressable
@@ -597,7 +598,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           ) : null}
 
         </View>
-      ) : null}
+      </CollapsibleSection>
 
       <Modal
         visible={currencyModalVisible}
