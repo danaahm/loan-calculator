@@ -262,6 +262,51 @@ export const refillReminderNotifications = async (
   }));
 };
 
+/**
+ * Clears already-delivered reminder notifications from the system tray (and
+ * with them the launcher's badge), for reminders the user has just looked at.
+ * Only touches notifications this app posted, and only delivered ones -
+ * scheduled future alerts are untouched.
+ *
+ * Pass reminder ids to dismiss just those; omit to clear all of ours.
+ */
+export const dismissDeliveredReminderNotifications = async (
+  reminderIds?: string[]
+): Promise<void> => {
+  const Notifications = loadNotifications();
+  if (!Notifications) {
+    return;
+  }
+
+  const wanted = reminderIds ? new Set(reminderIds) : null;
+  if (wanted && wanted.size === 0) {
+    return;
+  }
+
+  try {
+    const presented = await Notifications.getPresentedNotificationsAsync();
+    await Promise.all(
+      presented
+        .filter((item) => {
+          const identifier = item.request.identifier;
+          if (!isOurIdentifier(identifier)) {
+            return false;
+          }
+          if (!wanted) {
+            return true;
+          }
+          const data = item.request.content.data as
+            | { reminderId?: string }
+            | undefined;
+          return typeof data?.reminderId === "string" && wanted.has(data.reminderId);
+        })
+        .map((item) => Notifications.dismissNotificationAsync(item.request.identifier))
+    );
+  } catch {
+    // A tray we cannot read or clear must never block opening the screen.
+  }
+};
+
 export const permissionStatusLabel = (status: OsPermissionStatus): string => {
   switch (status) {
     case "granted":

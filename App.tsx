@@ -76,6 +76,7 @@ import {
 } from "./src/utils/reminderMath";
 import { detectCurrencyCode } from "./src/utils/locale";
 import {
+  dismissDeliveredReminderNotifications,
   getOsPermissionStatus,
   notificationUnavailableHint,
   openPhoneNotificationSettings,
@@ -293,6 +294,13 @@ function AppContent() {
     if (isTabScreen(screen)) {
       remindersReturnRef.current = screen;
     }
+    // The list itself shows due/overdue state, so the tray copies are redundant
+    // once the user is looking at them.
+    dismissDeliveredReminderNotifications(
+      remindersRef.current
+        .filter((item) => item.status !== "archived")
+        .map((item) => item.id)
+    ).catch(() => {});
     setScreen("reminders");
   };
 
@@ -595,6 +603,7 @@ function AppContent() {
 
   const openReminderDetail = (reminder: LoanReminder, from: AppScreen = "reminders") => {
     detailBackRef.current = from;
+    dismissDeliveredReminderNotifications([reminder.id]).catch(() => {});
     setDetailReminderId(reminder.id);
     setScreen("reminder-detail");
   };
