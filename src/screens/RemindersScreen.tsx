@@ -8,7 +8,7 @@ import { REMINDER_DISCLAIMER, type LoanReminder } from "../types/reminder";
 interface RemindersScreenProps {
   reminders: LoanReminder[];
   showArchived: boolean;
-  onToggleArchived: () => void;
+  onSelectArchived: (showArchived: boolean) => void;
   notificationsAvailable: boolean;
   onBack: () => void;
   onAdd: () => void;
@@ -21,7 +21,7 @@ interface RemindersScreenProps {
 export const RemindersScreen = ({
   reminders,
   showArchived,
-  onToggleArchived,
+  onSelectArchived,
   notificationsAvailable,
   onBack,
   onAdd,
@@ -31,9 +31,37 @@ export const RemindersScreen = ({
   onDelete,
 }: RemindersScreenProps) => {
   const { colors } = useTheme();
+  const archivedCount = reminders.filter((item) => item.status === "archived").length;
+  const activeCount = reminders.length - archivedCount;
   const visible = reminders.filter((item) =>
     showArchived ? item.status === "archived" : item.status !== "archived"
   );
+
+  const renderTab = (label: string, count: number, archivedTab: boolean) => {
+    const selected = showArchived === archivedTab;
+    return (
+      <Pressable
+        onPress={() => onSelectArchived(archivedTab)}
+        style={[
+          styles.tab,
+          {
+            backgroundColor: selected ? colors.primary : "transparent",
+          },
+        ]}
+        accessibilityRole="tab"
+        accessibilityState={{ selected }}
+      >
+        <Text
+          style={[
+            styles.tabText,
+            { color: selected ? colors.textInverse : colors.textSecondary },
+          ]}
+        >
+          {label} ({count})
+        </Text>
+      </Pressable>
+    );
+  };
 
   return (
     <View style={[styles.page, { backgroundColor: colors.page }]}>
@@ -60,11 +88,15 @@ export const RemindersScreen = ({
       <Text style={[styles.disclaimer, { color: colors.textMuted }]}>
         {REMINDER_DISCLAIMER}
       </Text>
-      <Pressable onPress={onToggleArchived} style={styles.filterRow}>
-        <Text style={[styles.filterText, { color: colors.accentTextStrong }]}>
-          {showArchived ? "Show active reminders" : "Show archived"}
-        </Text>
-      </Pressable>
+      <View
+        style={[
+          styles.tabBar,
+          { backgroundColor: colors.inputBg, borderColor: colors.border },
+        ]}
+      >
+        {renderTab("Active", activeCount, false)}
+        {renderTab("Archived", archivedCount, true)}
+      </View>
 
       <ScrollView
         contentContainerStyle={styles.list}
@@ -131,11 +163,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 10,
   },
-  filterRow: {
+  tabBar: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderRadius: 999,
+    padding: 3,
+    gap: 3,
     marginBottom: 12,
   },
-  filterText: {
+  tab: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  tabText: {
     fontWeight: "700",
+    fontSize: 13,
   },
   list: {
     paddingBottom: 24,

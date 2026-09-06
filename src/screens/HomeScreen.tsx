@@ -93,7 +93,6 @@ export const HomeScreen = ({
             item={item}
             expanded={item.key === activeKey}
             isNext={index === 0}
-            activeReminderCount={activeReminderCount}
             onPress={() => {
               if (item.key === activeKey) {
                 onOpenReminder(item.reminder);

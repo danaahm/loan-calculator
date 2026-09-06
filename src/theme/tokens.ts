@@ -22,6 +22,8 @@ export type ThemeColors = {
   danger: string;
   dangerBg: string;
   dangerBorder: string;
+  warning: string;
+  warningBg: string;
   errorText: string;
   savingsBg: string;
   savingsBorder: string;
@@ -76,6 +78,8 @@ export const lightColors: ThemeColors = {
   danger: "#b91c1c",
   dangerBg: "#fef2f2",
   dangerBorder: "#fecaca",
+  warning: "#92400e",
+  warningBg: "#fef3c7",
   errorText: "#dc2626",
   savingsBg: "rgba(139, 228, 172, 0.5)",
   savingsBorder: "rgba(92, 228, 141, 0.5)",
@@ -130,6 +134,8 @@ export const darkColors: ThemeColors = {
   danger: "#f87171",
   dangerBg: "#7f1d1d",
   dangerBorder: "#991b1b",
+  warning: "#fbbf24",
+  warningBg: "#78350f",
   errorText: "#f87171",
   savingsBg: "rgba(16, 185, 129, 0.18)",
   savingsBorder: "rgba(16, 185, 129, 0.35)",

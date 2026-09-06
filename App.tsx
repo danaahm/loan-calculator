@@ -902,7 +902,7 @@ function AppContent() {
             <RemindersScreen
               reminders={reminders}
               showArchived={showArchivedReminders}
-              onToggleArchived={() => setShowArchivedReminders((value) => !value)}
+              onSelectArchived={setShowArchivedReminders}
               notificationsAvailable={
                 reminderNotificationsSupported &&
                 reminderSettings.reminderNotificationsEnabled &&

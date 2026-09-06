@@ -441,8 +441,10 @@ export const setReminderStatus = (
   return {
     ...reminder,
     status,
+    // Only an active reminder can notify, so archiving or completing one
+    // turns its alerts off rather than leaving a stale enabled flag behind.
     notificationsEnabled:
-      status === "completed" ? false : reminder.notificationsEnabled,
+      status === "active" ? reminder.notificationsEnabled : false,
     updatedAt: new Date().toISOString(),
   };
 };

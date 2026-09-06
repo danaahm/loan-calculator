@@ -12,8 +12,6 @@ interface UpcomingRepaymentCardProps {
   expanded: boolean;
   /** The soonest repayment overall, regardless of which card is expanded. */
   isNext: boolean;
-  /** Shown on the expanded card only. */
-  activeReminderCount: number;
   onPress: () => void;
 }
 
@@ -21,7 +19,6 @@ export const UpcomingRepaymentCard = ({
   item,
   expanded,
   isNext,
-  activeReminderCount,
   onPress,
 }: UpcomingRepaymentCardProps) => {
   const { colors } = useTheme();
@@ -83,9 +80,6 @@ export const UpcomingRepaymentCard = ({
         {formatCurrency(reminder.originalAmount, reminder.currencyCode)}
       </Text>
       <ProgressBar progress={payoffProgress(reminder)} showPercent />
-      <Text style={[styles.liveHint, { color: colors.accentTextStrong }]}>
-        {activeReminderCount} active reminder{activeReminderCount === 1 ? "" : "s"} · Open
-      </Text>
     </Pressable>
   );
 };
@@ -121,10 +115,6 @@ const styles = StyleSheet.create({
   liveMeta: {
     marginTop: 4,
     fontWeight: "600",
-  },
-  liveHint: {
-    marginTop: 10,
-    fontWeight: "700",
   },
   compactCard: {
     borderWidth: 1,

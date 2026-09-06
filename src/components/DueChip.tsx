@@ -13,6 +13,34 @@ export const isReminderOverdue = (dateIso: string, status: ReminderStatus): bool
   return status === "active" && daysUntil(dateIso) < 0;
 };
 
+/** Due within this many days reads as urgent (red). */
+const URGENT_DAYS = 3;
+/** Due within this many days reads as approaching (amber). */
+const SOON_DAYS = 7;
+
+export type DueTone = "paid" | "urgent" | "soon" | "normal";
+
+/**
+ * Urgency only applies to live reminders; archived and paid-off ones stay
+ * neutral regardless of how close the stored date is.
+ */
+export const dueTone = (dateIso: string, status: ReminderStatus): DueTone => {
+  if (status === "completed") {
+    return "paid";
+  }
+  if (status !== "active") {
+    return "normal";
+  }
+  const until = daysUntil(dateIso);
+  if (until <= URGENT_DAYS) {
+    return "urgent";
+  }
+  if (until <= SOON_DAYS) {
+    return "soon";
+  }
+  return "normal";
+};
+
 export const DueChip = ({ dateIso, status }: DueChipProps) => {
   const { colors } = useTheme();
   const until = daysUntil(dateIso);
@@ -28,33 +56,27 @@ export const DueChip = ({ dateIso, status }: DueChipProps) => {
           ? "Due tomorrow"
           : `Due in ${until} days`;
 
+  const tone = dueTone(dateIso, status);
+  const backgroundColor =
+    tone === "paid"
+      ? colors.savingsBg
+      : tone === "urgent"
+        ? colors.dangerBg
+        : tone === "soon"
+          ? colors.warningBg
+          : colors.primarySoft;
+  const color =
+    tone === "paid"
+      ? colors.savingsText
+      : tone === "urgent"
+        ? colors.danger
+        : tone === "soon"
+          ? colors.warning
+          : colors.accentTextDeep;
+
   return (
-    <View
-      style={[
-        styles.badge,
-        {
-          backgroundColor: paidOff
-            ? colors.savingsBg
-            : overdue
-              ? colors.dangerBg
-              : colors.primarySoft,
-        },
-      ]}
-    >
-      <Text
-        style={[
-          styles.text,
-          {
-            color: paidOff
-              ? colors.savingsText
-              : overdue
-                ? colors.danger
-                : colors.accentTextDeep,
-          },
-        ]}
-      >
-        {label}
-      </Text>
+    <View style={[styles.badge, { backgroundColor }]}>
+      <Text style={[styles.text, { color }]}>{label}</Text>
     </View>
   );
 };
