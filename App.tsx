@@ -208,6 +208,7 @@ function AppContent() {
   const [compareSelection, setCompareSelection] = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [loanFormMode, setLoanFormMode] = useState<"chooser" | "form">("chooser");
+  const [loanPickerVisible, setLoanPickerVisible] = useState(false);
   const [profileName, setProfileName] = useState(() => t("profiles.defaultName"));
   const [saveDialogVisible, setSaveDialogVisible] = useState(false);
   const [renameDialogVisible, setRenameDialogVisible] = useState(false);
@@ -873,11 +874,29 @@ function AppContent() {
             nestedScrollEnabled
           >
             <View style={styles.activeLoanRow}>
-              <Text style={styles.activeLoanName} numberOfLines={1}>
-                {selectedProfileId ? profileName : t("app.newLoan")}
-              </Text>
-              <Pressable onPress={() => setLoanFormMode("chooser")}>
-                <Text style={styles.activeLoanChange}>{t("common.change")}</Text>
+              <Pressable
+                style={styles.loanPickerButton}
+                accessibilityRole="button"
+                accessibilityLabel={t("loanPicker.switchLabel")}
+                onPress={() => setLoanPickerVisible(true)}
+              >
+                <Text style={styles.loanPickerName} numberOfLines={1}>
+                  {selectedProfileId ? profileName : t("app.newLoan")}
+                </Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={16}
+                  color={colors.accentTextStrong}
+                />
+              </Pressable>
+              <Pressable
+                style={styles.newLoanButton}
+                accessibilityRole="button"
+                accessibilityLabel={t("app.newLoan")}
+                onPress={startNewLoan}
+              >
+                <Ionicons name="add" size={16} color={colors.textInverse} />
+                <Text style={styles.newLoanButtonText}>{t("app.newLoan")}</Text>
               </Pressable>
             </View>
 
@@ -1331,6 +1350,69 @@ function AppContent() {
         ) : null}
 
         <Modal
+          visible={loanPickerVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLoanPickerVisible(false)}
+        >
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setLoanPickerVisible(false)}
+          >
+            <Pressable style={styles.modalCard} onPress={() => {}}>
+              <Text style={styles.modalTitle}>{t("loanPicker.title")}</Text>
+              {savedProfiles.length === 0 ? (
+                <Text style={styles.loanPickerEmpty}>{t("loanPicker.empty")}</Text>
+              ) : (
+                <FlatList
+                  style={styles.loanPickerList}
+                  data={savedProfiles}
+                  keyExtractor={(profile) => profile.id}
+                  showsVerticalScrollIndicator={false}
+                  renderItem={({ item: profile }) => {
+                    const isCurrent = profile.id === selectedProfileId;
+                    return (
+                      <Pressable
+                        style={[
+                          styles.loanPickerRow,
+                          isCurrent && styles.loanPickerRowCurrent,
+                        ]}
+                        onPress={() => {
+                          setLoanPickerVisible(false);
+                          openProfile(profile);
+                        }}
+                      >
+                        <View style={styles.loanPickerRowText}>
+                          <Text style={styles.loanPickerRowName} numberOfLines={1}>
+                            {profile.name}
+                          </Text>
+                          <Text style={styles.loanPickerRowMeta} numberOfLines={1}>
+                            {buildSavedProfileCardSummary(profile).headline}
+                          </Text>
+                        </View>
+                        {isCurrent ? (
+                          <Ionicons
+                            name="checkmark"
+                            size={18}
+                            color={colors.accentTextStrong}
+                          />
+                        ) : null}
+                      </Pressable>
+                    );
+                  }}
+                />
+              )}
+              <Pressable
+                style={styles.cancelButton}
+                onPress={() => setLoanPickerVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>{t("common.cancel")}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        <Modal
           visible={renameDialogVisible}
           transparent
           animationType="fade"
@@ -1453,15 +1535,72 @@ const createStyles = (colors: ThemeColors) =>
       gap: 12,
       marginBottom: 10,
     },
-    activeLoanName: {
+    loanPickerButton: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.inputBg,
+    },
+    loanPickerName: {
       flex: 1,
       fontSize: 15,
       fontWeight: "800",
       color: colors.text,
     },
-    activeLoanChange: {
-      fontWeight: "700",
-      color: colors.accentTextStrong,
+    newLoanButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingVertical: 9,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+    },
+    newLoanButtonText: {
+      fontWeight: "800",
+      color: colors.textInverse,
+    },
+    loanPickerList: {
+      maxHeight: 320,
+    },
+    loanPickerEmpty: {
+      color: colors.textMuted,
+      fontWeight: "600",
+      paddingVertical: 8,
+    },
+    loanPickerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBg,
+      marginBottom: 8,
+    },
+    loanPickerRowCurrent: {
+      borderColor: colors.accentTextStrong,
+    },
+    loanPickerRowText: {
+      flex: 1,
+    },
+    loanPickerRowName: {
+      fontSize: 15,
+      fontWeight: "800",
+      color: colors.text,
+    },
+    loanPickerRowMeta: {
+      marginTop: 2,
+      fontWeight: "600",
+      color: colors.textMuted,
     },
     pageContent: {
       flex: 1,

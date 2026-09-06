@@ -35,6 +35,11 @@
     "calculating": "Calculating your loan...",
     "newLoan": "New loan"
   },
+  "loanPicker": {
+    "title": "Your saved loans",
+    "switchLabel": "Switch loan",
+    "empty": "No saved loans yet. Tap New loan to start one."
+  },
   "snackbar": {
     "calculationReady": "Your loan calculation is ready"
   },
