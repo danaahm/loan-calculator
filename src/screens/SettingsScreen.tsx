@@ -19,8 +19,13 @@ import {
 } from "../notifications/reminderNotifications";
 import { useLocale } from "../i18n/LocaleProvider";
 import { SUPPORTED_LANGUAGES } from "../i18n/languages";
+import { useDueThresholds } from "../settings/DueThresholdsProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeMode } from "../types/settings";
+import {
+  DUE_SOON_DAY_OPTIONS,
+  DUE_URGENT_DAY_OPTIONS,
+} from "../utils/dueTone";
 import { getAvailableCurrencies } from "../utils/format";
 
 interface SettingsScreenProps {
@@ -55,6 +60,16 @@ const formatHour = (hour: number, language: string): string => {
   }
 };
 
+/** Which band the day picker is currently editing, or `null` when it is closed. */
+type DueBand = "soon" | "urgent";
+
+/** 0 has no "days before" reading, so it gets its own phrasing. */
+const dayLabel = (
+  days: number,
+  t: (key: string, values?: Record<string, string | number>) => string
+): string =>
+  days === 0 ? t("settings.dueOnTheDay") : t("settings.dueDaysBefore", { count: days });
+
 export const SettingsScreen = ({
   onBack,
   reminderNotificationsEnabled,
@@ -66,6 +81,7 @@ export const SettingsScreen = ({
   onOpenPhoneSettings,
 }: SettingsScreenProps) => {
   const { colors, mode, setThemeMode } = useTheme();
+  const { thresholds, setDueThresholds } = useDueThresholds();
   const {
     t,
     language,
@@ -76,6 +92,15 @@ export const SettingsScreen = ({
   const blockedOnPhone = osPermissionStatus === "denied";
   const currencies = useMemo(() => getAvailableCurrencies(), []);
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const [dueBandPicker, setDueBandPicker] = useState<DueBand | null>(null);
+
+  // Red has to stay strictly inside amber, so each list drops the values that
+  // would break it. Choices that cannot be made are absent rather than offered
+  // and then silently corrected.
+  const dueDayOptions =
+    dueBandPicker === "soon"
+      ? DUE_SOON_DAY_OPTIONS.filter((days) => days > thresholds.urgentDays)
+      : DUE_URGENT_DAY_OPTIONS.filter((days) => days < thresholds.soonDays);
   const [currencySearch, setCurrencySearch] = useState("");
   const filteredCurrencies = useMemo(() => {
     const query = currencySearch.trim().toLowerCase();
@@ -328,6 +353,180 @@ export const SettingsScreen = ({
         </View>
       </View>
 
+      <View
+        style={[
+          styles.sectionCard,
+          { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
+        ]}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
+          {t("settings.dueColours")}
+        </Text>
+        <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+          {t("settings.dueColoursHint")}
+        </Text>
+
+        <View style={styles.duePreview}>
+          <View style={styles.duePreviewRow}>
+            <View style={[styles.dueSwatch, { backgroundColor: colors.dueDotUrgent }]} />
+            <Text style={[styles.duePreviewText, { color: colors.textSecondary }]}>
+              {thresholds.urgentDays === 0
+                ? t("settings.duePreviewUrgentToday")
+                : t("settings.duePreviewUrgent", { count: thresholds.urgentDays })}
+            </Text>
+          </View>
+          <View style={styles.duePreviewRow}>
+            <View style={[styles.dueSwatch, { backgroundColor: colors.dueDotSoon }]} />
+            <Text style={[styles.duePreviewText, { color: colors.textSecondary }]}>
+              {t("settings.duePreviewSoon", { count: thresholds.soonDays })}
+            </Text>
+          </View>
+          <View style={styles.duePreviewRow}>
+            <View style={[styles.dueSwatch, { backgroundColor: colors.primary }]} />
+            <Text style={[styles.duePreviewText, { color: colors.textSecondary }]}>
+              {t("settings.duePreviewNormal")}
+            </Text>
+          </View>
+        </View>
+
+        <Pressable
+          onPress={() => setDueBandPicker("soon")}
+          style={[
+            styles.optionRow,
+            { borderColor: colors.borderStrong, backgroundColor: colors.inputBg },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={t("settings.dueSoonFrom")}
+        >
+          <View
+            style={[
+              styles.dueSwatch,
+              styles.dueRowSwatch,
+              { backgroundColor: colors.dueDotSoon },
+            ]}
+          />
+          <View style={styles.optionCopy}>
+            <Text style={[styles.optionTitle, { color: colors.text }]}>
+              {t("settings.dueSoonFrom")}
+            </Text>
+            <Text style={[styles.optionHint, { color: colors.textMuted }]}>
+              {dayLabel(thresholds.soonDays, t)}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </Pressable>
+
+        <Pressable
+          onPress={() => setDueBandPicker("urgent")}
+          style={[
+            styles.optionRow,
+            { borderColor: colors.borderStrong, backgroundColor: colors.inputBg },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={t("settings.dueUrgentFrom")}
+        >
+          <View
+            style={[
+              styles.dueSwatch,
+              styles.dueRowSwatch,
+              { backgroundColor: colors.dueDotUrgent },
+            ]}
+          />
+          <View style={styles.optionCopy}>
+            <Text style={[styles.optionTitle, { color: colors.text }]}>
+              {t("settings.dueUrgentFrom")}
+            </Text>
+            <Text style={[styles.optionHint, { color: colors.textMuted }]}>
+              {dayLabel(thresholds.urgentDays, t)}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </Pressable>
+      </View>
+
+      <Modal
+        visible={dueBandPicker !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setDueBandPicker(null)}
+      >
+        <Pressable
+          style={[styles.sheetBackdrop, { backgroundColor: colors.modalBackdrop }]}
+          onPress={() => setDueBandPicker(null)}
+        >
+          {/* Swallows taps on the sheet itself so only the backdrop closes it. */}
+          <Pressable
+            style={[styles.sheet, { backgroundColor: colors.card }]}
+            onPress={() => {}}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              {dueBandPicker === "urgent"
+                ? t("settings.dueUrgentFrom")
+                : t("settings.dueSoonFrom")}
+            </Text>
+            <ScrollView>
+              {dueDayOptions.map((days) => {
+                const selected =
+                  dueBandPicker === "urgent"
+                    ? thresholds.urgentDays === days
+                    : thresholds.soonDays === days;
+                return (
+                  <Pressable
+                    key={days}
+                    onPress={() => {
+                      setDueThresholds(
+                        dueBandPicker === "urgent"
+                          ? { urgentDays: days }
+                          : { soonDays: days }
+                      );
+                      setDueBandPicker(null);
+                    }}
+                    style={[
+                      styles.optionRow,
+                      {
+                        borderColor: selected ? colors.primary : colors.borderStrong,
+                        backgroundColor: selected ? colors.primarySoft : colors.inputBg,
+                      },
+                    ]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                  >
+                    <View style={styles.optionCopy}>
+                      <Text
+                        style={[
+                          styles.optionTitle,
+                          { color: selected ? colors.accentTextDeep : colors.text },
+                        ]}
+                      >
+                        {dayLabel(days, t)}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.radioOuter,
+                        { borderColor: selected ? colors.primary : colors.borderStrong },
+                      ]}
+                    >
+                      {selected ? (
+                        <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Pressable
+              style={[styles.modalCloseButton, { backgroundColor: colors.primary }]}
+              onPress={() => setDueBandPicker(null)}
+            >
+              <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
+                {t("common.close")}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal
         visible={currencyModalVisible}
         animationType="slide"
@@ -488,6 +687,42 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 12,
+  },
+  duePreview: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    // Capped so a long list scrolls inside the sheet rather than filling the
+    // screen, which keeps the tapped row visible behind it.
+    maxHeight: "70%",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 16,
+    paddingBottom: 24,
+  },
+  duePreviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  dueSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  /** Same swatch, spaced off the label when it leads a selector row. */
+  dueRowSwatch: {
+    marginRight: 10,
+  },
+  duePreviewText: {
+    flex: 1,
+    fontWeight: "600",
+    fontSize: 13,
   },
   modalContainer: {
     flex: 1,

@@ -27,6 +27,7 @@ import {
   type ThemeMode,
 } from "../types/settings";
 import { isValidIsoDate } from "../utils/dateIso";
+import { normaliseDueThresholds } from "../utils/dueTone";
 
 const STORAGE_KEY = "loan-calculator-input-v1";
 const SAVED_PROFILES_KEY = "loan-calculator-saved-profiles-v1";
@@ -239,6 +240,10 @@ export const loadAppSettings = async (): Promise<AppSettings> => {
 
   try {
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    const dueThresholds = normaliseDueThresholds({
+      soonDays: parsed.dueSoonDays,
+      urgentDays: parsed.dueUrgentDays,
+    });
     return {
       themeMode: isThemeMode(parsed.themeMode)
         ? parsed.themeMode
@@ -247,6 +252,8 @@ export const loadAppSettings = async (): Promise<AppSettings> => {
       defaultCurrencyCode: normalizeCurrencyCode(parsed.defaultCurrencyCode),
       reminderNotificationsEnabled: Boolean(parsed.reminderNotificationsEnabled),
       defaultNotifyHour: clampHour(parsed.defaultNotifyHour),
+      dueSoonDays: dueThresholds.soonDays,
+      dueUrgentDays: dueThresholds.urgentDays,
     };
   } catch {
     return { ...DEFAULT_APP_SETTINGS };

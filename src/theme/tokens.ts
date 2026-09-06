@@ -24,6 +24,13 @@ export type ThemeColors = {
   dangerBorder: string;
   warning: string;
   warningBg: string;
+  /**
+   * Solid-fill counterparts of `warning`/`danger`, used by the header due dot.
+   * The chip colours are tuned as text on a tinted background and read muddy at
+   * dot size, where amber and red have to stay apart at a glance.
+   */
+  dueDotSoon: string;
+  dueDotUrgent: string;
   errorText: string;
   savingsBg: string;
   savingsBorder: string;
@@ -80,6 +87,8 @@ export const lightColors: ThemeColors = {
   dangerBorder: "#fecaca",
   warning: "#92400e",
   warningBg: "#fef3c7",
+  dueDotSoon: "#d97706",
+  dueDotUrgent: "#dc2626",
   errorText: "#dc2626",
   savingsBg: "rgba(139, 228, 172, 0.5)",
   savingsBorder: "rgba(92, 228, 141, 0.5)",
@@ -136,6 +145,8 @@ export const darkColors: ThemeColors = {
   dangerBorder: "#991b1b",
   warning: "#fbbf24",
   warningBg: "#78350f",
+  dueDotSoon: "#fbbf24",
+  dueDotUrgent: "#f87171",
   errorText: "#f87171",
   savingsBg: "rgba(16, 185, 129, 0.18)",
   savingsBorder: "rgba(16, 185, 129, 0.35)",

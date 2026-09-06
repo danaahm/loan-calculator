@@ -5,8 +5,9 @@ import { useTheme } from "../theme/ThemeProvider";
 import { type LoanReminder } from "../types/reminder";
 import { formatDisplayDate } from "../utils/dateIso";
 import { formatCurrency, formatFrequencyLabel } from "../utils/format";
+import { isReminderOverdue } from "../utils/dueTone";
 import { amountDueForReminder } from "../utils/reminderMath";
-import { DueChip, isReminderOverdue } from "./DueChip";
+import { DueChip } from "./DueChip";
 
 interface ReminderCardProps {
   reminder: LoanReminder;

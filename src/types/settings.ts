@@ -1,4 +1,5 @@
 import { FALLBACK_LANGUAGE, type LanguageCode } from "../i18n/languages";
+import { DEFAULT_DUE_THRESHOLDS } from "../utils/dueTone";
 
 export type ThemeMode = "auto" | "light" | "dark";
 
@@ -13,6 +14,12 @@ export interface AppSettings {
   defaultCurrencyCode: string | null;
   reminderNotificationsEnabled: boolean;
   defaultNotifyHour: number;
+  /**
+   * Days before a payment at which its chip and the header dot turn amber, then
+   * red. Stored flat so a partially written settings blob still merges cleanly.
+   */
+  dueSoonDays: number;
+  dueUrgentDays: number;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -21,4 +28,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   defaultCurrencyCode: null,
   reminderNotificationsEnabled: false,
   defaultNotifyHour: 9,
+  dueSoonDays: DEFAULT_DUE_THRESHOLDS.soonDays,
+  dueUrgentDays: DEFAULT_DUE_THRESHOLDS.urgentDays,
 };

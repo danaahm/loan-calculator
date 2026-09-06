@@ -45,6 +45,11 @@ import {
   saveSavedLoanProfiles,
 } from "./src/storage/localState";
 import { LocaleProvider, useLocale } from "./src/i18n/LocaleProvider";
+import {
+  DueThresholdsProvider,
+  useDueThresholds,
+} from "./src/settings/DueThresholdsProvider";
+import { strongestDueTone } from "./src/utils/dueTone";
 import { ThemeProvider, useTheme } from "./src/theme/ThemeProvider";
 import { type ThemeColors } from "./src/theme/tokens";
 import {
@@ -171,7 +176,9 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <LocaleProvider>
-          <AppContent />
+          <DueThresholdsProvider>
+            <AppContent />
+          </DueThresholdsProvider>
         </LocaleProvider>
       </ThemeProvider>
     </SafeAreaProvider>
@@ -181,6 +188,7 @@ export default function App() {
 function AppContent() {
   const { colors, isDark } = useTheme();
   const { t, defaultCurrencyCode } = useLocale();
+  const { thresholds: dueThresholds } = useDueThresholds();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [screen, setScreen] = useState<AppScreen>("home");
   const previousScreenRef = useRef<Exclude<AppScreen, "settings">>("home");
@@ -258,6 +266,14 @@ function AppContent() {
     (minimumMonthlyRepayment + extraMonthlyRepayment) * 100
   ) / 100;
   const activeReminders = reminders.filter((item) => item.status === "active");
+  // The header shows a state, not a count: a number there reads as unread mail
+  // and never falls, whereas this clears itself once payments move out of range.
+  // Deliberately not memoized: the tone depends on today's date, so a cached
+  // value would go stale on an app left open across midnight.
+  const dueAlertTone = strongestDueTone(
+    activeReminders.map((item) => item.nextPaymentDate),
+    dueThresholds
+  );
   // Projecting cycles simulates payments per reminder, so keep it memoized.
   const upcomingRepayments = useMemo(
     () => buildUpcomingRepayments(reminders, 3),
@@ -764,19 +780,31 @@ function AppContent() {
                 onPress={openReminders}
                 style={styles.settingsButton}
                 accessibilityRole="button"
-                accessibilityLabel={t("a11y.repaymentReminders")}
+                accessibilityLabel={
+                  dueAlertTone === "urgent"
+                    ? t("a11y.repaymentRemindersDueNow")
+                    : dueAlertTone === "soon"
+                      ? t("a11y.repaymentRemindersDueSoon")
+                      : t("a11y.repaymentReminders")
+                }
               >
                 <Ionicons
                   name={remindersSectionActive ? "notifications" : "notifications-outline"}
                   size={22}
                   color={remindersSectionActive ? colors.accentTextStrong : colors.text}
                 />
-                {activeReminders.length > 0 ? (
-                  <View style={styles.headerBadge}>
-                    <Text style={styles.headerBadgeText}>
-                      {activeReminders.length > 9 ? "9+" : String(activeReminders.length)}
-                    </Text>
-                  </View>
+                {dueAlertTone ? (
+                  <View
+                    style={[
+                      styles.headerDueDot,
+                      {
+                        backgroundColor:
+                          dueAlertTone === "urgent"
+                            ? colors.dueDotUrgent
+                            : colors.dueDotSoon,
+                      },
+                    ]}
+                  />
                 ) : null}
               </Pressable>
               <Pressable
@@ -1467,22 +1495,19 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
     },
-    headerBadge: {
+    headerDueDot: {
       position: "absolute",
-      top: 4,
-      right: 2,
-      minWidth: 16,
-      height: 16,
-      paddingHorizontal: 4,
-      borderRadius: 8,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerBadgeText: {
-      color: colors.textInverse,
-      fontSize: 9,
-      fontWeight: "800",
+      // Sits over the bell's top-right, where the old count badge was centred.
+      top: 6,
+      right: 4,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      // Ringed in the header fill so the dot stays readable where it overlaps
+      // the bell glyph rather than blending into the icon strokes. React Native
+      // draws the border inside the box, leaving an 8px core.
+      borderWidth: 2,
+      borderColor: colors.header,
     },
     calculateStickyBar: {
       paddingHorizontal: 16,
