@@ -1,9 +1,10 @@
 name: CI
 
+# Pull requests only. GitHub runs this against the merge of the branch into
+# main, so a green PR has already checked what main will become - running it
+# again on the merge commit repeats the same work.
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
 
 concurrency:
