@@ -21,6 +21,7 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - Basic calculator with local history
 - Repayment reminders: schedule, extra payments, rate changes, archive, and local notifications
 - Settings: light / dark / system theme and reminder notification preferences
+- Backup and restore: save every loan, reminder and setting to a JSON file, restore one on another phone, or delete everything stored on the device
 
 ## Tech Stack
 
@@ -33,6 +34,7 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - `expo-notifications` for local repayment alerts (development and production builds)
 - `@react-native-community/datetimepicker` for reminder dates
 - `react-native-format-currency` for currency formatting
+- `expo-file-system` + `expo-sharing` for backup files
 
 ## Project Structure
 
@@ -42,10 +44,12 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - `src/components/` — form, charts, amortization grid, reminder cards, date picker
 - `src/notifications/reminderNotifications.ts` — local notification scheduling
 - `src/utils/loanMath.ts` — loan amortization
-- `src/utils/__tests__/` — unit tests for the loan and reminder maths
 - `src/utils/reminderMath.ts` — reminder balances, catch-up, and extra payments
 - `src/utils/profileCompare.ts` — saved-loan comparison
+- `src/utils/__tests__/`, `src/storage/__tests__/` — unit tests
 - `src/storage/localState.ts` — AsyncStorage helpers
+- `src/storage/backup.ts` — backup file format, validation and restore
+- `src/storage/backupFile.ts` — writing, sharing and picking the backup file
 - `src/theme/` — light/dark tokens and theme provider
 - `src/types/` — shared TypeScript types
 - `.github/workflows/` — CI and Android Play release
@@ -102,12 +106,13 @@ npx eas-cli build -p android --profile development
 - `npm run typecheck` — TypeScript check (`tsc --noEmit`)
 - `npm test` — Jest unit tests
 - `npm run test:watch` — Jest in watch mode
-- `npm run test:coverage` — Jest with a coverage report for the maths modules
+- `npm run test:coverage` — Jest with a coverage report for the maths and backup modules
 
 ## Testing
 
-Unit tests live in `src/utils/__tests__/` and cover the modules that produce
-the numbers users act on:
+Unit tests live in `src/utils/__tests__/` and `src/storage/__tests__/`, and
+cover the modules that produce the numbers users act on and the ones that can
+lose their data:
 
 - `loanMath.test.ts` — amortization against the standard annuity formula,
   account fees at every frequency, offset savings, extra repayments, the
@@ -117,6 +122,10 @@ the numbers users act on:
   cycles, undo, extra payments, payoff projection and the saved-profile handoff
 - `reminderSchedule.test.ts` — repayment date arithmetic, including month-end
   clamping, leap years, custom one-off dates and notification lead times
+- `backup.test.ts` — backup file validation: damaged files, files from a newer
+  app, individual rows that fail to parse, and migration of older saved loans
+- `backupRoundTrip.test.ts` — save, export, wipe and restore against the
+  AsyncStorage mock
 
 Expected values are derived independently of the implementation, so a change
 that alters a repayment figure fails the suite rather than quietly updating it.
@@ -127,6 +136,9 @@ they run.
 npm test
 ```
 
+`jest.setup.js` swaps AsyncStorage for the in-memory mock the package ships, so
+the storage tests exercise the real read and write paths.
+
 `jest.environment.js` wraps the standard Node environment. Node 22.4 and newer
 expose a `localStorage` global that throws unless the process is started with
 `--localstorage-file`, and Jest 29 trips it while building the test context;
@@ -136,12 +148,12 @@ the wrapper neutralises it so the suite runs on Node 22 through 25.
 
 GitHub Actions workflows live in `.github/workflows/`.
 
-**CI** (`.github/workflows/ci.yml`) runs on pull requests and pushes to `main`:
+**CI** (`.github/workflows/ci.yml`) runs on pull requests targeting `main`:
 
 1. `npm ci`
 2. `npx expo install --check` (SDK 57 package versions)
 3. `npm run typecheck`
-4. `npm test -- --ci` (loan and reminder maths)
+4. `npm test -- --ci` (loan and reminder maths, backup validation)
 5. `npx expo-doctor` (advisory; does not fail the job)
 6. `npx expo export --platform web` (JS bundle smoke test)
 

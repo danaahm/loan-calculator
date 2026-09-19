@@ -18,6 +18,11 @@ import {
 interface DueThresholdsContextValue {
   thresholds: DueThresholds;
   setDueThresholds: (next: Partial<DueThresholds>) => void;
+  /**
+   * Re-reads the stored bands. Needed after a restore or a wipe, which change
+   * settings underneath this provider.
+   */
+  reloadFromStorage: () => Promise<void>;
 }
 
 const DueThresholdsContext = createContext<DueThresholdsContextValue | null>(null);
@@ -29,18 +34,19 @@ const DueThresholdsContext = createContext<DueThresholdsContextValue | null>(nul
 export const DueThresholdsProvider = ({ children }: { children: ReactNode }) => {
   const [thresholds, setThresholds] = useState<DueThresholds>(DEFAULT_DUE_THRESHOLDS);
 
-  useEffect(() => {
-    loadAppSettings()
-      .then((settings) => {
-        setThresholds(
-          normaliseDueThresholds({
-            soonDays: settings.dueSoonDays,
-            urgentDays: settings.dueUrgentDays,
-          })
-        );
+  const reloadFromStorage = useCallback(async () => {
+    const settings = await loadAppSettings();
+    setThresholds(
+      normaliseDueThresholds({
+        soonDays: settings.dueSoonDays,
+        urgentDays: settings.dueUrgentDays,
       })
-      .catch(() => {});
+    );
   }, []);
+
+  useEffect(() => {
+    reloadFromStorage().catch(() => {});
+  }, [reloadFromStorage]);
 
   const setDueThresholds = useCallback(
     (next: Partial<DueThresholds>) => {
@@ -55,8 +61,8 @@ export const DueThresholdsProvider = ({ children }: { children: ReactNode }) => 
   );
 
   const value = useMemo(
-    () => ({ thresholds, setDueThresholds }),
-    [setDueThresholds, thresholds]
+    () => ({ thresholds, setDueThresholds, reloadFromStorage }),
+    [reloadFromStorage, setDueThresholds, thresholds]
   );
 
   return (

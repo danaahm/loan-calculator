@@ -20,6 +20,11 @@ interface LocaleContextValue {
   t: (key: string, values?: TranslateValues) => string;
   setLanguage: (language: LanguageCode) => void;
   setDefaultCurrencyCode: (currencyCode: string) => void;
+  /**
+   * Re-reads the stored language and currency. Needed after a restore or a
+   * wipe, which change settings underneath this provider.
+   */
+  reloadFromStorage: () => Promise<void>;
 }
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
@@ -30,16 +35,17 @@ export const LocaleProvider = ({ children }: { children: ReactNode }) => {
     detectCurrencyCode()
   );
 
-  useEffect(() => {
-    loadAppSettings()
-      .then((settings) => {
-        setLanguageState(setActiveLanguage(settings.language));
-        if (settings.defaultCurrencyCode) {
-          setDefaultCurrencyState(settings.defaultCurrencyCode);
-        }
-      })
-      .catch(() => {});
+  const reloadFromStorage = useCallback(async () => {
+    const settings = await loadAppSettings();
+    setLanguageState(setActiveLanguage(settings.language));
+    // A null code means "not chosen", so fall back to the device region rather
+    // than leaving whatever the previous data happened to use.
+    setDefaultCurrencyState(settings.defaultCurrencyCode ?? detectCurrencyCode());
   }, []);
+
+  useEffect(() => {
+    reloadFromStorage().catch(() => {});
+  }, [reloadFromStorage]);
 
   const setLanguage = useCallback((next: LanguageCode) => {
     // Update the singleton first so any plain module that formats during this
@@ -61,8 +67,15 @@ export const LocaleProvider = ({ children }: { children: ReactNode }) => {
       t: (key: string, values?: TranslateValues) => t(key, values),
       setLanguage,
       setDefaultCurrencyCode,
+      reloadFromStorage,
     }),
-    [defaultCurrencyCode, language, setDefaultCurrencyCode, setLanguage]
+    [
+      defaultCurrencyCode,
+      language,
+      reloadFromStorage,
+      setDefaultCurrencyCode,
+      setLanguage,
+    ]
   );
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;

@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { DataSection } from "../components/DataSection";
 import {
   notificationUnavailableHint,
   permissionStatusLabel,
@@ -37,6 +38,9 @@ interface SettingsScreenProps {
   onToggleReminderNotifications: (enabled: boolean) => void;
   onChangeNotifyHour: (hour: number) => void;
   onOpenPhoneSettings: () => void;
+  appVersion: string;
+  onDataReplaced: () => Promise<void>;
+  onNotify: (message: string) => void;
 }
 
 const APPEARANCE_MODES: ThemeMode[] = ["auto", "light", "dark"];
@@ -79,6 +83,9 @@ export const SettingsScreen = ({
   onToggleReminderNotifications,
   onChangeNotifyHour,
   onOpenPhoneSettings,
+  appVersion,
+  onDataReplaced,
+  onNotify,
 }: SettingsScreenProps) => {
   const { colors, mode, setThemeMode } = useTheme();
   const { thresholds, setDueThresholds } = useDueThresholds();
@@ -443,6 +450,12 @@ export const SettingsScreen = ({
           <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
         </Pressable>
       </View>
+
+      <DataSection
+        appVersion={appVersion}
+        onDataReplaced={onDataReplaced}
+        onNotify={onNotify}
+      />
 
       <Modal
         visible={dueBandPicker !== null}
