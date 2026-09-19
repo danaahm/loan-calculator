@@ -54,3 +54,6 @@ serviceAccount*.json
 # generated native folders
 /ios
 /android
+
+# test coverage output
+/coverage
