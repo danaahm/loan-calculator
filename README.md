@@ -42,6 +42,7 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - `src/components/` — form, charts, amortization grid, reminder cards, date picker
 - `src/notifications/reminderNotifications.ts` — local notification scheduling
 - `src/utils/loanMath.ts` — loan amortization
+- `src/utils/__tests__/` — unit tests for the loan and reminder maths
 - `src/utils/reminderMath.ts` — reminder balances, catch-up, and extra payments
 - `src/utils/profileCompare.ts` — saved-loan comparison
 - `src/storage/localState.ts` — AsyncStorage helpers
@@ -99,6 +100,37 @@ npx eas-cli build -p android --profile development
 - `npm run ios` — open the iOS flow
 - `npm run web` — run the web target
 - `npm run typecheck` — TypeScript check (`tsc --noEmit`)
+- `npm test` — Jest unit tests
+- `npm run test:watch` — Jest in watch mode
+- `npm run test:coverage` — Jest with a coverage report for the maths modules
+
+## Testing
+
+Unit tests live in `src/utils/__tests__/` and cover the modules that produce
+the numbers users act on:
+
+- `loanMath.test.ts` — amortization against the standard annuity formula,
+  account fees at every frequency, offset savings, extra repayments, the
+  lump-sum residual, plan-versus-contracted savings, validation and the
+  migration of older saved profiles
+- `reminderMath.test.ts` — the fee carry, rate changes, catch-up across missed
+  cycles, undo, extra payments, payoff projection and the saved-profile handoff
+- `reminderSchedule.test.ts` — repayment date arithmetic, including month-end
+  clamping, leap years, custom one-off dates and notification lead times
+
+Expected values are derived independently of the implementation, so a change
+that alters a repayment figure fails the suite rather than quietly updating it.
+Tests that read the clock freeze it, so the results never depend on the day
+they run.
+
+```bash
+npm test
+```
+
+`jest.environment.js` wraps the standard Node environment. Node 22.4 and newer
+expose a `localStorage` global that throws unless the process is started with
+`--localstorage-file`, and Jest 29 trips it while building the test context;
+the wrapper neutralises it so the suite runs on Node 22 through 25.
 
 ## CI / CD
 
@@ -109,8 +141,9 @@ GitHub Actions workflows live in `.github/workflows/`.
 1. `npm ci`
 2. `npx expo install --check` (SDK 57 package versions)
 3. `npm run typecheck`
-4. `npx expo-doctor` (advisory; does not fail the job)
-5. `npx expo export --platform web` (JS bundle smoke test)
+4. `npm test -- --ci` (loan and reminder maths)
+5. `npx expo-doctor` (advisory; does not fail the job)
+6. `npx expo export --platform web` (JS bundle smoke test)
 
 Keep `package-lock.json` in sync with `package.json`. CI uses `npm ci` and will fail if they drift.
 

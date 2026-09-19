@@ -36,6 +36,11 @@ jobs:
       - name: TypeScript typecheck
         run: npm run typecheck
 
+      # The loan and reminder maths are what users trust most, so a wrong
+      # number here blocks the merge rather than reaching a release.
+      - name: Unit tests
+        run: npm test -- --ci
+
       # Advisory only: expo-doctor currently fails on a non-square app icon.
       # Keep this visible in logs without blocking merges.
       - name: Expo config & dependency check
