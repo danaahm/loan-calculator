@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
@@ -100,6 +101,9 @@ type AppScreen =
   | "reminder-edit"
   | "reminder-detail"
   | "compare";
+
+/** Stamped into a backup file so a support request can name the build. */
+const APP_VERSION = Constants.expoConfig?.version ?? "unknown";
 
 const NAV_TABS: {
   id: TabScreen;
@@ -355,57 +359,72 @@ function AppContent() {
     }
   };
 
-  useEffect(() => {
-    const bootstrap = async () => {
-      const [savedInput, loadedProfiles, loadedReminders, loadedSettings] =
-        await Promise.all([
-          loadLoanInput(),
-          loadSavedLoanProfiles(),
-          loadLoanReminders(),
-          loadAppSettings(),
-        ]);
-      const initial = normalizeInput(
-        savedInput ?? {
-          ...DEFAULT_INPUT,
-          currencyCode: loadedSettings.defaultCurrencyCode ?? detectCurrencyCode(),
-        }
-      );
-      // A persisted input means work in progress: skip straight past the chooser.
-      setLoanFormMode(savedInput ? "form" : "chooser");
-      const initialHash = JSON.stringify(initial);
-      setInput(initial);
-      setDraftInput(initial);
-      setResult(calculateLoan(initial));
-      setLastCalculatedHash(initialHash);
-      setLastSavedHash(initialHash);
-      setSavedProfiles(loadedProfiles);
-      setReminderSettings(loadedSettings);
-      reminderSettingsRef.current = loadedSettings;
-      const osStatus = await getOsPermissionStatus();
-      setOsPermissionStatus(osStatus);
-      const { reminders: caught, summaries } = catchUpReminders(
-        loadedReminders,
-        todayLocalIso()
-      );
-      const refilled = await refillReminderNotifications(caught, {
-        masterEnabled: loadedSettings.reminderNotificationsEnabled,
-        notifyHour: loadedSettings.defaultNotifyHour,
-      });
-      setReminders(refilled);
-      await saveLoanReminders(refilled);
-      setLoadingState(false);
-      if (summaries.length > 0) {
-        showSnackbar(
-          summaries
-            .map((item) =>
-              t("catchUp.applied", { count: item.appliedCount, name: item.name })
-            )
-            .join(" · ")
-        );
-      }
-    };
+  /**
+   * Reads every screen's state back out of storage. Runs at launch, and again
+   * whenever Settings restores a backup or clears the device, so replaced data
+   * reaches the rest of the app without the user relaunching it.
+   */
+  const hydrateFromStorage = async () => {
+    // Ids held in memory may not exist in the data being loaded, so anything
+    // pointing at a specific loan or reminder is dropped before the new state
+    // lands. Without this a restore can leave a detail screen open on a
+    // reminder that is no longer there.
+    setEditingReminder(null);
+    setDetailReminderId(null);
+    setSelectedProfileId(null);
+    setCompareSelection([]);
+    setCompareSelectMode(false);
 
-    bootstrap().catch(() => {
+    const [savedInput, loadedProfiles, loadedReminders, loadedSettings] =
+      await Promise.all([
+        loadLoanInput(),
+        loadSavedLoanProfiles(),
+        loadLoanReminders(),
+        loadAppSettings(),
+      ]);
+    const initial = normalizeInput(
+      savedInput ?? {
+        ...DEFAULT_INPUT,
+        currencyCode: loadedSettings.defaultCurrencyCode ?? detectCurrencyCode(),
+      }
+    );
+    // A persisted input means work in progress: skip straight past the chooser.
+    setLoanFormMode(savedInput ? "form" : "chooser");
+    const initialHash = JSON.stringify(initial);
+    setInput(initial);
+    setDraftInput(initial);
+    setResult(calculateLoan(initial));
+    setLastCalculatedHash(initialHash);
+    setLastSavedHash(initialHash);
+    setSavedProfiles(loadedProfiles);
+    setReminderSettings(loadedSettings);
+    reminderSettingsRef.current = loadedSettings;
+    const osStatus = await getOsPermissionStatus();
+    setOsPermissionStatus(osStatus);
+    const { reminders: caught, summaries } = catchUpReminders(
+      loadedReminders,
+      todayLocalIso()
+    );
+    const refilled = await refillReminderNotifications(caught, {
+      masterEnabled: loadedSettings.reminderNotificationsEnabled,
+      notifyHour: loadedSettings.defaultNotifyHour,
+    });
+    setReminders(refilled);
+    await saveLoanReminders(refilled);
+    setLoadingState(false);
+    if (summaries.length > 0) {
+      showSnackbar(
+        summaries
+          .map((item) =>
+            t("catchUp.applied", { count: item.appliedCount, name: item.name })
+          )
+          .join(" · ")
+      );
+    }
+  };
+
+  useEffect(() => {
+    hydrateFromStorage().catch(() => {
       setInput(DEFAULT_INPUT);
       setDraftInput(DEFAULT_INPUT);
       setResult(calculateLoan(DEFAULT_INPUT));
@@ -1001,6 +1020,9 @@ function AppContent() {
               onOpenPhoneSettings={() => {
                 openPhoneNotificationSettings().catch(() => {});
               }}
+              appVersion={APP_VERSION}
+              onDataReplaced={hydrateFromStorage}
+              onNotify={showSnackbar}
             />
           </SwipeBackView>
         ) : null}

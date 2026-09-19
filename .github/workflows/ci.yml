@@ -1,9 +1,10 @@
 name: CI
 
+# Pull requests only. GitHub runs this against the merge of the branch into
+# main, so a green PR has already checked what main will become - running it
+# again on the merge commit repeats the same work.
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
 
 concurrency:
@@ -35,6 +36,13 @@ jobs:
 
       - name: TypeScript typecheck
         run: npm run typecheck
+
+      # docs/index.html is generated from PRIVACY_POLICY.md and served by
+      # Cloudflare Pages. Editing the Markdown without regenerating would leave
+      # the hosted policy behind the app, which is how the v1.3.0 backup
+      # section never reached the live site.
+      - name: Privacy policy page is in sync
+        run: npm run check:privacy
 
       # The loan and reminder maths are what users trust most, so a wrong
       # number here blocks the merge rather than reaching a release.

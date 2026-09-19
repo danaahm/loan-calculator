@@ -16,13 +16,13 @@ If you want a different package id, change it before first production release.
 
 Google Play requires a publicly accessible privacy policy URL.
 
-Use the content in `PRIVACY_POLICY.md` and publish it on a public URL, for example:
+This repo publishes one automatically. `docs/index.html` is generated from
+`PRIVACY_POLICY.md` and Cloudflare Pages serves the `docs/` folder, redeploying
+on every push to `main`. Use that Pages URL (or the custom domain mapped to it)
+in the Play Console listing.
 
-- Your website
-- GitHub Pages
-- Notion public page
-
-Keep that URL ready for Play Console.
+Edit the Markdown only, bump its `Effective date:`, run `npm run build:privacy`,
+and merge to `main` to publish. CI fails the PR if the generated page is stale.
 
 ## 3) Install EAS CLI and login
 

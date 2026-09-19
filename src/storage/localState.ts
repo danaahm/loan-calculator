@@ -232,6 +232,30 @@ export const saveAppSettings = async (settings: AppSettings): Promise<void> => {
   await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 };
 
+/**
+ * Settings arrive either from this device's storage or from a backup file, so
+ * the checks live in one place and neither path can trust a stored value.
+ */
+export const normalizeAppSettings = (
+  parsed: Partial<AppSettings>
+): AppSettings => {
+  const dueThresholds = normaliseDueThresholds({
+    soonDays: parsed.dueSoonDays,
+    urgentDays: parsed.dueUrgentDays,
+  });
+  return {
+    themeMode: isThemeMode(parsed.themeMode)
+      ? parsed.themeMode
+      : DEFAULT_APP_SETTINGS.themeMode,
+    language: normalizeLanguage(parsed.language),
+    defaultCurrencyCode: normalizeCurrencyCode(parsed.defaultCurrencyCode),
+    reminderNotificationsEnabled: Boolean(parsed.reminderNotificationsEnabled),
+    defaultNotifyHour: clampHour(parsed.defaultNotifyHour),
+    dueSoonDays: dueThresholds.soonDays,
+    dueUrgentDays: dueThresholds.urgentDays,
+  };
+};
+
 export const loadAppSettings = async (): Promise<AppSettings> => {
   const raw = await AsyncStorage.getItem(SETTINGS_KEY);
   if (!raw) {
@@ -239,22 +263,7 @@ export const loadAppSettings = async (): Promise<AppSettings> => {
   }
 
   try {
-    const parsed = JSON.parse(raw) as Partial<AppSettings>;
-    const dueThresholds = normaliseDueThresholds({
-      soonDays: parsed.dueSoonDays,
-      urgentDays: parsed.dueUrgentDays,
-    });
-    return {
-      themeMode: isThemeMode(parsed.themeMode)
-        ? parsed.themeMode
-        : DEFAULT_APP_SETTINGS.themeMode,
-      language: normalizeLanguage(parsed.language),
-      defaultCurrencyCode: normalizeCurrencyCode(parsed.defaultCurrencyCode),
-      reminderNotificationsEnabled: Boolean(parsed.reminderNotificationsEnabled),
-      defaultNotifyHour: clampHour(parsed.defaultNotifyHour),
-      dueSoonDays: dueThresholds.soonDays,
-      dueUrgentDays: dueThresholds.urgentDays,
-    };
+    return normalizeAppSettings(JSON.parse(raw) as Partial<AppSettings>);
   } catch {
     return { ...DEFAULT_APP_SETTINGS };
   }
@@ -316,3 +325,28 @@ export const loadLoanReminders = async (): Promise<LoanReminder[]> => {
 };
 
 export const MAX_BASIC_CALC_HISTORY = MAX_BASIC_HISTORY;
+
+/** Drops the calculation in progress without touching saved loans. */
+export const clearLoanInput = async (): Promise<void> => {
+  await AsyncStorage.removeItem(STORAGE_KEY);
+};
+
+/**
+ * Every key this app owns. Listed here so wiping the device cannot miss one
+ * and leave a stray loan behind after the user asked for everything to go.
+ */
+export const OWNED_STORAGE_KEYS = [
+  STORAGE_KEY,
+  SAVED_PROFILES_KEY,
+  SETTINGS_KEY,
+  BASIC_HISTORY_KEY,
+  REMINDERS_KEY,
+] as const;
+
+/**
+ * Removes only this app's keys rather than calling `AsyncStorage.clear()`,
+ * which would also throw away anything a library has stored alongside them.
+ */
+export const clearAllStoredData = async (): Promise<void> => {
+  await AsyncStorage.multiRemove([...OWNED_STORAGE_KEYS]);
+};

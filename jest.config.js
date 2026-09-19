@@ -7,9 +7,11 @@
 module.exports = {
   preset: "jest-expo",
   testEnvironment: "<rootDir>/jest.environment.js",
+  setupFiles: ["<rootDir>/jest.setup.js"],
   testMatch: ["<rootDir>/src/**/__tests__/**/*.test.ts"],
   testPathIgnorePatterns: ["/node_modules/", "/dist/", "/.expo/"],
   collectCoverageFrom: [
+    "src/storage/backup.ts",
     "src/utils/loanMath.ts",
     "src/utils/reminderMath.ts",
     "src/utils/reminderSchedule.ts",

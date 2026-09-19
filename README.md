@@ -21,6 +21,7 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - Basic calculator with local history
 - Repayment reminders: schedule, extra payments, rate changes, archive, and local notifications
 - Settings: light / dark / system theme and reminder notification preferences
+- Backup and restore: save every loan, reminder and setting to a JSON file, restore one on another phone, or delete everything stored on the device
 
 ## Tech Stack
 
@@ -33,6 +34,7 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - `expo-notifications` for local repayment alerts (development and production builds)
 - `@react-native-community/datetimepicker` for reminder dates
 - `react-native-format-currency` for currency formatting
+- `expo-file-system` + `expo-sharing` for backup files
 
 ## Project Structure
 
@@ -42,15 +44,19 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - `src/components/` — form, charts, amortization grid, reminder cards, date picker
 - `src/notifications/reminderNotifications.ts` — local notification scheduling
 - `src/utils/loanMath.ts` — loan amortization
-- `src/utils/__tests__/` — unit tests for the loan and reminder maths
 - `src/utils/reminderMath.ts` — reminder balances, catch-up, and extra payments
 - `src/utils/profileCompare.ts` — saved-loan comparison
+- `src/utils/__tests__/`, `src/storage/__tests__/` — unit tests
 - `src/storage/localState.ts` — AsyncStorage helpers
+- `src/storage/backup.ts` — backup file format, validation and restore
+- `src/storage/backupFile.ts` — writing, sharing and picking the backup file
 - `src/theme/` — light/dark tokens and theme provider
 - `src/types/` — shared TypeScript types
 - `.github/workflows/` — CI and Android Play release
-- `PRIVACY_POLICY.md` — privacy policy source
-- `docs/index.html` — hosted privacy policy page (GitHub Pages from `/docs`)
+- `PRIVACY_POLICY.md` — privacy policy source (the only copy you edit)
+- `docs/index.html` — generated policy page, served by Cloudflare Pages from `/docs`
+- `scripts/build-privacy-policy.mjs` — generates that page from the Markdown
+- `scripts/privacy-policy.template.html` — page shell and styling for the generator
 - `GOOGLE_PLAY_DEPLOYMENT.md` — Play Store and automated release guide
 
 ## Getting Started
@@ -102,12 +108,13 @@ npx eas-cli build -p android --profile development
 - `npm run typecheck` — TypeScript check (`tsc --noEmit`)
 - `npm test` — Jest unit tests
 - `npm run test:watch` — Jest in watch mode
-- `npm run test:coverage` — Jest with a coverage report for the maths modules
+- `npm run test:coverage` — Jest with a coverage report for the maths and backup modules
 
 ## Testing
 
-Unit tests live in `src/utils/__tests__/` and cover the modules that produce
-the numbers users act on:
+Unit tests live in `src/utils/__tests__/` and `src/storage/__tests__/`, and
+cover the modules that produce the numbers users act on and the ones that can
+lose their data:
 
 - `loanMath.test.ts` — amortization against the standard annuity formula,
   account fees at every frequency, offset savings, extra repayments, the
@@ -117,6 +124,10 @@ the numbers users act on:
   cycles, undo, extra payments, payoff projection and the saved-profile handoff
 - `reminderSchedule.test.ts` — repayment date arithmetic, including month-end
   clamping, leap years, custom one-off dates and notification lead times
+- `backup.test.ts` — backup file validation: damaged files, files from a newer
+  app, individual rows that fail to parse, and migration of older saved loans
+- `backupRoundTrip.test.ts` — save, export, wipe and restore against the
+  AsyncStorage mock
 
 Expected values are derived independently of the implementation, so a change
 that alters a repayment figure fails the suite rather than quietly updating it.
@@ -127,6 +138,9 @@ they run.
 npm test
 ```
 
+`jest.setup.js` swaps AsyncStorage for the in-memory mock the package ships, so
+the storage tests exercise the real read and write paths.
+
 `jest.environment.js` wraps the standard Node environment. Node 22.4 and newer
 expose a `localStorage` global that throws unless the process is started with
 `--localstorage-file`, and Jest 29 trips it while building the test context;
@@ -136,14 +150,15 @@ the wrapper neutralises it so the suite runs on Node 22 through 25.
 
 GitHub Actions workflows live in `.github/workflows/`.
 
-**CI** (`.github/workflows/ci.yml`) runs on pull requests and pushes to `main`:
+**CI** (`.github/workflows/ci.yml`) runs on pull requests targeting `main`:
 
 1. `npm ci`
 2. `npx expo install --check` (SDK 57 package versions)
 3. `npm run typecheck`
-4. `npm test -- --ci` (loan and reminder maths)
-5. `npx expo-doctor` (advisory; does not fail the job)
-6. `npx expo export --platform web` (JS bundle smoke test)
+4. `npm run check:privacy` (hosted policy page matches `PRIVACY_POLICY.md`)
+5. `npm test -- --ci` (loan and reminder maths, backup validation)
+6. `npx expo-doctor` (advisory; does not fail the job)
+7. `npx expo export --platform web` (JS bundle smoke test)
 
 Keep `package-lock.json` in sync with `package.json`. CI uses `npm ci` and will fail if they drift.
 
@@ -168,9 +183,21 @@ eas build -p android --profile production
 
 ## Privacy
 
-Privacy policy source is in `PRIVACY_POLICY.md`.
-A public HTML version is in `docs/index.html` (GitHub Pages source folder: `/docs`).
-For Play Console, host this policy on a public URL and use that URL in your listing.
+`PRIVACY_POLICY.md` is the source of truth and the only copy to edit.
+`docs/index.html` is generated from it and must never be hand-edited:
+
+```bash
+npm run build:privacy   # regenerate docs/index.html after editing the Markdown
+npm run check:privacy   # fail if the page is out of date (also runs in CI)
+```
+
+Cloudflare Pages serves the `docs/` folder and redeploys on every push to
+`main`, so merging a policy change publishes it. There is nothing to upload by
+hand.
+
+Bump the `Effective date:` line in the Markdown whenever the wording changes.
+It is the date shown on the live page and the one Play Console reviewers look
+at, and the generator refuses any value that is not `YYYY-MM-DD`.
 
 ## Disclaimer
 

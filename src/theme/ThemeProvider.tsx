@@ -19,6 +19,11 @@ interface ThemeContextValue {
   isDark: boolean;
   colors: ThemeColors;
   setThemeMode: (mode: ThemeMode) => void;
+  /**
+   * Re-reads the stored theme. Needed after a restore or a wipe, which change
+   * settings underneath this provider rather than through `setThemeMode`.
+   */
+  reloadFromStorage: () => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -27,15 +32,14 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const system = useColorScheme();
   const [mode, setMode] = useState<ThemeMode>("auto");
 
-  useEffect(() => {
-    loadAppSettings()
-      .then((settings) => {
-        if (settings?.themeMode) {
-          setMode(settings.themeMode);
-        }
-      })
-      .catch(() => {});
+  const reloadFromStorage = useCallback(async () => {
+    const settings = await loadAppSettings();
+    setMode(settings.themeMode);
   }, []);
+
+  useEffect(() => {
+    reloadFromStorage().catch(() => {});
+  }, [reloadFromStorage]);
 
   const resolved: "light" | "dark" =
     mode === "auto" ? (system === "dark" ? "dark" : "light") : mode;
@@ -53,8 +57,9 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
       isDark: resolved === "dark",
       colors,
       setThemeMode,
+      reloadFromStorage,
     }),
-    [colors, mode, resolved, setThemeMode]
+    [colors, mode, reloadFromStorage, resolved, setThemeMode]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

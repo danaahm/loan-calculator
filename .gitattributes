@@ -1,0 +1,4 @@
+# The privacy policy page is generated and byte-compared in CI, so its line
+# endings must not depend on the machine that checked it out.
+PRIVACY_POLICY.md text eol=lf
+docs/index.html text eol=lf

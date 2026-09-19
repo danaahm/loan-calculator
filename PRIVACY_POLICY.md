@@ -1,6 +1,6 @@
 # Privacy Policy for Simple Loan Calculator
 
-Effective date: 2026-02-27
+Effective date: 2026-09-19
 
 Simple Loan Calculator ("the App") is designed to work fully on your device.
 
@@ -27,6 +27,20 @@ To provide core functionality, the App stores the following data locally on your
 
 This data is stored only on your device using local storage and is not sent to our servers.
 
+## Backup Files You Create
+
+The App can write your stored data to a backup file and hand that file to the
+app you choose (for example a messaging, email, or cloud storage app). This
+happens only when you tap "Save a backup", and the destination is chosen by you.
+
+Once a backup file leaves the App, it is no longer covered by this policy: it is
+governed by whichever service or app you sent it to, and by your own device's
+settings. Backup files are not encrypted, so treat one as you would any other
+document holding your financial details.
+
+Restoring a backup reads a file you select and replaces the data held in the
+App. Nothing is uploaded to us at any point in either direction.
+
 ## Data Sharing
 
 We do not sell, share, or transfer your in-app loan data to third parties.
@@ -46,6 +60,7 @@ Because data is stored locally on your device, you are responsible for device-le
 ## Your Choices
 
 You can delete your saved loan profiles and reminders directly in the App at any time.
+Settings also has a "Delete everything" option that removes every loan, reminder, calculator entry, and setting the App has stored on your device. This cannot be undone, so save a backup first if you may want the data later.
 You can also uninstall the App to remove local app data from your device (subject to device backup settings).
 
 ## Changes to This Policy
