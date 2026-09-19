@@ -1,0 +1,11 @@
+{
+  // Publishes the generated privacy policy page as a static-assets Worker.
+  // "name" must stay "slc" so this updates the existing Worker in place
+  // rather than creating a second one on a new URL - the workers.dev URL is
+  // the one registered in the Play Console listing.
+  "name": "slc",
+  "compatibility_date": "2026-09-19",
+  "assets": {
+    "directory": "./docs"
+  }
+}
