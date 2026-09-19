@@ -9,6 +9,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "build:privacy": "node scripts/build-privacy-policy.mjs",
+    "check:privacy": "node scripts/build-privacy-policy.mjs --check",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"

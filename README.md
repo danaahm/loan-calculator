@@ -53,8 +53,10 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - `src/theme/` — light/dark tokens and theme provider
 - `src/types/` — shared TypeScript types
 - `.github/workflows/` — CI and Android Play release
-- `PRIVACY_POLICY.md` — privacy policy source
-- `docs/index.html` — hosted privacy policy page (GitHub Pages from `/docs`)
+- `PRIVACY_POLICY.md` — privacy policy source (the only copy you edit)
+- `docs/index.html` — generated policy page, served by Cloudflare Pages from `/docs`
+- `scripts/build-privacy-policy.mjs` — generates that page from the Markdown
+- `scripts/privacy-policy.template.html` — page shell and styling for the generator
 - `GOOGLE_PLAY_DEPLOYMENT.md` — Play Store and automated release guide
 
 ## Getting Started
@@ -153,9 +155,10 @@ GitHub Actions workflows live in `.github/workflows/`.
 1. `npm ci`
 2. `npx expo install --check` (SDK 57 package versions)
 3. `npm run typecheck`
-4. `npm test -- --ci` (loan and reminder maths, backup validation)
-5. `npx expo-doctor` (advisory; does not fail the job)
-6. `npx expo export --platform web` (JS bundle smoke test)
+4. `npm run check:privacy` (hosted policy page matches `PRIVACY_POLICY.md`)
+5. `npm test -- --ci` (loan and reminder maths, backup validation)
+6. `npx expo-doctor` (advisory; does not fail the job)
+7. `npx expo export --platform web` (JS bundle smoke test)
 
 Keep `package-lock.json` in sync with `package.json`. CI uses `npm ci` and will fail if they drift.
 
@@ -180,9 +183,21 @@ eas build -p android --profile production
 
 ## Privacy
 
-Privacy policy source is in `PRIVACY_POLICY.md`.
-A public HTML version is in `docs/index.html` (GitHub Pages source folder: `/docs`).
-For Play Console, host this policy on a public URL and use that URL in your listing.
+`PRIVACY_POLICY.md` is the source of truth and the only copy to edit.
+`docs/index.html` is generated from it and must never be hand-edited:
+
+```bash
+npm run build:privacy   # regenerate docs/index.html after editing the Markdown
+npm run check:privacy   # fail if the page is out of date (also runs in CI)
+```
+
+Cloudflare Pages serves the `docs/` folder and redeploys on every push to
+`main`, so merging a policy change publishes it. There is nothing to upload by
+hand.
+
+Bump the `Effective date:` line in the Markdown whenever the wording changes.
+It is the date shown on the live page and the one Play Console reviewers look
+at, and the generator refuses any value that is not `YYYY-MM-DD`.
 
 ## Disclaimer
 
