@@ -51,7 +51,17 @@
       "@react-native-community/datetimepicker",
       "expo-font",
       "expo-localization",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "# R8 is enabled for release builds, so anything resolved by name at\n# runtime has to be named here. React Native, Expo modules and\n# Reanimated each ship their own consumer rules, which Gradle applies\n# automatically; these cover the gaps in this app's dependency set.\n\n# Skia and Gesture Handler ship no consumer rules of their own. Both\n# reach their Java classes from C++ through JNI, where a renamed class\n# cannot be found and fails at runtime rather than at build time.\n-keep class com.shopify.reactnative.skia.** { *; }\n-keep class com.swmansion.gesturehandler.** { *; }\n\n# JNI lookups by name across the React Native bridge.\n-keepclasseswithmembernames class * {\n    native <methods>;\n}"
+          }
+        }
+      ]
     ]
   }
 }
