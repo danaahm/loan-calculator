@@ -572,6 +572,11 @@ export const calculateRepaymentAfterRateChange = (
 export interface UpcomingCycle {
   date: string;
   amountDue: number;
+  /**
+   * What will still be owed when this repayment falls due, once every earlier
+   * projected repayment has been made. For the next one it is today's balance.
+   */
+  remainingBefore: number;
   remainingAfter: number;
 }
 
@@ -601,6 +606,7 @@ export const projectUpcomingCycles = (
       cycles.push({
         date: current.nextPaymentDate,
         amountDue: due,
+        remainingBefore: current.remainingBalance,
         remainingAfter: after.remainingBalance,
       });
       current = after;
@@ -624,6 +630,7 @@ export interface UpcomingRepayment {
   reminder: LoanReminder;
   date: string;
   amountDue: number;
+  remainingBefore: number;
   remainingAfter: number;
 }
 
@@ -648,6 +655,7 @@ export const buildUpcomingRepayments = (
           reminder,
           date: cycle.date,
           amountDue: cycle.amountDue,
+          remainingBefore: cycle.remainingBefore,
           remainingAfter: cycle.remainingAfter,
         });
       });

@@ -38,6 +38,9 @@ export const UpcomingRepaymentCard = ({
   );
   // Redundant when this repayment is itself the last one.
   const showPayoffDate = payoffDate !== null && payoffDate !== item.date;
+  // A later card is a later point in the loan: the balance and progress are
+  // as they will stand on its due date, not as they stand today.
+  const balanceThen = item.remainingBefore;
 
   if (!expanded) {
     return (
@@ -98,11 +101,14 @@ export const UpcomingRepaymentCard = ({
       ) : null}
       <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
         {t("reminderCard.remainingOf", {
-          remaining: formatCurrency(reminder.remainingBalance, reminder.currencyCode),
+          remaining: formatCurrency(balanceThen, reminder.currencyCode),
           original: formatCurrency(reminder.originalAmount, reminder.currencyCode),
         })}
       </Text>
-      <ProgressBar progress={payoffProgress(reminder)} showPercent />
+      <ProgressBar
+        progress={payoffProgress({ ...reminder, remainingBalance: balanceThen })}
+        showPercent
+      />
     </Pressable>
   );
 };

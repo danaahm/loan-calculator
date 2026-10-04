@@ -454,9 +454,9 @@ describe("projectUpcomingCycles", () => {
     );
 
     expect(cycles).toEqual([
-      { date: "2026-01-15", amountDue: 1_000, remainingAfter: 9_000 },
-      { date: "2026-02-15", amountDue: 1_000, remainingAfter: 8_000 },
-      { date: "2026-03-15", amountDue: 1_000, remainingAfter: 7_000 },
+      { date: "2026-01-15", amountDue: 1_000, remainingBefore: 10_000, remainingAfter: 9_000 },
+      { date: "2026-02-15", amountDue: 1_000, remainingBefore: 9_000, remainingAfter: 8_000 },
+      { date: "2026-03-15", amountDue: 1_000, remainingBefore: 8_000, remainingAfter: 7_000 },
     ]);
   });
 
@@ -532,6 +532,56 @@ describe("buildUpcomingRepayments", () => {
       "Car 2026-02-15",
     ]);
     expect(upcoming[0].key).toBe("car:2026-01-15");
+  });
+
+  it("shows each later repayment against the balance left by the ones before it", () => {
+    freezeToday("2026-01-10");
+    // A 7,000 loan with 500 already paid, repaid at 135 a month.
+    const upcoming = buildUpcomingRepayments(
+      [reminder({ originalAmount: 7_000, remainingBalance: 6_500, repaymentAmount: 135 })],
+      3
+    );
+
+    expect(upcoming.map((item) => item.remainingBefore)).toEqual([6_500, 6_365, 6_230]);
+  });
+
+  it("counts only the principal part of each repayment once interest applies", () => {
+    freezeToday("2026-01-10");
+    const upcoming = buildUpcomingRepayments(
+      [
+        reminder({
+          remainingBalance: 6_500,
+          repaymentAmount: 135,
+          annualInterestRatePercent: 12,
+        }),
+      ],
+      2
+    );
+
+    // 65 of the first 135 is interest (1% of 6,500), so 70 comes off.
+    expect(upcoming[0].remainingBefore).toBe(6_500);
+    expect(upcoming[1].remainingBefore).toBe(6_430);
+  });
+
+  it("keeps each loan's own running balance when several interleave", () => {
+    freezeToday("2026-01-10");
+    const upcoming = buildUpcomingRepayments(
+      [
+        reminder({ id: "car", name: "Car", remainingBalance: 5_000, repaymentAmount: 500 }),
+        reminder({
+          id: "home",
+          name: "Home",
+          remainingBalance: 9_000,
+          repaymentAmount: 1_000,
+          nextPaymentDate: "2026-01-20",
+        }),
+      ],
+      3
+    );
+
+    expect(
+      upcoming.map((item) => `${item.reminder.name} ${item.remainingBefore}`)
+    ).toEqual(["Car 5000", "Home 9000", "Car 4500"]);
   });
 
   it("fills the list from a single loan when only one is tracked", () => {
