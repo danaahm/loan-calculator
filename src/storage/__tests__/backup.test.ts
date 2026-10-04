@@ -29,6 +29,7 @@ const validFile = (overrides: Record<string, unknown> = {}): string =>
       settings: {
         themeMode: "dark",
         language: "en",
+        dateFormat: "dmy-dot",
         defaultCurrencyCode: "AUD",
         reminderNotificationsEnabled: true,
         defaultNotifyHour: 9,
@@ -66,6 +67,7 @@ describe("parseBackup", () => {
     expect(parsed.backup.data.profiles[0].name).toBe("Home loan");
     expect(parsed.backup.data.reminders[0].name).toBe("Car");
     expect(parsed.backup.data.settings.themeMode).toBe("dark");
+    expect(parsed.backup.data.settings.dateFormat).toBe("dmy-dot");
   });
 
   it("round-trips everything an export writes", () => {
@@ -254,6 +256,18 @@ describe("parseBackup", () => {
       expect(restored.rateChanges[0]).not.toHaveProperty("repaymentAmount");
     });
 
+    it("follows the device for a date format it does not recognise", () => {
+      const raw = validFile();
+      const file = JSON.parse(raw);
+      file.data.settings.dateFormat = "dd.MM.yyyy";
+      const parsed = parseBackup(JSON.stringify(file));
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) {
+        return;
+      }
+      expect(parsed.backup.data.settings.dateFormat).toBe("auto");
+    });
+
     it("migrates a profile written before the current input shape", () => {
       const raw = validFile({
         data: {
@@ -426,6 +440,7 @@ describe("serializeBackup", () => {
         settings: {
           themeMode: "auto",
           language: "en",
+          dateFormat: "auto",
           defaultCurrencyCode: null,
           reminderNotificationsEnabled: false,
           defaultNotifyHour: 9,

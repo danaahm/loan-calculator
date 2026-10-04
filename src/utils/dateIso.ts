@@ -1,4 +1,5 @@
 import { getActiveLanguage } from "../i18n/translate";
+import { formatDateWith, getActiveDateFormat } from "./dateFormat";
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -66,17 +67,12 @@ export const dateAtLocalHour = (iso: string, hour: number): Date => {
   return date;
 };
 
+/** Every date the app shows goes through here, in the user's chosen format. */
 export const formatDisplayDate = (iso: string): string => {
   if (!isValidIsoDate(iso)) {
     return iso;
   }
-  // Explicit language rather than `undefined`: the app's language is a user
-  // setting and may differ from the device locale.
-  return parseIsoDate(iso).toLocaleDateString(getActiveLanguage(), {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return formatDateWith(parseIsoDate(iso), getActiveDateFormat(), getActiveLanguage());
 };
 
 export const parseUserDate = (value: string): string | null => {

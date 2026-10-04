@@ -24,6 +24,7 @@ import {
 } from "../i18n/languages";
 import {
   DEFAULT_APP_SETTINGS,
+  isDateFormatSetting,
   type AppSettings,
   type ThemeMode,
 } from "../types/settings";
@@ -282,6 +283,9 @@ export const normalizeAppSettings = (
       ? parsed.themeMode
       : DEFAULT_APP_SETTINGS.themeMode,
     language: normalizeLanguage(parsed.language),
+    dateFormat: isDateFormatSetting(parsed.dateFormat)
+      ? parsed.dateFormat
+      : DEFAULT_APP_SETTINGS.dateFormat,
     defaultCurrencyCode: normalizeCurrencyCode(parsed.defaultCurrencyCode),
     reminderNotificationsEnabled: Boolean(parsed.reminderNotificationsEnabled),
     defaultNotifyHour: clampHour(parsed.defaultNotifyHour),

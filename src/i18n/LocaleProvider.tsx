@@ -9,6 +9,8 @@ import {
 } from "react";
 
 import { loadAppSettings, patchAppSettings } from "../storage/localState";
+import { DEFAULT_APP_SETTINGS, type DateFormatSetting } from "../types/settings";
+import { setActiveDateFormat } from "../utils/dateFormat";
 import { detectCurrencyCode } from "../utils/locale";
 import { FALLBACK_LANGUAGE, type LanguageCode } from "./languages";
 import { getActiveLanguage, setActiveLanguage, t, type TranslateValues } from "./translate";
@@ -17,11 +19,14 @@ interface LocaleContextValue {
   language: LanguageCode;
   /** Currency a brand-new loan or reminder starts with. Each one can differ. */
   defaultCurrencyCode: string;
+  /** The stored choice, which may be "auto"; dates render in its resolved form. */
+  dateFormat: DateFormatSetting;
   t: (key: string, values?: TranslateValues) => string;
   setLanguage: (language: LanguageCode) => void;
   setDefaultCurrencyCode: (currencyCode: string) => void;
+  setDateFormat: (dateFormat: DateFormatSetting) => void;
   /**
-   * Re-reads the stored language and currency. Needed after a restore or a
+   * Re-reads the stored language, currency and date format. Needed after a restore or a
    * wipe, which change settings underneath this provider.
    */
   reloadFromStorage: () => Promise<void>;
@@ -34,6 +39,9 @@ export const LocaleProvider = ({ children }: { children: ReactNode }) => {
   const [defaultCurrencyCode, setDefaultCurrencyState] = useState<string>(
     detectCurrencyCode()
   );
+  const [dateFormat, setDateFormatState] = useState<DateFormatSetting>(
+    DEFAULT_APP_SETTINGS.dateFormat
+  );
 
   const reloadFromStorage = useCallback(async () => {
     const settings = await loadAppSettings();
@@ -41,6 +49,8 @@ export const LocaleProvider = ({ children }: { children: ReactNode }) => {
     // A null code means "not chosen", so fall back to the device region rather
     // than leaving whatever the previous data happened to use.
     setDefaultCurrencyState(settings.defaultCurrencyCode ?? detectCurrencyCode());
+    setActiveDateFormat(settings.dateFormat);
+    setDateFormatState(settings.dateFormat);
   }, []);
 
   useEffect(() => {
@@ -59,20 +69,31 @@ export const LocaleProvider = ({ children }: { children: ReactNode }) => {
     patchAppSettings({ defaultCurrencyCode: next }).catch(() => {});
   }, []);
 
+  const setDateFormat = useCallback((next: DateFormatSetting) => {
+    // Singleton first, as with the language, so this render already uses it.
+    setActiveDateFormat(next);
+    setDateFormatState(next);
+    patchAppSettings({ dateFormat: next }).catch(() => {});
+  }, []);
+
   const value = useMemo(
     () => ({
       language,
       defaultCurrencyCode,
-      // Re-created per language so consumers re-render with fresh copy.
+      dateFormat,
+      // Re-created per language and date format so consumers re-render.
       t: (key: string, values?: TranslateValues) => t(key, values),
       setLanguage,
       setDefaultCurrencyCode,
+      setDateFormat,
       reloadFromStorage,
     }),
     [
+      dateFormat,
       defaultCurrencyCode,
       language,
       reloadFromStorage,
+      setDateFormat,
       setDefaultCurrencyCode,
       setLanguage,
     ]

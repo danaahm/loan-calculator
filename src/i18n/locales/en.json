@@ -441,6 +441,22 @@
   },
   "settings": {
     "title": "Settings",
+    "dateFormat": "Date format",
+    "dateFormatHint": "How dates are shown everywhere in the app, including reminder notifications.",
+    "dateFormats": {
+      "auto": "Match my device",
+      "autoHint": "Currently {example}",
+      "chosen": "Choose a format",
+      "chosenHint": "Pick one from a list",
+      "chosenValue": "{example} · {pattern}",
+      "pickerTitle": "Choose a date format",
+      "dmy-slash": "Day/month/year",
+      "d-mon-y": "Day, month name, year",
+      "dmy-dot": "Day.month.year",
+      "ymd-dash": "Year-month-day (ISO)",
+      "mdy-slash": "Month/day/year",
+      "mon-d-y": "Month name, day, year"
+    },
     "appearance": "Appearance",
     "appearanceHint": "Choose how the app looks",
     "theme": {
