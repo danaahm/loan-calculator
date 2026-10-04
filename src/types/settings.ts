@@ -1,4 +1,5 @@
 import { FALLBACK_LANGUAGE, type LanguageCode } from "../i18n/languages";
+import { type DateFormatSetting } from "./dateFormat";
 import { DEFAULT_DUE_THRESHOLDS } from "../utils/dueTone";
 
 export type ThemeMode = "auto" | "light" | "dark";
@@ -6,6 +7,7 @@ export type ThemeMode = "auto" | "light" | "dark";
 export interface AppSettings {
   themeMode: ThemeMode;
   language: LanguageCode;
+  dateFormat: DateFormatSetting;
   /**
    * Currency a brand-new loan or reminder starts with. Existing ones keep the
    * currency they were saved with, so a user can hold loans in several.
@@ -25,6 +27,7 @@ export interface AppSettings {
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   themeMode: "auto",
   language: FALLBACK_LANGUAGE,
+  dateFormat: "auto",
   defaultCurrencyCode: null,
   reminderNotificationsEnabled: false,
   defaultNotifyHour: 9,

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
@@ -60,6 +59,7 @@ import {
   type SavedLoanProfile,
 } from "./src/types/loan";
 import { type LoanReminder } from "./src/types/reminder";
+import { type DateFormatSetting } from "./src/types/dateFormat";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "./src/types/settings";
 import {
   calculateLoan,
@@ -68,6 +68,8 @@ import {
 } from "./src/utils/loanMath";
 import { formatCurrency, formatFrequencyLabel } from "./src/utils/format";
 import { buildSavedProfileCardSummary } from "./src/utils/profileSummary";
+import { getAppBuildInfo } from "./src/utils/appInfo";
+import { setActiveDateFormat } from "./src/utils/dateFormat";
 import { todayLocalIso } from "./src/utils/dateIso";
 import {
   addRateChange,
@@ -103,7 +105,7 @@ type AppScreen =
   | "compare";
 
 /** Stamped into a backup file so a support request can name the build. */
-const APP_VERSION = Constants.expoConfig?.version ?? "unknown";
+const APP_BUILD = getAppBuildInfo();
 
 const NAV_TABS: {
   id: TabScreen;
@@ -128,6 +130,9 @@ const DEFAULT_INPUT: LoanInput = {
   annualInterestRatePercent: 6.2,
   repaymentFrequency: "monthly",
   loanLengthYears: 30,
+  loanTermMode: "length",
+  loanStartDate: null,
+  loanEndDate: null,
   accountFeeEnabled: false,
   accountFee: 8,
   accountFeeFrequency: "monthly",
@@ -191,7 +196,7 @@ export default function App() {
 
 function AppContent() {
   const { colors, isDark } = useTheme();
-  const { t, defaultCurrencyCode } = useLocale();
+  const { t, defaultCurrencyCode, dateFormat } = useLocale();
   const { thresholds: dueThresholds } = useDueThresholds();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [screen, setScreen] = useState<AppScreen>("home");
@@ -232,6 +237,7 @@ function AppContent() {
   const editorBackRef = useRef<AppScreen>("reminders");
   const detailBackRef = useRef<AppScreen>("reminders");
   const remindersReturnRef = useRef<TabScreen>("home");
+  const notifiedDateFormatRef = useRef<DateFormatSetting | null>(null);
   const insets = useSafeAreaInsets();
 
   const inputHash = JSON.stringify(input);
@@ -401,6 +407,9 @@ function AppContent() {
     reminderSettingsRef.current = loadedSettings;
     const osStatus = await getOsPermissionStatus();
     setOsPermissionStatus(osStatus);
+    // LocaleProvider applies this too, but on its own read; the notifications
+    // scheduled just below must not race it and go out in the device format.
+    setActiveDateFormat(loadedSettings.dateFormat);
     const { reminders: caught, summaries } = catchUpReminders(
       loadedReminders,
       todayLocalIso()
@@ -434,6 +443,24 @@ function AppContent() {
       setLoadingState(false);
     });
   }, []);
+
+  // Scheduled notifications carry their due date as text, so a new date format
+  // has to rebuild them. The launch refill already used the stored format, so
+  // the first value seen after loading is only recorded.
+  useEffect(() => {
+    if (loadingState) {
+      return;
+    }
+    if (notifiedDateFormatRef.current === null) {
+      notifiedDateFormatRef.current = dateFormat;
+      return;
+    }
+    if (notifiedDateFormatRef.current === dateFormat) {
+      return;
+    }
+    notifiedDateFormatRef.current = dateFormat;
+    refillAndPersist(remindersRef.current).catch(() => {});
+  }, [dateFormat, loadingState]);
 
   const handleSubmit = async (nextInput: LoanInput) => {
     const normalized = normalizeInput(nextInput);
@@ -1020,7 +1047,7 @@ function AppContent() {
               onOpenPhoneSettings={() => {
                 openPhoneNotificationSettings().catch(() => {});
               }}
-              appVersion={APP_VERSION}
+              buildInfo={APP_BUILD}
               onDataReplaced={hydrateFromStorage}
               onNotify={showSnackbar}
             />
@@ -1098,10 +1125,10 @@ function AppContent() {
             onUndoLast={() => {
               updateReminder(undoLastPayment(detailReminder)).catch(() => {});
             }}
-            onAddRateChange={(effectiveDate, rate) => {
-              updateReminder(addRateChange(detailReminder, effectiveDate, rate)).catch(
-                () => {}
-              );
+            onAddRateChange={(effectiveDate, rate, repaymentAmount) => {
+              updateReminder(
+                addRateChange(detailReminder, effectiveDate, rate, repaymentAmount)
+              ).catch(() => {});
             }}
             onRemoveRateChange={(id) => {
               updateReminder(removeRateChange(detailReminder, id)).catch(() => {});

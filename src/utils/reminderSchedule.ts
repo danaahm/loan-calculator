@@ -57,6 +57,43 @@ export const nextFormulaDate = (
   }
 };
 
+/**
+ * The due date one cycle before `dueIso` under the formula schedule - the day
+ * the cycle ending on `dueIso` started accruing interest. Custom one-off dates
+ * are not tracked backwards, so a cycle that follows one is treated as a
+ * regular cycle.
+ */
+export const previousFormulaDate = (
+  dueIso: string,
+  frequency: RepaymentFrequency,
+  monthlyAnchor: MonthlyAnchor,
+  paymentDayOfMonth: number
+): string => {
+  switch (frequency) {
+    case "weekly":
+      return addDays(dueIso, -7);
+    case "fortnightly":
+      return addDays(dueIso, -14);
+    case "quarterly":
+      return addDays(dueIso, -91);
+    case "yearly":
+      return addDays(dueIso, -365);
+    case "monthly":
+    default: {
+      if (frequency === "monthly" && monthlyAnchor === "startOfMonth") {
+        const date = parseIsoDate(dueIso);
+        return formatLocalDate(new Date(date.getFullYear(), date.getMonth() - 1, 1));
+      }
+      if (frequency === "monthly" && monthlyAnchor === "endOfMonth") {
+        const date = parseIsoDate(dueIso);
+        // Day 0 of this month is the last day of the previous one.
+        return formatLocalDate(new Date(date.getFullYear(), date.getMonth(), 0));
+      }
+      return addMonthsClamped(dueIso, -1, paymentDayOfMonth);
+    }
+  }
+};
+
 export const advancePaymentDate = (
   reminder: Pick<
     LoanReminder,

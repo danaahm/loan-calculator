@@ -1,9 +1,11 @@
 import { type SavedLoanProfile } from "../../types/loan";
+import { type LoanReminder } from "../../types/reminder";
 import {
   addRateChange,
   amountDueForReminder,
   applyExtraPayment,
   buildUpcomingRepayments,
+  calculateRepaymentAfterRateChange,
   catchUpReminder,
   catchUpReminders,
   draftFromSavedProfile,
@@ -15,6 +17,7 @@ import {
   rateAsOf,
   refreshTermsFromProfile,
   removeRateChange,
+  repaymentAsOf,
   setReminderStatus,
   undoLastPayment,
 } from "../reminderMath";
@@ -134,7 +137,7 @@ describe("rate changes", () => {
     ]);
   });
 
-  it("charges the new rate on a repayment falling on the effective date", () => {
+  it("charges a change made on the due date from the following cycle", () => {
     const item = addRateChange(
       reminder({
         remainingBalance: 100_000,
@@ -147,10 +150,34 @@ describe("rate changes", () => {
       12
     );
 
-    const { reminder: caughtUp } = catchUpReminder(item, "2026-03-01");
-    // 100,000 at 12%/12 = 1,000, not the 500 the old 6% would have charged.
-    expect(caughtUp.payments[0].interestPortion).toBe(1_000);
-    expect(caughtUp.payments[0].principalPortion).toBe(1_000);
+    const { reminder: caughtUp } = catchUpReminder(item, "2026-04-01");
+    // The 1 March repayment settles February's interest, all accrued at 6%.
+    expect(caughtUp.payments[0].interestPortion).toBe(500);
+    expect(caughtUp.payments[0].principalPortion).toBe(1_500);
+    // March is the first month charged entirely at 12%: 98,500 at 1%.
+    expect(caughtUp.payments[1].interestPortion).toBe(985);
+  });
+
+  it("splits a mid-cycle change by the days each rate applied", () => {
+    const item = addRateChange(
+      reminder({
+        remainingBalance: 100_000,
+        annualInterestRatePercent: 6,
+        repaymentAmount: 2_000,
+        nextPaymentDate: "2026-04-01",
+        paymentDayOfMonth: 1,
+      }),
+      "2026-03-11",
+      12
+    );
+
+    const { reminder: caughtUp } = catchUpReminder(item, "2026-04-01");
+    // 10 of March's 31 days at 6% and 21 at 12%: an average of ~10.06%.
+    const averageRate = (6 * 10 + 12 * 21) / 31;
+    expect(caughtUp.payments[0].interestPortion).toBeCloseTo(
+      (100_000 * averageRate) / 100 / 12,
+      2
+    );
   });
 
   it("drops a change by id and leaves the rest in place", () => {
@@ -427,9 +454,9 @@ describe("projectUpcomingCycles", () => {
     );
 
     expect(cycles).toEqual([
-      { date: "2026-01-15", amountDue: 1_000, remainingAfter: 9_000 },
-      { date: "2026-02-15", amountDue: 1_000, remainingAfter: 8_000 },
-      { date: "2026-03-15", amountDue: 1_000, remainingAfter: 7_000 },
+      { date: "2026-01-15", amountDue: 1_000, remainingBefore: 10_000, remainingAfter: 9_000 },
+      { date: "2026-02-15", amountDue: 1_000, remainingBefore: 9_000, remainingAfter: 8_000 },
+      { date: "2026-03-15", amountDue: 1_000, remainingBefore: 8_000, remainingAfter: 7_000 },
     ]);
   });
 
@@ -505,6 +532,56 @@ describe("buildUpcomingRepayments", () => {
       "Car 2026-02-15",
     ]);
     expect(upcoming[0].key).toBe("car:2026-01-15");
+  });
+
+  it("shows each later repayment against the balance left by the ones before it", () => {
+    freezeToday("2026-01-10");
+    // A 7,000 loan with 500 already paid, repaid at 135 a month.
+    const upcoming = buildUpcomingRepayments(
+      [reminder({ originalAmount: 7_000, remainingBalance: 6_500, repaymentAmount: 135 })],
+      3
+    );
+
+    expect(upcoming.map((item) => item.remainingBefore)).toEqual([6_500, 6_365, 6_230]);
+  });
+
+  it("counts only the principal part of each repayment once interest applies", () => {
+    freezeToday("2026-01-10");
+    const upcoming = buildUpcomingRepayments(
+      [
+        reminder({
+          remainingBalance: 6_500,
+          repaymentAmount: 135,
+          annualInterestRatePercent: 12,
+        }),
+      ],
+      2
+    );
+
+    // 65 of the first 135 is interest (1% of 6,500), so 70 comes off.
+    expect(upcoming[0].remainingBefore).toBe(6_500);
+    expect(upcoming[1].remainingBefore).toBe(6_430);
+  });
+
+  it("keeps each loan's own running balance when several interleave", () => {
+    freezeToday("2026-01-10");
+    const upcoming = buildUpcomingRepayments(
+      [
+        reminder({ id: "car", name: "Car", remainingBalance: 5_000, repaymentAmount: 500 }),
+        reminder({
+          id: "home",
+          name: "Home",
+          remainingBalance: 9_000,
+          repaymentAmount: 1_000,
+          nextPaymentDate: "2026-01-20",
+        }),
+      ],
+      3
+    );
+
+    expect(
+      upcoming.map((item) => `${item.reminder.name} ${item.remainingBefore}`)
+    ).toEqual(["Car 5000", "Home 9000", "Car 4500"]);
   });
 
   it("fills the list from a single loan when only one is tracked", () => {
@@ -592,5 +669,307 @@ describe("saved profile handoff", () => {
     expect(refreshed.annualInterestRatePercent).toBe(7.25);
     expect(refreshed.remainingBalance).toBe(250_000);
     expect(refreshed.nextPaymentDate).toBe(tracked.nextPaymentDate);
+  });
+});
+
+describe("repayment set by a rate change", () => {
+  const withNewRepayment = () =>
+    addRateChange(
+      reminder({ remainingBalance: 10_000, repaymentAmount: 1_000 }),
+      "2026-03-01",
+      0,
+      1_250
+    );
+
+  it("takes over from its effective date", () => {
+    const item = withNewRepayment();
+    expect(repaymentAsOf(item, "2026-02-28")).toBe(1_000);
+    expect(repaymentAsOf(item, "2026-03-01")).toBe(1_250);
+  });
+
+  it("is what the amount due and the catch-up both use", () => {
+    const { reminder: caughtUp } = catchUpReminder(withNewRepayment(), "2026-03-15");
+
+    expect(caughtUp.payments.map((payment) => payment.amountPaid)).toEqual([
+      1_000, // 15 Jan
+      1_000, // 15 Feb
+      1_250, // 15 Mar, after the change
+    ]);
+    expect(caughtUp.remainingBalance).toBe(6_750);
+    expect(amountDueForReminder(caughtUp)).toBe(1_250);
+  });
+
+  it("leaves the repayment alone when the change does not set one", () => {
+    const item = addRateChange(reminder({ repaymentAmount: 1_000 }), "2026-03-01", 7);
+    expect(item.rateChanges[0].repaymentAmount).toBeUndefined();
+    expect(repaymentAsOf(item, "2026-06-01")).toBe(1_000);
+  });
+});
+
+describe("calculateRepaymentAfterRateChange", () => {
+  const tracked = (overrides: Partial<LoanReminder> = {}) =>
+    reminder({
+      remainingBalance: 12_000,
+      repaymentAmount: 1_000,
+      finalPaymentDate: "2026-12-15",
+      ...overrides,
+    });
+
+  it("spreads the projected balance over the repayments left at the new rate", () => {
+    // 15 Jan and 15 Feb fall before the change, leaving 10,000 owing and ten
+    // repayments (15 Mar to 15 Dec) to clear it at 1% a month.
+    const factor = Math.pow(1.01, 10);
+    const expected = (10_000 * 0.01 * factor) / (factor - 1);
+
+    expect(calculateRepaymentAfterRateChange(tracked(), "2026-03-01", 12)).toBeCloseTo(
+      expected,
+      2
+    );
+  });
+
+  it("counts a repayment on the effective date as one still to come", () => {
+    // Dropping to 0% with eleven repayments left (15 Feb to 15 Dec).
+    expect(calculateRepaymentAfterRateChange(tracked(), "2026-02-15", 0)).toBeCloseTo(
+      11_000 / 11,
+      2
+    );
+  });
+
+  it("sets the repayment on the loan balance, not the balance less the offset", () => {
+    const withOffset = tracked({ offsetBalance: 5_000 });
+    expect(calculateRepaymentAfterRateChange(withOffset, "2026-03-01", 12)).toBe(
+      calculateRepaymentAfterRateChange(tracked(), "2026-03-01", 12)
+    );
+  });
+
+  it("needs a final repayment date", () => {
+    expect(
+      calculateRepaymentAfterRateChange(
+        tracked({ finalPaymentDate: null }),
+        "2026-03-01",
+        12
+      )
+    ).toBeNull();
+  });
+
+  it("returns null when no repayment is left before the final date", () => {
+    expect(
+      calculateRepaymentAfterRateChange(
+        tracked({ finalPaymentDate: "2026-02-01" }),
+        "2026-03-01",
+        12
+      )
+    ).toBeNull();
+  });
+});
+
+describe("offset balance", () => {
+  it("charges interest on the balance less the offset", () => {
+    const { reminder: caughtUp } = catchUpReminder(
+      reminder({
+        remainingBalance: 100_000,
+        offsetBalance: 40_000,
+        annualInterestRatePercent: 12,
+        repaymentAmount: 1_500,
+      }),
+      "2026-01-15"
+    );
+
+    const payment = caughtUp.payments[0];
+    expect(payment.interestPortion).toBe(600); // 60,000 at 1%
+    expect(payment.principalPortion).toBe(900);
+    expect(caughtUp.remainingBalance).toBe(99_100);
+  });
+
+  it("charges no interest once the offset covers the balance", () => {
+    const { reminder: caughtUp } = catchUpReminder(
+      reminder({
+        remainingBalance: 10_000,
+        offsetBalance: 15_000,
+        annualInterestRatePercent: 12,
+        repaymentAmount: 1_000,
+      }),
+      "2026-01-15"
+    );
+    expect(caughtUp.payments[0].interestPortion).toBe(0);
+    expect(caughtUp.remainingBalance).toBe(9_000);
+  });
+
+  it("grows by its regular deposit each cycle without paying down the loan", () => {
+    const { reminder: caughtUp } = catchUpReminder(
+      reminder({
+        remainingBalance: 10_000,
+        offsetBalance: 2_000,
+        offsetDeposit: { amount: 500, frequency: "monthly" },
+      }),
+      "2026-03-15"
+    );
+    expect(caughtUp.offsetBalance).toBe(3_500);
+    expect(caughtUp.remainingBalance).toBe(7_000);
+  });
+
+  it("carries a weekly deposit across monthly cycles", () => {
+    const { reminder: caughtUp } = catchUpReminder(
+      reminder({
+        remainingBalance: 100_000,
+        offsetDeposit: { amount: 100, frequency: "weekly" },
+      }),
+      "2026-12-15"
+    );
+    // Twelve monthly cycles hold all 52 weekly deposits.
+    expect(caughtUp.offsetBalance).toBe(5_200);
+  });
+});
+
+describe("regular extra repayment", () => {
+  it("comes off the principal on top of the scheduled repayment", () => {
+    const { reminder: caughtUp } = catchUpReminder(
+      reminder({
+        remainingBalance: 10_000,
+        extraRepayment: { amount: 500, frequency: "monthly" },
+      }),
+      "2026-01-15"
+    );
+
+    const payment = caughtUp.payments[0];
+    expect(payment.principalPortion).toBe(1_000);
+    expect(payment.extraPortion).toBe(500);
+    expect(payment.amountPaid).toBe(1_500);
+    expect(caughtUp.remainingBalance).toBe(8_500);
+  });
+
+  it("lands only on the cycles its own frequency reaches", () => {
+    const { reminder: caughtUp } = catchUpReminder(
+      reminder({
+        remainingBalance: 100_000,
+        extraRepayment: { amount: 3_000, frequency: "quarterly" },
+      }),
+      "2026-06-15"
+    );
+    expect(caughtUp.payments.map((payment) => payment.extraPortion)).toEqual([
+      0, 0, 3_000, 0, 0, 3_000,
+    ]);
+  });
+
+  it("never takes more than is left owing", () => {
+    const { reminder: caughtUp } = catchUpReminder(
+      reminder({
+        remainingBalance: 1_200,
+        extraRepayment: { amount: 500, frequency: "monthly" },
+      }),
+      "2026-01-15"
+    );
+    expect(caughtUp.payments[0].extraPortion).toBe(200);
+    expect(caughtUp.status).toBe("completed");
+  });
+
+  it("brings the payoff date forward", () => {
+    const plain = reminder({ remainingBalance: 12_000 });
+    const withExtra = reminder({
+      remainingBalance: 12_000,
+      extraRepayment: { amount: 1_000, frequency: "monthly" },
+    });
+    expect(estimatePayoffDate(plain)).toBe("2026-12-15");
+    expect(estimatePayoffDate(withExtra)).toBe("2026-06-15");
+  });
+});
+
+describe("undo with offset and extras", () => {
+  it("restores the offset balance and both carries", () => {
+    const start = reminder({
+      remainingBalance: 10_000,
+      offsetBalance: 1_000,
+      offsetDeposit: { amount: 100, frequency: "weekly" },
+      extraRepayment: { amount: 300, frequency: "quarterly" },
+    });
+    const { reminder: caughtUp } = catchUpReminder(start, "2026-01-15");
+    const undone = undoLastPayment(caughtUp);
+
+    expect(undone.offsetBalance).toBe(1_000);
+    expect(undone.offsetEventCarry).toBe(start.offsetEventCarry);
+    expect(undone.extraEventCarry).toBe(start.extraEventCarry);
+  });
+
+  it("keeps today's offset when undoing a payment recorded before offsets existed", () => {
+    const { reminder: caughtUp } = catchUpReminder(reminder(), "2026-01-15");
+    const legacy: LoanReminder = {
+      ...caughtUp,
+      offsetBalance: 4_000,
+      payments: caughtUp.payments.map((payment) => {
+        const {
+          offsetBalance: _offset,
+          offsetEventCarry: _offsetCarry,
+          extraEventCarry: _extraCarry,
+          ...snapshot
+        } = payment.undoSnapshot;
+        return { ...payment, undoSnapshot: snapshot };
+      }),
+    };
+
+    expect(undoLastPayment(legacy).offsetBalance).toBe(4_000);
+  });
+});
+
+describe("saved profile handoff of offset, extras and end date", () => {
+  const profile = (overrides: Parameters<typeof loanInput>[0] = {}): SavedLoanProfile => ({
+    id: "profile-2",
+    name: "Offset loan",
+    input: loanInput({
+      offsetSavings: {
+        enabled: true,
+        amount: 20_000,
+        contribution: { enabled: true, amount: 1_000, frequency: "monthly" },
+      },
+      extraRepayment: { enabled: true, amount: 250, frequency: "fortnightly" },
+      ...overrides,
+    }),
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  });
+
+  it("carries the offset, its deposits and the extra repayment into a new reminder", () => {
+    const draft = draftFromSavedProfile(profile());
+
+    expect(draft.offsetBalance).toBe(20_000);
+    expect(draft.offsetDeposit).toEqual({ amount: 1_000, frequency: "monthly" });
+    expect(draft.extraRepayment).toEqual({ amount: 250, frequency: "fortnightly" });
+    expect(draft.finalPaymentDate).toBeNull();
+  });
+
+  it("leaves out sections switched off in the profile", () => {
+    const draft = draftFromSavedProfile(
+      profile({
+        offsetSavings: { enabled: false },
+        extraRepayment: { enabled: false },
+      })
+    );
+    expect(draft.offsetBalance).toBe(0);
+    expect(draft.offsetDeposit.amount).toBe(0);
+    expect(draft.extraRepayment.amount).toBe(0);
+  });
+
+  it("takes the final repayment date from a profile entered by end date", () => {
+    const draft = draftFromSavedProfile(
+      profile({
+        loanTermMode: "endDate",
+        loanStartDate: "2026-01-15",
+        loanEndDate: "2056-01-15",
+      })
+    );
+    expect(draft.finalPaymentDate).toBe("2056-01-15");
+  });
+
+  it("refreshes the regular amounts but keeps the tracked offset balance", () => {
+    const tracked = reminder({
+      offsetBalance: 35_000,
+      finalPaymentDate: "2050-01-15",
+    });
+    const refreshed = refreshTermsFromProfile(tracked, profile());
+
+    expect(refreshed.offsetBalance).toBe(35_000);
+    expect(refreshed.offsetDeposit.amount).toBe(1_000);
+    expect(refreshed.extraRepayment.amount).toBe(250);
+    // A profile entered by length has no end date to offer, so keep ours.
+    expect(refreshed.finalPaymentDate).toBe("2050-01-15");
   });
 });

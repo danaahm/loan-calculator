@@ -1,9 +1,11 @@
 import { t } from "../i18n/translate";
+import { daysBetween, isValidIsoDate, todayLocalIso } from "./dateIso";
 import {
   FREQUENCIES,
   type LoanCalculationResult,
   type LoanInput,
   type LoanSchedule,
+  type LoanTermMode,
   type OffsetContributionConfig,
   type PeriodRow,
   type RepaymentFrequency,
@@ -28,11 +30,39 @@ const safeRound = (value: number): number => {
   return Math.round(value * 100) / 100;
 };
 
+const AVERAGE_DAYS_PER_MONTH = 365.25 / 12;
+
+/**
+ * The loan term implied by a start date and a final repayment date, in the
+ * same decimal years `loanLengthYears` uses. Rounded to whole months, the
+ * smallest term the length fields can express, so a 30-year loan entered as
+ * dates calculates exactly like one entered as 30 years. Returns 0 when the
+ * dates are missing, invalid or out of order.
+ */
+export const loanYearsBetween = (
+  startIso: string | null,
+  endIso: string | null
+): number => {
+  if (!startIso || !endIso || !isValidIsoDate(startIso) || !isValidIsoDate(endIso)) {
+    return 0;
+  }
+  const days = daysBetween(startIso, endIso);
+  if (days <= 0) {
+    return 0;
+  }
+  const months = Math.max(1, Math.round(days / AVERAGE_DAYS_PER_MONTH));
+  return months / 12;
+};
+
 const getPeriodsPerYear = (frequency: RepaymentFrequency): number => {
   return FREQUENCY_PER_YEAR[frequency];
 };
 
-const calculateBaseRepayment = (
+/**
+ * The level repayment that clears `principal` (down to `futureValue`) over
+ * `numberOfPeriods` at `periodRate` per period.
+ */
+export const calculateBaseRepayment = (
   principal: number,
   periodRate: number,
   numberOfPeriods: number,
@@ -367,6 +397,9 @@ export const validateLoanInput = (input: LoanInput): LoanInputValidation => {
     if (input.amountBorrowed <= 0) {
       return t("validation.amountBorrowed");
     }
+    if (input.loanTermMode === "endDate" && input.loanLengthYears <= 0) {
+      return t("validation.loanEndDate");
+    }
     if (input.loanLengthYears <= 0) {
       return t("validation.loanLength");
     }
@@ -414,6 +447,17 @@ export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
     0,
     Math.round((legacyStartAfterPeriods / periodsPerYear) * 12)
   );
+  const validDateOrNull = (value: unknown): string | null =>
+    typeof value === "string" && isValidIsoDate(value) ? value : null;
+  // Profiles saved before end dates existed have no mode and were all lengths.
+  const loanTermMode: LoanTermMode =
+    input.loanTermMode === "endDate" ? "endDate" : "length";
+  const loanStartDate = validDateOrNull(input.loanStartDate);
+  const loanEndDate = validDateOrNull(input.loanEndDate);
+  const yearsFromDates =
+    loanTermMode === "endDate"
+      ? loanYearsBetween(loanStartDate ?? todayLocalIso(), loanEndDate)
+      : 0;
 
   return {
     currencyCode: input.currencyCode ?? "AUD",
@@ -422,8 +466,11 @@ export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
     repaymentFrequency,
     loanLengthYears: Math.max(
       MIN_LOAN_LENGTH_YEARS,
-      input.loanLengthYears ?? 1
+      yearsFromDates > 0 ? yearsFromDates : input.loanLengthYears ?? 1
     ),
+    loanTermMode,
+    loanStartDate,
+    loanEndDate,
     // Older saved profiles predate the toggle: a stored fee above zero means
     // the fee was in effect, so preserve that behaviour on load.
     accountFeeEnabled: input.accountFeeEnabled ?? (input.accountFee ?? 0) > 0,

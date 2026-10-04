@@ -22,7 +22,10 @@ import { useLocale } from "../i18n/LocaleProvider";
 import { SUPPORTED_LANGUAGES } from "../i18n/languages";
 import { useDueThresholds } from "../settings/DueThresholdsProvider";
 import { useTheme } from "../theme/ThemeProvider";
+import { DATE_FORMATS, type DateFormatSetting } from "../types/dateFormat";
 import { type ThemeMode } from "../types/settings";
+import { DEVELOPER_NAME, type AppBuildInfo } from "../utils/appInfo";
+import { formatDateWith, resolveDateFormat } from "../utils/dateFormat";
 import {
   DUE_SOON_DAY_OPTIONS,
   DUE_URGENT_DAY_OPTIONS,
@@ -38,7 +41,7 @@ interface SettingsScreenProps {
   onToggleReminderNotifications: (enabled: boolean) => void;
   onChangeNotifyHour: (hour: number) => void;
   onOpenPhoneSettings: () => void;
-  appVersion: string;
+  buildInfo: AppBuildInfo;
   onDataReplaced: () => Promise<void>;
   onNotify: (message: string) => void;
 }
@@ -46,6 +49,7 @@ interface SettingsScreenProps {
 const APPEARANCE_MODES: ThemeMode[] = ["auto", "light", "dark"];
 
 const NOTIFY_HOURS = [7, 8, 9, 10, 12, 18, 21];
+
 
 /**
  * Rendered through `Intl` rather than hand-built so a 24-hour language shows
@@ -83,7 +87,7 @@ export const SettingsScreen = ({
   onToggleReminderNotifications,
   onChangeNotifyHour,
   onOpenPhoneSettings,
-  appVersion,
+  buildInfo,
   onDataReplaced,
   onNotify,
 }: SettingsScreenProps) => {
@@ -95,10 +99,17 @@ export const SettingsScreen = ({
     setLanguage,
     defaultCurrencyCode,
     setDefaultCurrencyCode,
+    dateFormat,
+    setDateFormat,
   } = useLocale();
+  // Each option previews today's date, which says more than a pattern does.
+  const today = new Date();
+  const exampleDate = (option: DateFormatSetting) =>
+    formatDateWith(today, resolveDateFormat(option), language);
   const blockedOnPhone = osPermissionStatus === "denied";
   const currencies = useMemo(() => getAvailableCurrencies(), []);
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const [dateFormatPickerOpen, setDateFormatPickerOpen] = useState(false);
   const [dueBandPicker, setDueBandPicker] = useState<DueBand | null>(null);
 
   // Red has to stay strictly inside amber, so each list drops the values that
@@ -145,6 +156,89 @@ export const SettingsScreen = ({
         style={[
           styles.sectionCard,
           { backgroundColor: colors.card, borderColor: colors.cardBorder },
+        ]}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
+          {t("settings.dateFormat")}
+        </Text>
+        <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+          {t("settings.dateFormatHint")}
+        </Text>
+
+        {([
+          {
+            key: "auto",
+            selected: dateFormat === "auto",
+            title: t("settings.dateFormats.auto"),
+            hint: t("settings.dateFormats.autoHint", { example: exampleDate("auto") }),
+            onPress: () => setDateFormat("auto"),
+          },
+          {
+            key: "chosen",
+            selected: dateFormat !== "auto",
+            title: t("settings.dateFormats.chosen"),
+            hint:
+              dateFormat === "auto"
+                ? t("settings.dateFormats.chosenHint")
+                : t("settings.dateFormats.chosenValue", {
+                    example: exampleDate(dateFormat),
+                    pattern: t(`settings.dateFormats.${dateFormat}`),
+                  }),
+            onPress: () => setDateFormatPickerOpen(true),
+          },
+        ] as const).map((row) => (
+          <Pressable
+            key={row.key}
+            onPress={row.onPress}
+            style={[
+              styles.optionRow,
+              {
+                borderColor: row.selected ? colors.primary : colors.borderStrong,
+                backgroundColor: row.selected ? colors.primarySoft : colors.inputBg,
+              },
+            ]}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: row.selected }}
+          >
+            <View style={styles.optionCopy}>
+              <Text
+                style={[
+                  styles.optionTitle,
+                  { color: row.selected ? colors.accentTextDeep : colors.text },
+                ]}
+              >
+                {row.title}
+              </Text>
+              <Text style={[styles.optionHint, { color: colors.textMuted }]}>
+                {row.hint}
+              </Text>
+            </View>
+            {row.key === "chosen" ? (
+              <Ionicons
+                name="chevron-down"
+                size={18}
+                color={colors.textMuted}
+                style={styles.pickerChevron}
+              />
+            ) : null}
+            <View
+              style={[
+                styles.radioOuter,
+                { borderColor: row.selected ? colors.primary : colors.borderStrong },
+              ]}
+            >
+              {row.selected ? (
+                <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
+              ) : null}
+            </View>
+          </Pressable>
+        ))}
+      </View>
+
+      <View
+        style={[
+          styles.sectionCard,
+          { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
         ]}
       >
         <Text style={[styles.sectionTitle, { color: colors.accentText }]}>{t("settings.appearance")}</Text>
@@ -452,10 +546,37 @@ export const SettingsScreen = ({
       </View>
 
       <DataSection
-        appVersion={appVersion}
+        appVersion={buildInfo.version}
         onDataReplaced={onDataReplaced}
         onNotify={onNotify}
       />
+
+      <View style={styles.footer}>
+        {/* Selectable so a user can paste exactly which build they run. */}
+        <Text selectable style={[styles.footerVersion, { color: colors.textSecondary }]}>
+          {buildInfo.buildNumber
+            ? t("settings.about.versionWithBuild", {
+                version: buildInfo.version,
+                build: buildInfo.buildNumber,
+              })
+            : t("settings.about.version", { version: buildInfo.version })}
+        </Text>
+        {buildInfo.binaryVersion ? (
+          <Text selectable style={[styles.footerDetail, { color: colors.textMuted }]}>
+            {t("settings.about.binaryVersion", { version: buildInfo.binaryVersion })}
+          </Text>
+        ) : null}
+        {buildInfo.channel !== "production" ? (
+          <View style={[styles.footerBadge, { borderColor: colors.borderStrong }]}>
+            <Text style={[styles.footerBadgeText, { color: colors.textSecondary }]}>
+              {t(`settings.about.channel.${buildInfo.channel}`)}
+            </Text>
+          </View>
+        ) : null}
+        <Text style={[styles.footerSignature, { color: colors.textMuted }]}>
+          {t("settings.about.madeBy", { name: DEVELOPER_NAME })}
+        </Text>
+      </View>
 
       <Modal
         visible={dueBandPicker !== null}
@@ -541,6 +662,83 @@ export const SettingsScreen = ({
       </Modal>
 
       <Modal
+        visible={dateFormatPickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setDateFormatPickerOpen(false)}
+      >
+        <Pressable
+          style={[styles.sheetBackdrop, { backgroundColor: colors.modalBackdrop }]}
+          onPress={() => setDateFormatPickerOpen(false)}
+        >
+          {/* Swallows taps on the sheet itself so only the backdrop closes it. */}
+          <Pressable
+            style={[styles.sheet, { backgroundColor: colors.card }]}
+            onPress={() => {}}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              {t("settings.dateFormats.pickerTitle")}
+            </Text>
+            <ScrollView>
+              {DATE_FORMATS.map((format) => {
+                const selected = dateFormat === format;
+                return (
+                  <Pressable
+                    key={format}
+                    onPress={() => {
+                      setDateFormat(format);
+                      setDateFormatPickerOpen(false);
+                    }}
+                    style={[
+                      styles.optionRow,
+                      {
+                        borderColor: selected ? colors.primary : colors.borderStrong,
+                        backgroundColor: selected ? colors.primarySoft : colors.inputBg,
+                      },
+                    ]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                  >
+                    <View style={styles.optionCopy}>
+                      <Text
+                        style={[
+                          styles.optionTitle,
+                          { color: selected ? colors.accentTextDeep : colors.text },
+                        ]}
+                      >
+                        {exampleDate(format)}
+                      </Text>
+                      <Text style={[styles.optionHint, { color: colors.textMuted }]}>
+                        {t(`settings.dateFormats.${format}`)}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.radioOuter,
+                        { borderColor: selected ? colors.primary : colors.borderStrong },
+                      ]}
+                    >
+                      {selected ? (
+                        <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Pressable
+              style={[styles.modalCloseButton, { backgroundColor: colors.primary }]}
+              onPress={() => setDateFormatPickerOpen(false)}
+            >
+              <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
+                {t("common.close")}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
         visible={currencyModalVisible}
         animationType="slide"
         onRequestClose={() => setCurrencyModalVisible(false)}
@@ -605,6 +803,34 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
   },
+  footer: {
+    marginTop: 24,
+    alignItems: "center",
+    gap: 6,
+  },
+  footerVersion: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  footerBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+  },
+  footerBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  footerDetail: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  footerSignature: {
+    fontSize: 12,
+    fontWeight: "600",
+    fontStyle: "italic",
+  },
   backRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -655,6 +881,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontWeight: "600",
     fontSize: 13,
+  },
+  pickerChevron: {
+    marginRight: 8,
   },
   radioOuter: {
     width: 22,

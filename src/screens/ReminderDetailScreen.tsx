@@ -21,6 +21,7 @@ import { REMINDER_DISCLAIMER, type LoanReminder } from "../types/reminder";
 import { formatDisplayDate, todayLocalIso } from "../utils/dateIso";
 import {
   formatGroupedNumberInput,
+  formatGroupedNumberValue,
   formatPlainNumberInput,
 } from "../utils/numberInput";
 import {
@@ -31,6 +32,7 @@ import {
 } from "../utils/format";
 import {
   amountDueForReminder,
+  calculateRepaymentAfterRateChange,
   estimatePayoffDate,
   listUpcomingDates,
   payoffProgress,
@@ -46,7 +48,11 @@ interface ReminderDetailScreenProps {
   onToggleNotifications: (enabled: boolean) => void;
   onExtraPayment: (amount: number) => void;
   onUndoLast: () => void;
-  onAddRateChange: (effectiveDate: string, rate: number) => void;
+  onAddRateChange: (
+    effectiveDate: string,
+    rate: number,
+    repaymentAmount: number | null
+  ) => void;
   onRemoveRateChange: (id: string) => void;
   onArchive: () => void;
   onUnarchive: () => void;
@@ -75,6 +81,7 @@ export const ReminderDetailScreen = ({
   const [extraInput, setExtraInput] = useState("");
   const [rateDate, setRateDate] = useState(todayLocalIso());
   const [rateInput, setRateInput] = useState("");
+  const [rateRepaymentInput, setRateRepaymentInput] = useState("");
   const due = amountDueForReminder(reminder);
   const payoff = estimatePayoffDate(reminder);
   const upcoming = listUpcomingDates(reminder, 6);
@@ -83,6 +90,14 @@ export const ReminderDetailScreen = ({
     left.effectiveDate.localeCompare(right.effectiveDate)
   );
   const progress = payoffProgress(reminder);
+  const parsedNewRate = Number(rateInput.replace(/,/g, ""));
+  const calculatedRepayment = useMemo(
+    () =>
+      rateInput.trim() !== "" && Number.isFinite(parsedNewRate) && parsedNewRate >= 0
+        ? calculateRepaymentAfterRateChange(reminder, rateDate, parsedNewRate)
+        : null,
+    [parsedNewRate, rateDate, rateInput, reminder]
+  );
   const lastPayments = useMemo(
     () => [...reminder.payments].reverse().slice(0, 8),
     [reminder.payments]
@@ -104,8 +119,15 @@ export const ReminderDetailScreen = ({
       Alert.alert(t("detail.rateRequired"), t("detail.rateRequiredBody"));
       return;
     }
-    onAddRateChange(rateDate, rate);
+    const repaymentText = rateRepaymentInput.replace(/,/g, "").trim();
+    const repayment = repaymentText === "" ? null : Number(repaymentText);
+    if (repayment !== null && (!Number.isFinite(repayment) || repayment <= 0)) {
+      Alert.alert(t("detail.amountRequired"), t("detail.amountRequiredBody"));
+      return;
+    }
+    onAddRateChange(rateDate, rate, repayment);
     setRateInput("");
+    setRateRepaymentInput("");
   };
 
   return (
@@ -158,6 +180,51 @@ export const ReminderDetailScreen = ({
           <Text style={[styles.rowValue, { color: colors.text }]}>
             {t("detail.rateAsOfToday", { rate: formatPercent(currentRate) })}
           </Text>
+          {reminder.offsetBalance > 0 || reminder.offsetDeposit.amount > 0 ? (
+            <>
+              <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+                {t("detail.offsetBalance")}
+              </Text>
+              <Text style={[styles.rowValue, { color: colors.text }]}>
+                {formatCurrency(reminder.offsetBalance, reminder.currencyCode)}
+                {reminder.offsetDeposit.amount > 0
+                  ? ` · ${t("detail.recurringAmount", {
+                      amount: formatCurrency(
+                        reminder.offsetDeposit.amount,
+                        reminder.currencyCode
+                      ),
+                      frequency: formatFrequencyLabel(reminder.offsetDeposit.frequency),
+                    })}`
+                  : ""}
+              </Text>
+            </>
+          ) : null}
+          {reminder.extraRepayment.amount > 0 ? (
+            <>
+              <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+                {t("detail.regularExtra")}
+              </Text>
+              <Text style={[styles.rowValue, { color: colors.text }]}>
+                {t("detail.recurringAmount", {
+                  amount: formatCurrency(
+                    reminder.extraRepayment.amount,
+                    reminder.currencyCode
+                  ),
+                  frequency: formatFrequencyLabel(reminder.extraRepayment.frequency),
+                })}
+              </Text>
+            </>
+          ) : null}
+          {reminder.finalPaymentDate ? (
+            <>
+              <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+                {t("detail.finalRepayment")}
+              </Text>
+              <Text style={[styles.rowValue, { color: colors.text }]}>
+                {formatDisplayDate(reminder.finalPaymentDate)}
+              </Text>
+            </>
+          ) : null}
           {payoff ? (
             <>
               <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
@@ -190,7 +257,15 @@ export const ReminderDetailScreen = ({
                       {formatDisplayDate(change.effectiveDate)}
                     </Text>
                     <Text style={[styles.hint, { color: colors.textMuted }]}>
-                      {formatPercent(change.annualInterestRatePercent)}
+                      {change.repaymentAmount != null
+                        ? t("detail.rateWithRepayment", {
+                            rate: formatPercent(change.annualInterestRatePercent),
+                            repayment: formatCurrency(
+                              change.repaymentAmount,
+                              reminder.currencyCode
+                            ),
+                          })
+                        : formatPercent(change.annualInterestRatePercent)}
                     </Text>
                   </View>
                   <Pressable
@@ -208,29 +283,68 @@ export const ReminderDetailScreen = ({
           <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{t("detail.effectiveDate")}</Text>
           <DatePickerField value={rateDate} onChange={setRateDate} />
           <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{t("detail.newRate")}</Text>
-          <View style={styles.row}>
-            <TextInput
-              keyboardType="decimal-pad"
-              value={rateInput}
-              onChangeText={(value) => setRateInput(formatPlainNumberInput(value))}
-              placeholder={t("detail.ratePlaceholder")}
-              placeholderTextColor={colors.textMuted}
-              style={[
-                styles.input,
-                {
-                  color: colors.text,
-                  backgroundColor: colors.inputBg,
-                  borderColor: colors.borderStrong,
-                },
-              ]}
-            />
+          <TextInput
+            keyboardType="decimal-pad"
+            value={rateInput}
+            onChangeText={(value) => setRateInput(formatPlainNumberInput(value))}
+            placeholder={t("detail.ratePlaceholder")}
+            placeholderTextColor={colors.textMuted}
+            style={[
+              styles.input,
+              {
+                color: colors.text,
+                backgroundColor: colors.inputBg,
+                borderColor: colors.borderStrong,
+              },
+            ]}
+          />
+          <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+            {t("detail.newRepayment")}
+          </Text>
+          <TextInput
+            keyboardType="decimal-pad"
+            value={rateRepaymentInput}
+            onChangeText={(value) => setRateRepaymentInput(formatGroupedNumberInput(value))}
+            placeholder={t("detail.newRepaymentPlaceholder")}
+            placeholderTextColor={colors.textMuted}
+            style={[
+              styles.input,
+              {
+                color: colors.text,
+                backgroundColor: colors.inputBg,
+                borderColor: colors.borderStrong,
+              },
+            ]}
+          />
+          {calculatedRepayment !== null ? (
             <Pressable
-              onPress={submitRateChange}
-              style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+              onPress={() =>
+                setRateRepaymentInput(formatGroupedNumberValue(calculatedRepayment))
+              }
+              style={[styles.secondaryBtn, { borderColor: colors.borderStrong }]}
             >
-              <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>{t("common.add")}</Text>
+              <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
+                {t("detail.useCalculatedRepayment", {
+                  amount: formatCurrency(calculatedRepayment, reminder.currencyCode),
+                  date: formatDisplayDate(reminder.finalPaymentDate ?? ""),
+                })}
+              </Text>
             </Pressable>
-          </View>
+          ) : (
+            <Text style={[styles.hint, { color: colors.textMuted, marginTop: 6 }]}>
+              {reminder.finalPaymentDate
+                ? t("detail.newRepaymentHint")
+                : t("detail.newRepaymentNeedsFinalDate")}
+            </Text>
+          )}
+          <Pressable
+            onPress={submitRateChange}
+            style={[styles.primaryBtnFull, { backgroundColor: colors.primary, marginTop: 10, marginBottom: 0 }]}
+          >
+            <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>
+              {t("detail.addRateChange")}
+            </Text>
+          </Pressable>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -307,6 +421,13 @@ export const ReminderDetailScreen = ({
                     source: t(`detail.source.${item.source}`),
                   })}
                 </Text>
+                {item.extraPortion ? (
+                  <Text style={[styles.hint, { color: colors.textMuted, marginBottom: 0 }]}>
+                    {t("detail.historyExtra", {
+                      amount: formatCurrency(item.extraPortion, reminder.currencyCode),
+                    })}
+                  </Text>
+                ) : null}
                 <Text style={[styles.hint, { color: colors.textMuted }]}>
                   {t("detail.historyAmounts", {
                     paid: formatCurrency(item.amountPaid, reminder.currencyCode),

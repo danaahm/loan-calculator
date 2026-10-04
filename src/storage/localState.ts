@@ -14,6 +14,7 @@ import {
   type NotifyLead,
   type ReminderPayment,
   type ReminderRateChange,
+  type ReminderRecurringAmount,
   type ReminderStatus,
 } from "../types/reminder";
 import {
@@ -21,6 +22,7 @@ import {
   isSupportedLanguage,
   type LanguageCode,
 } from "../i18n/languages";
+import { isDateFormatSetting } from "../types/dateFormat";
 import {
   DEFAULT_APP_SETTINGS,
   type AppSettings,
@@ -105,11 +107,35 @@ const normalizeRateChanges = (value: unknown): ReminderRateChange[] => {
         Number.isFinite(change.annualInterestRatePercent)
       );
     })
-    .map((item) => ({
-      ...item,
-      annualInterestRatePercent: Math.max(0, item.annualInterestRatePercent),
-    }))
+    .map((item) => {
+      const { repaymentAmount, ...rest } = item;
+      const repayment = Number(repaymentAmount);
+      return {
+        ...rest,
+        annualInterestRatePercent: Math.max(0, item.annualInterestRatePercent),
+        // Dropped rather than zeroed: a zero repayment would stall the loan.
+        ...(Number.isFinite(repayment) && repayment > 0
+          ? { repaymentAmount: repayment }
+          : {}),
+      };
+    })
     .sort((left, right) => left.effectiveDate.localeCompare(right.effectiveDate));
+};
+
+/** Reminders saved before regular amounts existed read as switched off. */
+const normalizeRecurringAmount = (value: unknown): ReminderRecurringAmount => {
+  const raw = (value && typeof value === "object" ? value : {}) as Partial<
+    Record<keyof ReminderRecurringAmount, unknown>
+  >;
+  return {
+    amount: Math.max(0, Number(raw.amount) || 0),
+    frequency: isFrequency(raw.frequency) ? raw.frequency : "monthly",
+  };
+};
+
+const normalizeCarry = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed < 1 ? parsed : 0;
 };
 
 const normalizePayments = (value: unknown): ReminderPayment[] => {
@@ -175,6 +201,15 @@ export const normalizeReminder = (raw: Partial<LoanReminder>): LoanReminder | nu
       ? raw.accountFeeFrequency
       : "monthly",
     feeEventCarry: Math.max(0, Number(raw.feeEventCarry) || 0),
+    finalPaymentDate:
+      typeof raw.finalPaymentDate === "string" && isValidIsoDate(raw.finalPaymentDate)
+        ? raw.finalPaymentDate
+        : null,
+    offsetBalance: Math.max(0, Number(raw.offsetBalance) || 0),
+    offsetDeposit: normalizeRecurringAmount(raw.offsetDeposit),
+    offsetEventCarry: normalizeCarry(raw.offsetEventCarry),
+    extraRepayment: normalizeRecurringAmount(raw.extraRepayment),
+    extraEventCarry: normalizeCarry(raw.extraEventCarry),
     notificationsEnabled: Boolean(raw.notificationsEnabled),
     notifyLeads: normalizeLeads(raw.notifyLeads),
     status: isReminderStatus(raw.status) ? raw.status : "active",
@@ -248,6 +283,9 @@ export const normalizeAppSettings = (
       ? parsed.themeMode
       : DEFAULT_APP_SETTINGS.themeMode,
     language: normalizeLanguage(parsed.language),
+    dateFormat: isDateFormatSetting(parsed.dateFormat)
+      ? parsed.dateFormat
+      : DEFAULT_APP_SETTINGS.dateFormat,
     defaultCurrencyCode: normalizeCurrencyCode(parsed.defaultCurrencyCode),
     reminderNotificationsEnabled: Boolean(parsed.reminderNotificationsEnabled),
     defaultNotifyHour: clampHour(parsed.defaultNotifyHour),

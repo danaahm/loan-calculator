@@ -11,6 +11,8 @@ import {
 } from "react-native";
 
 import { useTranslation } from "../i18n/LocaleProvider";
+import { addMonthsClamped, parseIsoDate, todayLocalIso } from "../utils/dateIso";
+import { loanYearsBetween } from "../utils/loanMath";
 import {
   formatGroupedNumberInput,
   formatGroupedNumberValue,
@@ -25,6 +27,7 @@ import {
   FREQUENCIES,
   type ExtraRepaymentStartUnit,
   type LoanInput,
+  type LoanTermMode,
   type RepaymentFrequency,
 } from "../types/loan";
 import {
@@ -34,9 +37,11 @@ import {
   getCurrencySymbol,
   type CurrencyOption,
   formatFrequencyLabel,
+  formatLoanLengthLabel,
 } from "../utils/format";
 import { CardHeader } from "./CardHeader";
 import { CollapsibleSection } from "./CollapsibleSection";
+import { DatePickerField } from "./DatePickerField";
 
 type FormStyles = ReturnType<typeof createStyles>;
 
@@ -134,6 +139,15 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
   const [loanLengthMonths, setLoanLengthMonths] = useState(
     formatNumberForInputOrBlank(decomposeLoanYears(initialValue.loanLengthYears).months)
   );
+  const [loanTermMode, setLoanTermMode] = useState<LoanTermMode>(
+    initialValue.loanTermMode
+  );
+  const [loanStartDate, setLoanStartDate] = useState(
+    initialValue.loanStartDate ?? todayLocalIso()
+  );
+  const [loanEndDate, setLoanEndDate] = useState<string | null>(
+    initialValue.loanEndDate
+  );
   const [accountFeeEnabled, setAccountFeeEnabled] = useState(
     initialValue.accountFeeEnabled
   );
@@ -180,6 +194,9 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
     const loanLength = decomposeLoanYears(initialValue.loanLengthYears);
     setLoanLengthYears(formatNumberForInputOrBlank(loanLength.years));
     setLoanLengthMonths(formatNumberForInputOrBlank(loanLength.months));
+    setLoanTermMode(initialValue.loanTermMode);
+    setLoanStartDate(initialValue.loanStartDate ?? todayLocalIso());
+    setLoanEndDate(initialValue.loanEndDate);
     setAccountFeeEnabled(initialValue.accountFeeEnabled);
     setAccountFee(formatNumberForInput(initialValue.accountFee));
     setRepaymentFrequency(initialValue.repaymentFrequency);
@@ -202,16 +219,45 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
     setOffsetContributionFrequency(defaultOffsetContribution(initialValue).frequency);
   }, [initialValue]);
 
+  const termFromLength = composeLoanYears(
+    parsePositiveInt(loanLengthYears),
+    parsePositiveInt(loanLengthMonths)
+  );
+  const termFromDates = loanYearsBetween(loanStartDate, loanEndDate);
+
+  // Carry the term across when switching, so neither mode starts blank.
+  const changeTermMode = (next: LoanTermMode) => {
+    if (next === loanTermMode) {
+      return;
+    }
+    if (next === "endDate" && !loanEndDate && termFromLength > 0) {
+      setLoanEndDate(
+        addMonthsClamped(
+          loanStartDate,
+          Math.round(termFromLength * 12),
+          parseIsoDate(loanStartDate).getDate()
+        )
+      );
+    }
+    if (next === "length" && termFromDates > 0) {
+      const parts = decomposeLoanYears(termFromDates);
+      setLoanLengthYears(formatNumberForInputOrBlank(parts.years));
+      setLoanLengthMonths(formatNumberForInputOrBlank(parts.months));
+    }
+    setLoanTermMode(next);
+  };
+
   const fieldValue = useMemo<LoanInput>(() => {
     return {
       currencyCode,
       amountBorrowed: parsePositiveNumber(amountBorrowed),
       annualInterestRatePercent: parsePositiveNumber(interestRate),
       repaymentFrequency,
-      loanLengthYears: composeLoanYears(
-        parsePositiveInt(loanLengthYears),
-        parsePositiveInt(loanLengthMonths)
-      ),
+      loanLengthYears:
+        loanTermMode === "endDate" ? termFromDates : termFromLength,
+      loanTermMode,
+      loanStartDate: loanTermMode === "endDate" ? loanStartDate : null,
+      loanEndDate: loanTermMode === "endDate" ? loanEndDate : null,
       accountFeeEnabled,
       accountFee: parsePositiveNumber(accountFee),
       accountFeeFrequency,
@@ -250,14 +296,17 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
     lumpSumAmount,
     lumpSumEnabled,
     interestRate,
-    loanLengthMonths,
-    loanLengthYears,
+    loanEndDate,
+    loanStartDate,
+    loanTermMode,
     offsetAmount,
     offsetContributionAmount,
     offsetContributionEnabled,
     offsetContributionFrequency,
     offsetEnabled,
     repaymentFrequency,
+    termFromDates,
+    termFromLength,
   ]);
   const moneySymbol = useMemo(() => getCurrencySymbol(currencyCode), [currencyCode]);
 
@@ -348,34 +397,79 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           />
 
           <Text style={styles.label}>{t("loanForm.loanLength")}</Text>
-          <View style={styles.loanLengthRow}>
-            <View style={styles.startAfterInputWrap}>
-              <TextInput
-                keyboardType="number-pad"
-                value={loanLengthYears}
-                onChangeText={(value) =>
-                  setLoanLengthYears(clampWholeNumberInput(value))
-                }
-                style={styles.simpleInput}
-                placeholder={t("loanForm.yearsPlaceholder")}
-                placeholderTextColor={colors.textMuted}
-              />
-              <Text style={styles.fieldUnitText}>{t("loanForm.unitYears")}</Text>
-            </View>
-            <View style={styles.startAfterInputWrap}>
-              <TextInput
-                keyboardType="number-pad"
-                value={loanLengthMonths}
-                onChangeText={(value) =>
-                  setLoanLengthMonths(clampWholeNumberInput(value, 11))
-                }
-                style={styles.simpleInput}
-                placeholder="0"
-                placeholderTextColor={colors.textMuted}
-              />
-              <Text style={styles.fieldUnitText}>{t("loanForm.unitMonthsOptional")}</Text>
-            </View>
+          <View style={[styles.startAfterToggle, styles.termModeToggle]}>
+            {(["length", "endDate"] as const).map((mode) => (
+              <Pressable
+                key={mode}
+                style={[
+                  styles.startAfterToggleButton,
+                  styles.termModeButton,
+                  loanTermMode === mode && styles.startAfterToggleButtonActive,
+                ]}
+                onPress={() => changeTermMode(mode)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: loanTermMode === mode }}
+              >
+                <Text
+                  style={[
+                    styles.startAfterToggleText,
+                    loanTermMode === mode && styles.startAfterToggleTextActive,
+                  ]}
+                >
+                  {t(mode === "length" ? "loanForm.termByLength" : "loanForm.termByEndDate")}
+                </Text>
+              </Pressable>
+            ))}
           </View>
+          {loanTermMode === "endDate" ? (
+            <View>
+              <Text style={styles.label}>{t("loanForm.loanStartDate")}</Text>
+              <DatePickerField value={loanStartDate} onChange={setLoanStartDate} />
+              <Text style={styles.label}>{t("loanForm.loanEndDate")}</Text>
+              <DatePickerField
+                value={loanEndDate}
+                onChange={setLoanEndDate}
+                placeholderKey="loanForm.loanEndDatePlaceholder"
+                minimumDate={parseIsoDate(loanStartDate)}
+              />
+              <Text style={styles.hintText}>
+                {termFromDates > 0
+                  ? t("loanForm.termFromDates", {
+                      term: formatLoanLengthLabel(termFromDates),
+                    })
+                  : t("loanForm.endDateHint")}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.loanLengthRow}>
+              <View style={styles.startAfterInputWrap}>
+                <TextInput
+                  keyboardType="number-pad"
+                  value={loanLengthYears}
+                  onChangeText={(value) =>
+                    setLoanLengthYears(clampWholeNumberInput(value))
+                  }
+                  style={styles.simpleInput}
+                  placeholder={t("loanForm.yearsPlaceholder")}
+                  placeholderTextColor={colors.textMuted}
+                />
+                <Text style={styles.fieldUnitText}>{t("loanForm.unitYears")}</Text>
+              </View>
+              <View style={styles.startAfterInputWrap}>
+                <TextInput
+                  keyboardType="number-pad"
+                  value={loanLengthMonths}
+                  onChangeText={(value) =>
+                    setLoanLengthMonths(clampWholeNumberInput(value, 11))
+                  }
+                  style={styles.simpleInput}
+                  placeholder="0"
+                  placeholderTextColor={colors.textMuted}
+                />
+                <Text style={styles.fieldUnitText}>{t("loanForm.unitMonthsOptional")}</Text>
+              </View>
+            </View>
+          )}
 
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>{t("loanForm.enableAccountFee")}</Text>
@@ -775,6 +869,13 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: 10,
       paddingHorizontal: 12,
       backgroundColor: colors.inputBg,
+    },
+    termModeToggle: {
+      alignSelf: "flex-start",
+      marginBottom: 4,
+    },
+    termModeButton: {
+      paddingHorizontal: 16,
     },
     startAfterToggleButtonActive: {
       backgroundColor: colors.primarySoft,

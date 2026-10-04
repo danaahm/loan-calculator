@@ -1,4 +1,5 @@
 import { getActiveLanguage } from "../i18n/translate";
+import { formatDateWith, getActiveDateFormat } from "./dateFormat";
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -36,6 +37,13 @@ export const addDays = (iso: string, days: number): string => {
   return formatLocalDate(date);
 };
 
+/** Whole days from `fromIso` to `toIso`; negative when `toIso` is earlier. */
+export const daysBetween = (fromIso: string, toIso: string): number => {
+  const ms = parseIsoDate(toIso).getTime() - parseIsoDate(fromIso).getTime();
+  // Rounded so a daylight-saving shift inside the range cannot cost a day.
+  return Math.round(ms / 86400000);
+};
+
 export const lastDayOfMonth = (year: number, monthIndex: number): number => {
   return new Date(year, monthIndex + 1, 0).getDate();
 };
@@ -59,17 +67,12 @@ export const dateAtLocalHour = (iso: string, hour: number): Date => {
   return date;
 };
 
+/** Every date the app shows goes through here, in the user's chosen format. */
 export const formatDisplayDate = (iso: string): string => {
   if (!isValidIsoDate(iso)) {
     return iso;
   }
-  // Explicit language rather than `undefined`: the app's language is a user
-  // setting and may differ from the device locale.
-  return parseIsoDate(iso).toLocaleDateString(getActiveLanguage(), {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return formatDateWith(parseIsoDate(iso), getActiveDateFormat(), getActiveLanguage());
 };
 
 export const parseUserDate = (value: string): string | null => {
