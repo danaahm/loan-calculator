@@ -5,6 +5,8 @@ export type RepaymentFrequency =
   | "fortnightly"
   | "weekly";
 export type ExtraRepaymentStartUnit = "months" | "years";
+/** How the user expressed the loan term: as a length, or as start and end dates. */
+export type LoanTermMode = "length" | "endDate";
 
 export interface ExtraRepaymentConfig {
   enabled: boolean;
@@ -36,7 +38,15 @@ export interface LoanInput {
   amountBorrowed: number;
   annualInterestRatePercent: number;
   repaymentFrequency: RepaymentFrequency;
+  /**
+   * Always populated. In "endDate" mode it is derived from the two dates by
+   * `normalizeInput`, so the maths never reads the dates directly.
+   */
   loanLengthYears: number;
+  loanTermMode: LoanTermMode;
+  loanStartDate: string | null;
+  /** Final repayment date. Only meaningful in "endDate" mode. */
+  loanEndDate: string | null;
   accountFeeEnabled: boolean;
   accountFee: number;
   accountFeeFrequency: RepaymentFrequency;

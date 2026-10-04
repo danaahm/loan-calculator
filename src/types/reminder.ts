@@ -18,6 +18,10 @@ export interface ReminderUndoSnapshot {
   feeEventCarry: number;
   status: ReminderStatus;
   notificationsEnabled: boolean;
+  // Absent on payments recorded before offset and regular extras existed.
+  offsetBalance?: number;
+  offsetEventCarry?: number;
+  extraEventCarry?: number;
 }
 
 export interface ReminderPayment {
@@ -27,6 +31,8 @@ export interface ReminderPayment {
   interestPortion: number;
   principalPortion: number;
   feePortion: number;
+  /** Regular extra repayment applied on this cycle, on top of `principalPortion`. */
+  extraPortion?: number;
   remainingAfter: number;
   source: ReminderPaymentSource;
   undoSnapshot: ReminderUndoSnapshot;
@@ -36,6 +42,17 @@ export interface ReminderRateChange {
   id: string;
   effectiveDate: string;
   annualInterestRatePercent: number;
+  /**
+   * The repayment the lender asks for from this date. Absent means the
+   * repayment stays as it was.
+   */
+  repaymentAmount?: number;
+}
+
+/** An amount that recurs on its own frequency. An amount of 0 means off. */
+export interface ReminderRecurringAmount {
+  amount: number;
+  frequency: RepaymentFrequency;
 }
 
 export interface LoanReminder {
@@ -55,6 +72,15 @@ export interface LoanReminder {
   accountFee: number;
   accountFeeFrequency: RepaymentFrequency;
   feeEventCarry: number;
+  /** The contracted final repayment date, when the user knows it. */
+  finalPaymentDate: string | null;
+  /** Savings held against the loan. Interest is charged on balance minus this. */
+  offsetBalance: number;
+  offsetDeposit: ReminderRecurringAmount;
+  offsetEventCarry: number;
+  /** A regular repayment on top of the scheduled one, paid off the principal. */
+  extraRepayment: ReminderRecurringAmount;
+  extraEventCarry: number;
   notificationsEnabled: boolean;
   notifyLeads: NotifyLead[];
   status: ReminderStatus;

@@ -1,16 +1,23 @@
-import { type SavedLoanProfile } from "../types/loan";
+import { type LoanInput, type SavedLoanProfile } from "../types/loan";
 import {
   DEFAULT_NOTIFY_LEADS,
   type LoanReminder,
   type ReminderPayment,
   type ReminderRateChange,
+  type ReminderRecurringAmount,
   type ReminderStatus,
+  type ReminderUndoSnapshot,
 } from "../types/reminder";
-import { calculateLoan, normalizeInput } from "./loanMath";
-import { addDays, todayLocalIso } from "./dateIso";
+import {
+  calculateBaseRepayment,
+  calculateLoan,
+  normalizeInput,
+} from "./loanMath";
+import { addDays, daysBetween, todayLocalIso } from "./dateIso";
 import {
   FREQUENCY_PER_YEAR,
   advancePaymentDate,
+  previousFormulaDate,
 } from "./reminderSchedule";
 
 const ZERO_EPSILON = 1e-7;
@@ -44,6 +51,12 @@ export const createEmptyReminder = (
     accountFee: 0,
     accountFeeFrequency: "monthly",
     feeEventCarry: 0,
+    finalPaymentDate: null,
+    offsetBalance: 0,
+    offsetDeposit: { amount: 0, frequency: "monthly" },
+    offsetEventCarry: 0,
+    extraRepayment: { amount: 0, frequency: "monthly" },
+    extraEventCarry: 0,
     notificationsEnabled: false,
     notifyLeads: DEFAULT_NOTIFY_LEADS,
     status: "active",
@@ -67,6 +80,37 @@ export const estimatePeriodRepaymentFromProfile = (
   return safeRound(first.principalPaid + first.interestPaid);
 };
 
+const NO_RECURRING_AMOUNT: ReminderRecurringAmount = {
+  amount: 0,
+  frequency: "monthly",
+};
+
+/**
+ * The parts of a profile that describe how the loan is being paid, as opposed
+ * to its balance. A switched-off section maps to an amount of 0.
+ */
+const recurringTermsFromInput = (
+  input: LoanInput
+): Pick<LoanReminder, "offsetDeposit" | "extraRepayment"> => {
+  const deposit = input.offsetSavings.contribution;
+  return {
+    offsetDeposit:
+      input.offsetSavings.enabled && deposit.enabled
+        ? { amount: deposit.amount, frequency: deposit.frequency }
+        : NO_RECURRING_AMOUNT,
+    extraRepayment: input.extraRepayment.enabled
+      ? {
+          amount: input.extraRepayment.amount,
+          frequency: input.extraRepayment.frequency,
+        }
+      : NO_RECURRING_AMOUNT,
+  };
+};
+
+/** A profile only knows its final repayment date when it was entered as one. */
+const finalPaymentDateFromInput = (input: LoanInput): string | null =>
+  input.loanTermMode === "endDate" ? input.loanEndDate : null;
+
 export const draftFromSavedProfile = (
   profile: SavedLoanProfile,
   base?: LoanReminder
@@ -86,6 +130,9 @@ export const draftFromSavedProfile = (
     repaymentFrequency: input.repaymentFrequency,
     accountFee: input.accountFeeEnabled ? input.accountFee : 0,
     accountFeeFrequency: input.accountFeeFrequency,
+    finalPaymentDate: finalPaymentDateFromInput(input),
+    offsetBalance: input.offsetSavings.enabled ? input.offsetSavings.amount : 0,
+    ...recurringTermsFromInput(input),
     updatedAt: new Date().toISOString(),
   };
 };
@@ -101,26 +148,61 @@ export const refreshTermsFromProfile = (
     accountFee: input.accountFeeEnabled ? input.accountFee : 0,
     accountFeeFrequency: input.accountFeeFrequency,
     repaymentFrequency: input.repaymentFrequency,
+    // The offset balance is left alone: like the loan balance it is a live
+    // figure the user tracks, not a term of the loan.
+    ...recurringTermsFromInput(input),
+    finalPaymentDate: finalPaymentDateFromInput(input) ?? reminder.finalPaymentDate,
     updatedAt: new Date().toISOString(),
   };
+};
+
+/**
+ * How many times something on `frequency` happens in one repayment cycle.
+ * The fractional remainder is carried, so a yearly event lands on every
+ * twelfth monthly cycle and a weekly one lands 4 or 5 times a month.
+ */
+const eventsInCycle = (
+  reminder: LoanReminder,
+  frequency: ReminderRecurringAmount["frequency"],
+  carry: number
+): { count: number; carry: number } => {
+  const periodsPerYear = FREQUENCY_PER_YEAR[reminder.repaymentFrequency];
+  const next = carry + FREQUENCY_PER_YEAR[frequency] / Math.max(1, periodsPerYear);
+  const count = Math.floor(next + ZERO_EPSILON);
+  return { count, carry: next - count };
 };
 
 const feeForCycle = (
   reminder: LoanReminder
 ): { feePortion: number; feeEventCarry: number } => {
-  const periodsPerYear = FREQUENCY_PER_YEAR[reminder.repaymentFrequency];
-  const feeEventsPerYear = FREQUENCY_PER_YEAR[reminder.accountFeeFrequency];
-  let feeEventCarry = reminder.feeEventCarry;
-  feeEventCarry += feeEventsPerYear / Math.max(1, periodsPerYear);
-  const feeEventsThisPeriod = Math.floor(feeEventCarry + ZERO_EPSILON);
-  const feePortion = reminder.accountFee * feeEventsThisPeriod;
-  feeEventCarry -= feeEventsThisPeriod;
-  return { feePortion, feeEventCarry };
+  const { count, carry } = eventsInCycle(
+    reminder,
+    reminder.accountFeeFrequency,
+    reminder.feeEventCarry
+  );
+  return { feePortion: reminder.accountFee * count, feeEventCarry: carry };
+};
+
+/**
+ * The repayment the lender asks for on `isoDate`: the latest dated rate change
+ * that set one, or the reminder's own repayment before any did.
+ */
+export const repaymentAsOf = (reminder: LoanReminder, isoDate: string): number => {
+  let repayment = reminder.repaymentAmount;
+  const changes = [...(reminder.rateChanges ?? [])].sort((left, right) =>
+    left.effectiveDate.localeCompare(right.effectiveDate)
+  );
+  for (const change of changes) {
+    if (change.effectiveDate <= isoDate && change.repaymentAmount != null) {
+      repayment = change.repaymentAmount;
+    }
+  }
+  return repayment;
 };
 
 export const amountDueForReminder = (reminder: LoanReminder): number => {
   const { feePortion } = feeForCycle(reminder);
-  return safeRound(reminder.repaymentAmount + feePortion);
+  return safeRound(repaymentAsOf(reminder, reminder.nextPaymentDate) + feePortion);
 };
 
 /** Fraction of the original balance paid down so far, clamped to 0..1. */
@@ -150,12 +232,16 @@ export const rateAsOf = (reminder: LoanReminder, isoDate: string): number => {
 export const addRateChange = (
   reminder: LoanReminder,
   effectiveDate: string,
-  annualInterestRatePercent: number
+  annualInterestRatePercent: number,
+  repaymentAmount?: number | null
 ): LoanReminder => {
   const next: ReminderRateChange = {
     id: newId(),
     effectiveDate,
     annualInterestRatePercent: Math.max(0, annualInterestRatePercent),
+    ...(repaymentAmount != null && repaymentAmount > 0
+      ? { repaymentAmount: safeRound(repaymentAmount) }
+      : {}),
   };
   return {
     ...reminder,
@@ -177,50 +263,116 @@ export const removeRateChange = (
   };
 };
 
+/**
+ * The annual rate charged across the cycle that ends on `dueIso`, weighted by
+ * the days each rate was in force. Interest accrues from the previous due
+ * date up to the day before this one, so a change taking effect mid-cycle
+ * splits the cycle, and one taking effect on the due date itself first shows
+ * up in the following cycle - the way a lender charges it.
+ */
+export const cycleAverageRate = (reminder: LoanReminder, dueIso: string): number => {
+  const startIso = previousFormulaDate(
+    dueIso,
+    reminder.repaymentFrequency,
+    reminder.monthlyAnchor,
+    reminder.paymentDayOfMonth
+  );
+  const totalDays = daysBetween(startIso, dueIso);
+  if (totalDays <= 0) {
+    return rateAsOf(reminder, dueIso);
+  }
+
+  const boundaries = (reminder.rateChanges ?? [])
+    .map((change) => change.effectiveDate)
+    .filter((date) => date > startIso && date < dueIso)
+    .sort();
+  let weighted = 0;
+  let cursor = startIso;
+  for (const boundary of boundaries) {
+    weighted += rateAsOf(reminder, cursor) * daysBetween(cursor, boundary);
+    cursor = boundary;
+  }
+  weighted += rateAsOf(reminder, cursor) * daysBetween(cursor, dueIso);
+  return weighted / totalDays;
+};
+
+const snapshotOf = (reminder: LoanReminder): ReminderUndoSnapshot => ({
+  remainingBalance: reminder.remainingBalance,
+  nextPaymentDate: reminder.nextPaymentDate,
+  customUpcomingDates: reminder.customUpcomingDates,
+  feeEventCarry: reminder.feeEventCarry,
+  status: reminder.status,
+  notificationsEnabled: reminder.notificationsEnabled,
+  offsetBalance: reminder.offsetBalance,
+  offsetEventCarry: reminder.offsetEventCarry,
+  extraEventCarry: reminder.extraEventCarry,
+});
+
 const applyScheduledPayment = (
   reminder: LoanReminder,
   source: "auto" | "manual"
 ): LoanReminder => {
+  const dueDate = reminder.nextPaymentDate;
   const periodsPerYear = FREQUENCY_PER_YEAR[reminder.repaymentFrequency];
   const periodRate =
-    rateAsOf(reminder, reminder.nextPaymentDate) / 100 / Math.max(1, periodsPerYear);
-  const interest = reminder.remainingBalance * periodRate;
+    cycleAverageRate(reminder, dueDate) / 100 / Math.max(1, periodsPerYear);
+  // Interest is charged on the loan balance less whatever sits in the offset.
+  const interest =
+    Math.max(0, reminder.remainingBalance - reminder.offsetBalance) * periodRate;
   const { feePortion, feeEventCarry } = feeForCycle(reminder);
-  const payment = Math.max(0, reminder.repaymentAmount);
+  const payment = Math.max(0, repaymentAsOf(reminder, dueDate));
   const interestPortion = Math.min(payment, Math.max(0, interest));
   const leftover = Math.max(0, payment - interestPortion);
   const principalPortion = Math.min(reminder.remainingBalance, leftover);
-  const remaining = Math.max(0, reminder.remainingBalance - principalPortion);
+  const afterScheduled = Math.max(0, reminder.remainingBalance - principalPortion);
+
+  const extraEvents = eventsInCycle(
+    reminder,
+    reminder.extraRepayment.frequency,
+    reminder.extraEventCarry
+  );
+  const extraPortion = Math.min(
+    afterScheduled,
+    Math.max(0, reminder.extraRepayment.amount) * extraEvents.count
+  );
+  const remaining = Math.max(0, afterScheduled - extraPortion);
+
+  const offsetEvents = eventsInCycle(
+    reminder,
+    reminder.offsetDeposit.frequency,
+    reminder.offsetEventCarry
+  );
+  const offsetBalance =
+    reminder.offsetBalance +
+    Math.max(0, reminder.offsetDeposit.amount) * offsetEvents.count;
+
   const { nextDate, customUpcomingDates } = advancePaymentDate(
     reminder,
-    reminder.nextPaymentDate
+    dueDate
   );
   const completed = remaining <= ZERO_EPSILON;
   const paymentRecord: ReminderPayment = {
     id: newId(),
-    date: reminder.nextPaymentDate,
-    amountPaid: safeRound(payment),
+    date: dueDate,
+    amountPaid: safeRound(payment + extraPortion),
     interestPortion: safeRound(interestPortion),
     principalPortion: safeRound(principalPortion),
     feePortion: safeRound(feePortion),
+    extraPortion: safeRound(extraPortion),
     remainingAfter: safeRound(remaining),
     source,
-    undoSnapshot: {
-      remainingBalance: reminder.remainingBalance,
-      nextPaymentDate: reminder.nextPaymentDate,
-      customUpcomingDates: reminder.customUpcomingDates,
-      feeEventCarry: reminder.feeEventCarry,
-      status: reminder.status,
-      notificationsEnabled: reminder.notificationsEnabled,
-    },
+    undoSnapshot: snapshotOf(reminder),
   };
 
   return {
     ...reminder,
     remainingBalance: safeRound(remaining),
-    nextPaymentDate: completed ? reminder.nextPaymentDate : nextDate,
+    nextPaymentDate: completed ? dueDate : nextDate,
     customUpcomingDates,
     feeEventCarry,
+    offsetBalance: safeRound(offsetBalance),
+    offsetEventCarry: offsetEvents.carry,
+    extraEventCarry: extraEvents.carry,
     status: completed ? "completed" : reminder.status,
     notificationsEnabled: completed ? false : reminder.notificationsEnabled,
     payments: [...reminder.payments, paymentRecord],
@@ -280,6 +432,9 @@ export const undoLastPayment = (reminder: LoanReminder): LoanReminder => {
     nextPaymentDate: snapshot.nextPaymentDate,
     customUpcomingDates: snapshot.customUpcomingDates,
     feeEventCarry: snapshot.feeEventCarry,
+    offsetBalance: snapshot.offsetBalance ?? reminder.offsetBalance,
+    offsetEventCarry: snapshot.offsetEventCarry ?? reminder.offsetEventCarry,
+    extraEventCarry: snapshot.extraEventCarry ?? reminder.extraEventCarry,
     status: snapshot.status === "completed" ? "active" : snapshot.status,
     notificationsEnabled: snapshot.notificationsEnabled,
     payments: reminder.payments.slice(0, -1),
@@ -306,14 +461,7 @@ export const applyExtraPayment = (
     feePortion: 0,
     remainingAfter: safeRound(remaining),
     source: "extra",
-    undoSnapshot: {
-      remainingBalance: reminder.remainingBalance,
-      nextPaymentDate: reminder.nextPaymentDate,
-      customUpcomingDates: reminder.customUpcomingDates,
-      feeEventCarry: reminder.feeEventCarry,
-      status: reminder.status,
-      notificationsEnabled: reminder.notificationsEnabled,
-    },
+    undoSnapshot: snapshotOf(reminder),
   };
 
   return {
@@ -365,6 +513,60 @@ export const estimatePayoffDate = (reminder: LoanReminder): string | null => {
 
   // Still active means the projection limit was hit rather than a real payoff.
   return current.status === "active" ? null : lastPaymentDate;
+};
+
+/**
+ * The repayment that clears the loan by its final repayment date once
+ * `annualInterestRatePercent` takes effect on `effectiveDate`.
+ *
+ * The balance is projected forward to the first repayment on or after the
+ * effective date, then spread over every repayment left up to and including
+ * the final one. Lenders set the minimum repayment on the loan balance alone,
+ * so the offset does not lower it. Returns null when there is no final
+ * repayment date, or no repayment left before it.
+ */
+export const calculateRepaymentAfterRateChange = (
+  reminder: LoanReminder,
+  effectiveDate: string,
+  annualInterestRatePercent: number
+): number | null => {
+  const finalDate = reminder.finalPaymentDate;
+  if (!finalDate || reminder.status !== "active") {
+    return null;
+  }
+
+  let current: LoanReminder = { ...reminder, payments: [] };
+  let guard = 0;
+  while (
+    current.status === "active" &&
+    current.nextPaymentDate < effectiveDate &&
+    guard < MAX_PAYOFF_PERIODS
+  ) {
+    current = { ...applyScheduledPayment(current, "auto"), payments: [] };
+    guard += 1;
+  }
+  if (current.status !== "active" || current.remainingBalance <= ZERO_EPSILON) {
+    return null;
+  }
+
+  let remainingCycles = 0;
+  let date = current.nextPaymentDate;
+  let schedule = current;
+  while (date <= finalDate && remainingCycles < MAX_PAYOFF_PERIODS) {
+    remainingCycles += 1;
+    const advanced = advancePaymentDate(schedule, date);
+    schedule = { ...schedule, customUpcomingDates: advanced.customUpcomingDates };
+    date = advanced.nextDate;
+  }
+  if (remainingCycles === 0) {
+    return null;
+  }
+
+  const periodsPerYear = FREQUENCY_PER_YEAR[reminder.repaymentFrequency];
+  const periodRate = Math.max(0, annualInterestRatePercent) / 100 / periodsPerYear;
+  return safeRound(
+    calculateBaseRepayment(current.remainingBalance, periodRate, remainingCycles)
+  );
 };
 
 export interface UpcomingCycle {

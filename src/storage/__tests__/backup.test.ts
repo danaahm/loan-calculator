@@ -207,6 +207,53 @@ describe("parseBackup", () => {
       expect(parsed.backup.data.reminders[0].id).toBe("good");
     });
 
+    it("migrates a reminder written before offsets, extras and end dates", () => {
+      const {
+        finalPaymentDate: _finalPaymentDate,
+        offsetBalance: _offsetBalance,
+        offsetDeposit: _offsetDeposit,
+        offsetEventCarry: _offsetEventCarry,
+        extraRepayment: _extraRepayment,
+        extraEventCarry: _extraEventCarry,
+        ...legacy
+      } = reminder({ id: "legacy" });
+      const raw = validFile({
+        data: {
+          input: null,
+          settings: {},
+          profiles: [],
+          basicHistory: [],
+          reminders: [
+            {
+              ...legacy,
+              rateChanges: [
+                {
+                  id: "rate-1",
+                  effectiveDate: "2026-03-01",
+                  annualInterestRatePercent: 6,
+                  repaymentAmount: "lots",
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      const parsed = parseBackup(raw);
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) {
+        return;
+      }
+      const restored = parsed.backup.data.reminders[0];
+      expect(restored.finalPaymentDate).toBeNull();
+      expect(restored.offsetBalance).toBe(0);
+      expect(restored.offsetDeposit).toEqual({ amount: 0, frequency: "monthly" });
+      expect(restored.extraRepayment).toEqual({ amount: 0, frequency: "monthly" });
+      expect(restored.offsetEventCarry).toBe(0);
+      // A repayment that is not a number is dropped, not turned into a zero.
+      expect(restored.rateChanges[0]).not.toHaveProperty("repaymentAmount");
+    });
+
     it("migrates a profile written before the current input shape", () => {
       const raw = validFile({
         data: {

@@ -128,6 +128,9 @@ const DEFAULT_INPUT: LoanInput = {
   annualInterestRatePercent: 6.2,
   repaymentFrequency: "monthly",
   loanLengthYears: 30,
+  loanTermMode: "length",
+  loanStartDate: null,
+  loanEndDate: null,
   accountFeeEnabled: false,
   accountFee: 8,
   accountFeeFrequency: "monthly",
@@ -1098,10 +1101,10 @@ function AppContent() {
             onUndoLast={() => {
               updateReminder(undoLastPayment(detailReminder)).catch(() => {});
             }}
-            onAddRateChange={(effectiveDate, rate) => {
-              updateReminder(addRateChange(detailReminder, effectiveDate, rate)).catch(
-                () => {}
-              );
+            onAddRateChange={(effectiveDate, rate, repaymentAmount) => {
+              updateReminder(
+                addRateChange(detailReminder, effectiveDate, rate, repaymentAmount)
+              ).catch(() => {});
             }}
             onRemoveRateChange={(id) => {
               updateReminder(removeRateChange(detailReminder, id)).catch(() => {});

@@ -2,6 +2,7 @@ import {
   MIN_LOAN_LENGTH_YEARS,
   calculateLoan,
   hasPlanAdjustments,
+  loanYearsBetween,
   normalizeInput,
   validateLoanInput,
 } from "../loanMath";
@@ -535,6 +536,44 @@ describe("validateLoanInput", () => {
         })
       ).error
     ).toBeNull();
+  });
+});
+
+describe("loan term entered as dates", () => {
+  const byDates = (loanStartDate: string | null, loanEndDate: string | null) =>
+    loanInput({ loanTermMode: "endDate", loanStartDate, loanEndDate });
+
+  it("works out whole months between the two dates", () => {
+    expect(loanYearsBetween("2026-10-04", "2056-10-04")).toBe(30);
+    expect(loanYearsBetween("2026-10-04", "2027-04-04")).toBe(0.5);
+  });
+
+  it("returns 0 for missing, invalid or reversed dates", () => {
+    expect(loanYearsBetween(null, "2056-10-04")).toBe(0);
+    expect(loanYearsBetween("2026-10-04", "2026-02-30")).toBe(0);
+    expect(loanYearsBetween("2056-10-04", "2026-10-04")).toBe(0);
+  });
+
+  it("calculates exactly like the same term entered as a length", () => {
+    const fromDates = calculateLoan(byDates("2026-10-04", "2056-10-04"));
+    const fromLength = calculateLoan(loanInput({ loanLengthYears: 30 }));
+
+    expect(fromDates.baseline.summary).toEqual(fromLength.baseline.summary);
+  });
+
+  it("asks for an end date when the dates do not give a term", () => {
+    const input = { ...byDates("2026-10-04", null), loanLengthYears: 0 };
+    expect(validateLoanInput(input).error).toBe(
+      "Choose a final repayment date after the loan start date."
+    );
+  });
+
+  it("reads a profile saved before end dates existed as a length", () => {
+    const result = normalizeInput({ loanLengthYears: 25 });
+    expect(result.loanTermMode).toBe("length");
+    expect(result.loanStartDate).toBeNull();
+    expect(result.loanEndDate).toBeNull();
+    expect(result.loanLengthYears).toBe(25);
   });
 });
 

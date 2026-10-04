@@ -16,7 +16,11 @@ import { DatePickerField } from "../components/DatePickerField";
 import { notificationUnavailableHint } from "../notifications/reminderNotifications";
 import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
-import { FREQUENCIES, type SavedLoanProfile } from "../types/loan";
+import {
+  FREQUENCIES,
+  type RepaymentFrequency,
+  type SavedLoanProfile,
+} from "../types/loan";
 import {
   MONTHLY_ANCHORS,
   NOTIFY_LEAD_PRESETS,
@@ -29,6 +33,7 @@ import {
 } from "../types/reminder";
 import { formatDisplayDate, parseIsoDate } from "../utils/dateIso";
 import {
+  formatCurrency,
   formatFrequencyLabel,
   formatMonthAnchorLabel,
   getCurrencySymbol,
@@ -62,6 +67,11 @@ const parseAmount = (value: string): number => {
 };
 
 const PROFILE_CHIP_LIMIT = 5;
+
+const toRecurringAmount = (
+  amountText: string,
+  frequency: RepaymentFrequency
+) => ({ amount: parseAmount(amountText), frequency });
 
 const isNoneLinked = (linkedProfileId: string | null): boolean =>
   linkedProfileId == null || linkedProfileId.length === 0;
@@ -102,6 +112,62 @@ const Chip = ({
     </Pressable>
   );
 };
+
+const MoneyField = ({
+  label,
+  hint,
+  symbol,
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  label: string;
+  hint?: string;
+  symbol: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+}) => {
+  const { colors } = useTheme();
+  return (
+    <View>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
+      <View style={[styles.inputWrap, { borderColor: colors.borderStrong, backgroundColor: colors.inputBg }]}>
+        <Text style={[styles.prefix, { color: colors.text }]}>{symbol}</Text>
+        <TextInput
+          keyboardType="decimal-pad"
+          value={value}
+          onChangeText={(next) => onChangeText(formatGroupedNumberInput(next))}
+          style={[styles.bareInput, { color: colors.text }]}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+        />
+      </View>
+      {hint ? (
+        <Text style={[styles.linkHint, { color: colors.textMuted }]}>{hint}</Text>
+      ) : null}
+    </View>
+  );
+};
+
+const FrequencyChips = ({
+  value,
+  onChange,
+}: {
+  value: RepaymentFrequency;
+  onChange: (next: RepaymentFrequency) => void;
+}) => (
+  <View style={[styles.chipWrap, styles.chipWrapSpaced]}>
+    {FREQUENCIES.map((item) => (
+      <Chip
+        key={item}
+        label={formatFrequencyLabel(item)}
+        selected={value === item}
+        onPress={() => onChange(item)}
+      />
+    ))}
+  </View>
+);
 
 const LinkedProfilePicker = ({
   profiles,
@@ -295,6 +361,24 @@ export const ReminderEditorScreen = ({
   const [customUpcomingDates, setCustomUpcomingDates] = useState(
     initialReminder.customUpcomingDates
   );
+  const [finalPaymentDate, setFinalPaymentDate] = useState<string | null>(
+    initialReminder.finalPaymentDate
+  );
+  const [offsetBalance, setOffsetBalance] = useState(
+    formatGroupedNumberValueOrBlank(initialReminder.offsetBalance)
+  );
+  const [offsetDepositAmount, setOffsetDepositAmount] = useState(
+    formatGroupedNumberValueOrBlank(initialReminder.offsetDeposit.amount)
+  );
+  const [offsetDepositFrequency, setOffsetDepositFrequency] = useState(
+    initialReminder.offsetDeposit.frequency
+  );
+  const [extraAmount, setExtraAmount] = useState(
+    formatGroupedNumberValueOrBlank(initialReminder.extraRepayment.amount)
+  );
+  const [extraFrequency, setExtraFrequency] = useState(
+    initialReminder.extraRepayment.frequency
+  );
   const [notes, setNotes] = useState(initialReminder.notes);
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     initialReminder.notificationsEnabled
@@ -332,6 +416,16 @@ export const ReminderEditorScreen = ({
     setAccountFee(formatGroupedNumberValueOrBlank(initialReminder.accountFee));
     setAccountFeeFrequency(initialReminder.accountFeeFrequency);
     setCustomUpcomingDates(initialReminder.customUpcomingDates);
+    setFinalPaymentDate(initialReminder.finalPaymentDate);
+    setOffsetBalance(formatGroupedNumberValueOrBlank(initialReminder.offsetBalance));
+    setOffsetDepositAmount(
+      formatGroupedNumberValueOrBlank(initialReminder.offsetDeposit.amount)
+    );
+    setOffsetDepositFrequency(initialReminder.offsetDeposit.frequency);
+    setExtraAmount(
+      formatGroupedNumberValueOrBlank(initialReminder.extraRepayment.amount)
+    );
+    setExtraFrequency(initialReminder.extraRepayment.frequency);
     setNotes(initialReminder.notes);
     setNotificationsEnabled(initialReminder.notificationsEnabled);
     setNotifyLeads(initialReminder.notifyLeads);
@@ -339,6 +433,12 @@ export const ReminderEditorScreen = ({
   }, [initialReminder]);
 
   const moneySymbol = useMemo(() => getCurrencySymbol(currencyCode), [currencyCode]);
+  // The field below is the repayment before any dated change; a rate change
+  // that set its own repayment overrides it from that change's date on.
+  const latestDatedRepayment = [...(initialReminder.rateChanges ?? [])]
+    .filter((change) => change.repaymentAmount != null)
+    .sort((left, right) => left.effectiveDate.localeCompare(right.effectiveDate))
+    .pop();
   const isNew = !initialReminder.name && initialReminder.payments.length === 0;
 
   const applyProfile = (profile: SavedLoanProfile) => {
@@ -357,6 +457,14 @@ export const ReminderEditorScreen = ({
     setRepaymentFrequency(draft.repaymentFrequency);
     setAccountFee(formatGroupedNumberValueOrBlank(draft.accountFee));
     setAccountFeeFrequency(draft.accountFeeFrequency);
+    setFinalPaymentDate(draft.finalPaymentDate);
+    setOffsetBalance(formatGroupedNumberValueOrBlank(draft.offsetBalance));
+    setOffsetDepositAmount(
+      formatGroupedNumberValueOrBlank(draft.offsetDeposit.amount)
+    );
+    setOffsetDepositFrequency(draft.offsetDeposit.frequency);
+    setExtraAmount(formatGroupedNumberValueOrBlank(draft.extraRepayment.amount));
+    setExtraFrequency(draft.extraRepayment.frequency);
     setError(null);
   };
 
@@ -378,6 +486,12 @@ export const ReminderEditorScreen = ({
     setMonthlyAnchor(empty.monthlyAnchor);
     setAccountFee("");
     setAccountFeeFrequency(empty.accountFeeFrequency);
+    setFinalPaymentDate(null);
+    setOffsetBalance("");
+    setOffsetDepositAmount("");
+    setOffsetDepositFrequency(empty.offsetDeposit.frequency);
+    setExtraAmount("");
+    setExtraFrequency(empty.extraRepayment.frequency);
     setError(null);
   };
 
@@ -475,6 +589,10 @@ export const ReminderEditorScreen = ({
       setError(t("editor.errorDate"));
       return;
     }
+    if (finalPaymentDate && finalPaymentDate < nextIso) {
+      setError(t("editor.errorFinalDate"));
+      return;
+    }
 
     const day = parseIsoDate(nextIso).getDate();
     const now = new Date().toISOString();
@@ -496,6 +614,10 @@ export const ReminderEditorScreen = ({
       ),
       accountFee: parseAmount(accountFee),
       accountFeeFrequency,
+      finalPaymentDate,
+      offsetBalance: parseAmount(offsetBalance),
+      offsetDeposit: toRecurringAmount(offsetDepositAmount, offsetDepositFrequency),
+      extraRepayment: toRecurringAmount(extraAmount, extraFrequency),
       notificationsEnabled: notificationsSupported ? notificationsEnabled : false,
       notifyLeads: notifyLeads.length > 0 ? notifyLeads : NOTIFY_LEAD_PRESETS.slice(1, 2),
       notes: notes.trim(),
@@ -619,6 +741,14 @@ export const ReminderEditorScreen = ({
             placeholderTextColor={colors.textMuted}
           />
         </View>
+        {latestDatedRepayment?.repaymentAmount != null ? (
+          <Text style={[styles.linkHint, { color: colors.textMuted }]}>
+            {t("editor.repaymentOverridden", {
+              date: formatDisplayDate(latestDatedRepayment.effectiveDate),
+              amount: formatCurrency(latestDatedRepayment.repaymentAmount, currencyCode),
+            })}
+          </Text>
+        ) : null}
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.repaymentFrequency")}</Text>
         <View style={styles.chipWrap}>
@@ -655,6 +785,24 @@ export const ReminderEditorScreen = ({
           placeholderKey="editor.nextDatePlaceholder"
         />
 
+        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.finalRepaymentDate")}</Text>
+        <DatePickerField
+          value={finalPaymentDate}
+          onChange={(iso) => {
+            setFinalPaymentDate(iso);
+            setError(null);
+          }}
+          placeholderKey="editor.finalDatePlaceholder"
+        />
+        {finalPaymentDate ? (
+          <Pressable onPress={() => setFinalPaymentDate(null)} style={styles.clearLink}>
+            <Text style={{ color: colors.danger, fontWeight: "700" }}>{t("common.remove")}</Text>
+          </Pressable>
+        ) : null}
+        <Text style={[styles.linkHint, { color: colors.textMuted }]}>
+          {t("editor.finalDateHint")}
+        </Text>
+
         <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.accountFee")}</Text>
         <View style={[styles.inputWrap, { borderColor: colors.borderStrong, backgroundColor: colors.inputBg }]}>
           <Text style={[styles.prefix, { color: colors.text }]}>{moneySymbol}</Text>
@@ -678,6 +826,45 @@ export const ReminderEditorScreen = ({
             />
           ))}
         </View>
+
+        <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
+          {t("editor.offsetAndExtra")}
+        </Text>
+        <Text style={[styles.linkHint, { color: colors.textMuted }]}>
+          {t("editor.offsetAndExtraHint")}
+        </Text>
+        <MoneyField
+          label={t("editor.offsetBalance")}
+          hint={t("editor.offsetBalanceHint")}
+          symbol={moneySymbol}
+          value={offsetBalance}
+          onChangeText={setOffsetBalance}
+          placeholder={t("editor.optionalAmountPlaceholder")}
+        />
+        <MoneyField
+          label={t("editor.offsetDeposit")}
+          symbol={moneySymbol}
+          value={offsetDepositAmount}
+          onChangeText={setOffsetDepositAmount}
+          placeholder={t("editor.optionalAmountPlaceholder")}
+        />
+        {parseAmount(offsetDepositAmount) > 0 ? (
+          <FrequencyChips
+            value={offsetDepositFrequency}
+            onChange={setOffsetDepositFrequency}
+          />
+        ) : null}
+        <MoneyField
+          label={t("editor.extraRepayment")}
+          hint={t("editor.extraRepaymentHint")}
+          symbol={moneySymbol}
+          value={extraAmount}
+          onChangeText={setExtraAmount}
+          placeholder={t("editor.optionalAmountPlaceholder")}
+        />
+        {parseAmount(extraAmount) > 0 ? (
+          <FrequencyChips value={extraFrequency} onChange={setExtraFrequency} />
+        ) : null}
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.extraDates")}</Text>
         <DatePickerField
@@ -821,6 +1008,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+  },
+  chipWrapSpaced: {
+    marginTop: 8,
+  },
+  sectionTitle: {
+    marginTop: 22,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  clearLink: {
+    alignSelf: "flex-start",
+    marginTop: 6,
   },
   chip: {
     borderWidth: 1,

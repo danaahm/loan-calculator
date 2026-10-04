@@ -36,6 +36,13 @@ export const addDays = (iso: string, days: number): string => {
   return formatLocalDate(date);
 };
 
+/** Whole days from `fromIso` to `toIso`; negative when `toIso` is earlier. */
+export const daysBetween = (fromIso: string, toIso: string): number => {
+  const ms = parseIsoDate(toIso).getTime() - parseIsoDate(fromIso).getTime();
+  // Rounded so a daylight-saving shift inside the range cannot cost a day.
+  return Math.round(ms / 86400000);
+};
+
 export const lastDayOfMonth = (year: number, monthIndex: number): number => {
   return new Date(year, monthIndex + 1, 0).getDate();
 };
