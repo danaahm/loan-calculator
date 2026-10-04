@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
@@ -60,11 +59,8 @@ import {
   type SavedLoanProfile,
 } from "./src/types/loan";
 import { type LoanReminder } from "./src/types/reminder";
-import {
-  DEFAULT_APP_SETTINGS,
-  type AppSettings,
-  type DateFormatSetting,
-} from "./src/types/settings";
+import { type DateFormatSetting } from "./src/types/dateFormat";
+import { DEFAULT_APP_SETTINGS, type AppSettings } from "./src/types/settings";
 import {
   calculateLoan,
   normalizeInput,
@@ -72,6 +68,7 @@ import {
 } from "./src/utils/loanMath";
 import { formatCurrency, formatFrequencyLabel } from "./src/utils/format";
 import { buildSavedProfileCardSummary } from "./src/utils/profileSummary";
+import { getAppBuildInfo } from "./src/utils/appInfo";
 import { setActiveDateFormat } from "./src/utils/dateFormat";
 import { todayLocalIso } from "./src/utils/dateIso";
 import {
@@ -108,7 +105,7 @@ type AppScreen =
   | "compare";
 
 /** Stamped into a backup file so a support request can name the build. */
-const APP_VERSION = Constants.expoConfig?.version ?? "unknown";
+const APP_BUILD = getAppBuildInfo();
 
 const NAV_TABS: {
   id: TabScreen;
@@ -1050,7 +1047,7 @@ function AppContent() {
               onOpenPhoneSettings={() => {
                 openPhoneNotificationSettings().catch(() => {});
               }}
-              appVersion={APP_VERSION}
+              buildInfo={APP_BUILD}
               onDataReplaced={hydrateFromStorage}
               onNotify={showSnackbar}
             />

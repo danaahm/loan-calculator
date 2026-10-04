@@ -2,7 +2,7 @@ import {
   isDateFormatSetting,
   type DateFormatCode,
   type DateFormatSetting,
-} from "../types/settings";
+} from "../types/dateFormat";
 import { detectDateFormat } from "./locale";
 
 const ENGLISH_SHORT_MONTHS = [

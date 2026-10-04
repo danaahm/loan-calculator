@@ -22,11 +22,9 @@ import { useLocale } from "../i18n/LocaleProvider";
 import { SUPPORTED_LANGUAGES } from "../i18n/languages";
 import { useDueThresholds } from "../settings/DueThresholdsProvider";
 import { useTheme } from "../theme/ThemeProvider";
-import {
-  DATE_FORMATS,
-  type DateFormatSetting,
-  type ThemeMode,
-} from "../types/settings";
+import { DATE_FORMATS, type DateFormatSetting } from "../types/dateFormat";
+import { type ThemeMode } from "../types/settings";
+import { DEVELOPER_NAME, type AppBuildInfo } from "../utils/appInfo";
 import { formatDateWith, resolveDateFormat } from "../utils/dateFormat";
 import {
   DUE_SOON_DAY_OPTIONS,
@@ -43,7 +41,7 @@ interface SettingsScreenProps {
   onToggleReminderNotifications: (enabled: boolean) => void;
   onChangeNotifyHour: (hour: number) => void;
   onOpenPhoneSettings: () => void;
-  appVersion: string;
+  buildInfo: AppBuildInfo;
   onDataReplaced: () => Promise<void>;
   onNotify: (message: string) => void;
 }
@@ -89,7 +87,7 @@ export const SettingsScreen = ({
   onToggleReminderNotifications,
   onChangeNotifyHour,
   onOpenPhoneSettings,
-  appVersion,
+  buildInfo,
   onDataReplaced,
   onNotify,
 }: SettingsScreenProps) => {
@@ -548,10 +546,37 @@ export const SettingsScreen = ({
       </View>
 
       <DataSection
-        appVersion={appVersion}
+        appVersion={buildInfo.version}
         onDataReplaced={onDataReplaced}
         onNotify={onNotify}
       />
+
+      <View style={styles.footer}>
+        {/* Selectable so a user can paste exactly which build they run. */}
+        <Text selectable style={[styles.footerVersion, { color: colors.textSecondary }]}>
+          {buildInfo.buildNumber
+            ? t("settings.about.versionWithBuild", {
+                version: buildInfo.version,
+                build: buildInfo.buildNumber,
+              })
+            : t("settings.about.version", { version: buildInfo.version })}
+        </Text>
+        {buildInfo.binaryVersion ? (
+          <Text selectable style={[styles.footerDetail, { color: colors.textMuted }]}>
+            {t("settings.about.binaryVersion", { version: buildInfo.binaryVersion })}
+          </Text>
+        ) : null}
+        {buildInfo.channel !== "production" ? (
+          <View style={[styles.footerBadge, { borderColor: colors.borderStrong }]}>
+            <Text style={[styles.footerBadgeText, { color: colors.textSecondary }]}>
+              {t(`settings.about.channel.${buildInfo.channel}`)}
+            </Text>
+          </View>
+        ) : null}
+        <Text style={[styles.footerSignature, { color: colors.textMuted }]}>
+          {t("settings.about.madeBy", { name: DEVELOPER_NAME })}
+        </Text>
+      </View>
 
       <Modal
         visible={dueBandPicker !== null}
@@ -777,6 +802,34 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 32,
+  },
+  footer: {
+    marginTop: 24,
+    alignItems: "center",
+    gap: 6,
+  },
+  footerVersion: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  footerBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+  },
+  footerBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  footerDetail: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  footerSignature: {
+    fontSize: 12,
+    fontWeight: "600",
+    fontStyle: "italic",
   },
   backRow: {
     flexDirection: "row",

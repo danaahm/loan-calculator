@@ -541,6 +541,16 @@
       "deleteDone": "Everything has been deleted",
       "deleteFailed": "Could not delete your data",
       "deleteNothing": "There is nothing stored to delete"
+    },
+    "about": {
+      "version": "Version {version}",
+      "versionWithBuild": "Version {version} (build {build})",
+      "binaryVersion": "Installed app {version}",
+      "channel": {
+        "preview": "Preview build",
+        "development": "Development build"
+      },
+      "madeBy": "Made by {name}"
     }
   },
   "notifications": {

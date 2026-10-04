@@ -9,7 +9,8 @@ import {
 } from "react";
 
 import { loadAppSettings, patchAppSettings } from "../storage/localState";
-import { DEFAULT_APP_SETTINGS, type DateFormatSetting } from "../types/settings";
+import { type DateFormatSetting } from "../types/dateFormat";
+import { DEFAULT_APP_SETTINGS } from "../types/settings";
 import { setActiveDateFormat } from "../utils/dateFormat";
 import { detectCurrencyCode } from "../utils/locale";
 import { FALLBACK_LANGUAGE, type LanguageCode } from "./languages";

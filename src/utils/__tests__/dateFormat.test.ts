@@ -1,6 +1,6 @@
 import * as Localization from "expo-localization";
 
-import { DATE_FORMATS } from "../../types/settings";
+import { DATE_FORMATS } from "../../types/dateFormat";
 import {
   formatDateWith,
   getActiveDateFormat,

@@ -22,9 +22,9 @@ import {
   isSupportedLanguage,
   type LanguageCode,
 } from "../i18n/languages";
+import { isDateFormatSetting } from "../types/dateFormat";
 import {
   DEFAULT_APP_SETTINGS,
-  isDateFormatSetting,
   type AppSettings,
   type ThemeMode,
 } from "../types/settings";

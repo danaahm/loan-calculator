@@ -5,7 +5,7 @@ import {
   isSupportedLanguage,
   type LanguageCode,
 } from "../i18n/languages";
-import { type DateFormatCode } from "../types/settings";
+import { type DateFormatCode } from "../types/dateFormat";
 import { getAvailableCurrencies } from "./format";
 
 export const FALLBACK_CURRENCY_CODE = "AUD";
