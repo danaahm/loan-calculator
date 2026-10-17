@@ -28,6 +28,7 @@ import {
   type ExtraRepaymentStartUnit,
   type LoanInput,
   type LoanTermMode,
+  type RateChange,
   type RepaymentFrequency,
 } from "../types/loan";
 import {
@@ -88,6 +89,73 @@ const defaultOffsetContribution = (value: LoanInput) =>
     frequency: "monthly" as RepaymentFrequency,
   };
 
+/** A rate change as typed, before parsing. */
+interface RateChangeDraft {
+  id: string;
+  startAfter: string;
+  startAfterUnit: ExtraRepaymentStartUnit;
+  rate: string;
+}
+
+const toRateChangeDrafts = (value: LoanInput): RateChangeDraft[] =>
+  value.rateChanges.changes.map((change) => ({
+    id: change.id,
+    startAfter: formatNumberForInputOrBlank(change.startAfterValue, 0),
+    startAfterUnit: change.startAfterUnit,
+    rate: formatNumberForInput(change.annualInterestRatePercent),
+  }));
+
+const parseRateChangeDraft = (draft: RateChangeDraft): RateChange => ({
+  id: draft.id,
+  startAfterValue: parsePositiveInt(draft.startAfter),
+  startAfterUnit: draft.startAfterUnit,
+  annualInterestRatePercent: parsePositiveNumber(draft.rate),
+});
+
+const newRateChangeDraft = (): RateChangeDraft => ({
+  id: `rate-change-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+  startAfter: "",
+  startAfterUnit: "years",
+  rate: "",
+});
+
+const StartAfterUnitToggle = ({
+  value,
+  onChange,
+  styles,
+}: {
+  value: ExtraRepaymentStartUnit;
+  onChange: (next: ExtraRepaymentStartUnit) => void;
+  styles: FormStyles;
+}) => {
+  const t = useTranslation();
+  return (
+    <View style={styles.startAfterToggle}>
+      {(["months", "years"] as const).map((unit) => (
+        <Pressable
+          key={unit}
+          style={[
+            styles.startAfterToggleButton,
+            value === unit && styles.startAfterToggleButtonActive,
+          ]}
+          onPress={() => onChange(unit)}
+          accessibilityRole="button"
+          accessibilityState={{ selected: value === unit }}
+        >
+          <Text
+            style={[
+              styles.startAfterToggleText,
+              value === unit && styles.startAfterToggleTextActive,
+            ]}
+          >
+            {t(unit === "months" ? "loanForm.unitMonths" : "loanForm.unitYears")}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+};
+
 const FrequencySelector = ({
   value,
   onChange,
@@ -142,6 +210,21 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
   const [loanTermMode, setLoanTermMode] = useState<LoanTermMode>(
     initialValue.loanTermMode
   );
+  const [rateChangesEnabled, setRateChangesEnabled] = useState(
+    initialValue.rateChanges.enabled
+  );
+  const [rateChangeDrafts, setRateChangeDrafts] = useState(() =>
+    toRateChangeDrafts(initialValue)
+  );
+  const [interestOnlyEnabled, setInterestOnlyEnabled] = useState(
+    initialValue.interestOnly.enabled
+  );
+  const [interestOnlyLength, setInterestOnlyLength] = useState(
+    formatNumberForInputOrBlank(initialValue.interestOnly.lengthValue, 0)
+  );
+  const [interestOnlyUnit, setInterestOnlyUnit] = useState<ExtraRepaymentStartUnit>(
+    initialValue.interestOnly.lengthUnit
+  );
   const [loanStartDate, setLoanStartDate] = useState(
     initialValue.loanStartDate ?? todayLocalIso()
   );
@@ -195,6 +278,13 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
     setLoanLengthYears(formatNumberForInputOrBlank(loanLength.years));
     setLoanLengthMonths(formatNumberForInputOrBlank(loanLength.months));
     setLoanTermMode(initialValue.loanTermMode);
+    setRateChangesEnabled(initialValue.rateChanges.enabled);
+    setRateChangeDrafts(toRateChangeDrafts(initialValue));
+    setInterestOnlyEnabled(initialValue.interestOnly.enabled);
+    setInterestOnlyLength(
+      formatNumberForInputOrBlank(initialValue.interestOnly.lengthValue, 0)
+    );
+    setInterestOnlyUnit(initialValue.interestOnly.lengthUnit);
     setLoanStartDate(initialValue.loanStartDate ?? todayLocalIso());
     setLoanEndDate(initialValue.loanEndDate);
     setAccountFeeEnabled(initialValue.accountFeeEnabled);
@@ -247,11 +337,35 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
     setLoanTermMode(next);
   };
 
+  // Switching on with nothing entered opens a blank change, so the section is
+  // never an empty heading.
+  const toggleRateChanges = (next: boolean) => {
+    setRateChangesEnabled(next);
+    if (next && rateChangeDrafts.length === 0) {
+      setRateChangeDrafts([newRateChangeDraft()]);
+    }
+  };
+
+  const updateRateChange = (id: string, patch: Partial<RateChangeDraft>) => {
+    setRateChangeDrafts((drafts) =>
+      drafts.map((draft) => (draft.id === id ? { ...draft, ...patch } : draft))
+    );
+  };
+
   const fieldValue = useMemo<LoanInput>(() => {
     return {
       currencyCode,
       amountBorrowed: parsePositiveNumber(amountBorrowed),
       annualInterestRatePercent: parsePositiveNumber(interestRate),
+      rateChanges: {
+        enabled: rateChangesEnabled,
+        changes: rateChangeDrafts.map(parseRateChangeDraft),
+      },
+      interestOnly: {
+        enabled: interestOnlyEnabled,
+        lengthValue: parsePositiveInt(interestOnlyLength),
+        lengthUnit: interestOnlyUnit,
+      },
       repaymentFrequency,
       loanLengthYears:
         loanTermMode === "endDate" ? termFromDates : termFromLength,
@@ -295,6 +409,9 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
     extraStartAfterUnit,
     lumpSumAmount,
     lumpSumEnabled,
+    interestOnlyEnabled,
+    interestOnlyLength,
+    interestOnlyUnit,
     interestRate,
     loanEndDate,
     loanStartDate,
@@ -304,6 +421,8 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
     offsetContributionEnabled,
     offsetContributionFrequency,
     offsetEnabled,
+    rateChangeDrafts,
+    rateChangesEnabled,
     repaymentFrequency,
     termFromDates,
     termFromLength,
@@ -472,6 +591,129 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           )}
 
           <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>{t("loanForm.enableRateChanges")}</Text>
+            <Switch
+              value={rateChangesEnabled}
+              onValueChange={toggleRateChanges}
+              trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
+              thumbColor={colors.switchThumb}
+            />
+          </View>
+          <Text style={styles.hintText}>{t("loanForm.rateChangesHint")}</Text>
+          {rateChangesEnabled ? (
+            <View>
+              {rateChangeDrafts.map((draft, index) => (
+                <View key={draft.id} style={styles.rateChangeBlock}>
+                  <View style={styles.rateChangeHeader}>
+                    <Text style={styles.rateChangeTitle}>
+                      {t("loanForm.rateChangeTitle", { number: index + 1 })}
+                    </Text>
+                    <Pressable
+                      onPress={() =>
+                        setRateChangeDrafts((drafts) =>
+                          drafts.filter((item) => item.id !== draft.id)
+                        )
+                      }
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={t("loanForm.rateChangeRemoveLabel", {
+                        number: index + 1,
+                      })}
+                    >
+                      <Text style={styles.rateChangeRemoveText}>
+                        {t("loanForm.rateChangeRemove")}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <Text style={styles.label}>{t("loanForm.rateChangeAfter")}</Text>
+                  <View style={styles.startAfterRow}>
+                    <View style={styles.startAfterInputWrap}>
+                      <TextInput
+                        keyboardType="number-pad"
+                        value={draft.startAfter}
+                        onChangeText={(value) =>
+                          updateRateChange(draft.id, {
+                            startAfter: formatPlainNumberInput(value, 0),
+                          })
+                        }
+                        style={styles.simpleInput}
+                        placeholder={t("loanForm.startAfterPlaceholder")}
+                        placeholderTextColor={colors.textMuted}
+                      />
+                    </View>
+                    <StartAfterUnitToggle
+                      value={draft.startAfterUnit}
+                      onChange={(startAfterUnit) =>
+                        updateRateChange(draft.id, { startAfterUnit })
+                      }
+                      styles={styles}
+                    />
+                  </View>
+
+                  <Text style={styles.label}>{t("loanForm.rateChangeRate")}</Text>
+                  <TextInput
+                    keyboardType="decimal-pad"
+                    value={draft.rate}
+                    onChangeText={(value) =>
+                      updateRateChange(draft.id, { rate: formatPlainNumberInput(value) })
+                    }
+                    style={styles.simpleInput}
+                    placeholder={t("loanForm.interestPlaceholder")}
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+              ))}
+              <Pressable
+                style={styles.addRateChangeButton}
+                onPress={() =>
+                  setRateChangeDrafts((drafts) => [...drafts, newRateChangeDraft()])
+                }
+                accessibilityRole="button"
+              >
+                <Text style={styles.addRateChangeText}>
+                  + {t("loanForm.addRateChange")}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>{t("loanForm.enableInterestOnly")}</Text>
+            <Switch
+              value={interestOnlyEnabled}
+              onValueChange={setInterestOnlyEnabled}
+              trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
+              thumbColor={colors.switchThumb}
+            />
+          </View>
+          <Text style={styles.hintText}>{t("loanForm.interestOnlyHint")}</Text>
+          {interestOnlyEnabled ? (
+            <View>
+              <Text style={styles.label}>{t("loanForm.interestOnlyLength")}</Text>
+              <View style={styles.startAfterRow}>
+                <View style={styles.startAfterInputWrap}>
+                  <TextInput
+                    keyboardType="number-pad"
+                    value={interestOnlyLength}
+                    onChangeText={(value) =>
+                      setInterestOnlyLength(formatPlainNumberInput(value, 0))
+                    }
+                    style={styles.simpleInput}
+                    placeholder={t("loanForm.interestOnlyPlaceholder")}
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+                <StartAfterUnitToggle
+                  value={interestOnlyUnit}
+                  onChange={setInterestOnlyUnit}
+                  styles={styles}
+                />
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>{t("loanForm.enableAccountFee")}</Text>
             <Switch
               value={accountFeeEnabled}
@@ -554,44 +796,11 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
                     placeholderTextColor={colors.textMuted}
                   />
                 </View>
-                <View style={styles.startAfterToggle}>
-                  <Pressable
-                    style={[
-                      styles.startAfterToggleButton,
-                      extraStartAfterUnit === "months" &&
-                        styles.startAfterToggleButtonActive,
-                    ]}
-                    onPress={() => setExtraStartAfterUnit("months")}
-                  >
-                    <Text
-                      style={[
-                        styles.startAfterToggleText,
-                        extraStartAfterUnit === "months" &&
-                          styles.startAfterToggleTextActive,
-                      ]}
-                    >
-                      {t("loanForm.unitMonths")}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[
-                      styles.startAfterToggleButton,
-                      extraStartAfterUnit === "years" &&
-                        styles.startAfterToggleButtonActive,
-                    ]}
-                    onPress={() => setExtraStartAfterUnit("years")}
-                  >
-                    <Text
-                      style={[
-                        styles.startAfterToggleText,
-                        extraStartAfterUnit === "years" &&
-                          styles.startAfterToggleTextActive,
-                      ]}
-                    >
-                      {t("loanForm.unitYears")}
-                    </Text>
-                  </Pressable>
-                </View>
+                <StartAfterUnitToggle
+                  value={extraStartAfterUnit}
+                  onChange={setExtraStartAfterUnit}
+                  styles={styles}
+                />
               </View>
             </View>
           ) : null}
@@ -869,6 +1078,42 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: 10,
       paddingHorizontal: 12,
       backgroundColor: colors.inputBg,
+    },
+    rateChangeBlock: {
+      marginTop: 12,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+    },
+    rateChangeHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    rateChangeTitle: {
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: "700",
+    },
+    rateChangeRemoveText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: "700",
+    },
+    addRateChangeButton: {
+      alignSelf: "flex-start",
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderRadius: 999,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      backgroundColor: colors.primarySoft,
+    },
+    addRateChangeText: {
+      color: colors.accentTextDeep,
+      fontWeight: "700",
     },
     termModeToggle: {
       alignSelf: "flex-start",

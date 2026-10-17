@@ -66,7 +66,12 @@ import {
   normalizeInput,
   validateLoanInput,
 } from "./src/utils/loanMath";
-import { formatCurrency, formatFrequencyLabel } from "./src/utils/format";
+import {
+  formatCurrency,
+  formatFrequencyLabel,
+  formatLoanLengthLabel,
+  formatPercent,
+} from "./src/utils/format";
 import { buildSavedProfileCardSummary } from "./src/utils/profileSummary";
 import { getAppBuildInfo } from "./src/utils/appInfo";
 import { setActiveDateFormat } from "./src/utils/dateFormat";
@@ -128,6 +133,15 @@ const DEFAULT_INPUT: LoanInput = {
   currencyCode: "AUD",
   amountBorrowed: 500000,
   annualInterestRatePercent: 6.2,
+  rateChanges: {
+    enabled: false,
+    changes: [],
+  },
+  interestOnly: {
+    enabled: false,
+    lengthValue: 5,
+    lengthUnit: "years",
+  },
   repaymentFrequency: "monthly",
   loanLengthYears: 30,
   loanTermMode: "length",
@@ -276,6 +290,33 @@ function AppContent() {
   const totalMonthlyPayment = Math.round(
     (minimumMonthlyRepayment + extraMonthlyRepayment) * 100
   ) / 100;
+  // Listed only once the repayment actually changes during the loan. Shown as
+  // monthly equivalents to match the headline figure above them.
+  const repaymentPhaseRows = (() => {
+    if (!result || result.repaymentPhases.length < 2) {
+      return [];
+    }
+    const periodsPerYear = REPAYMENT_PERIODS_PER_YEAR[input.repaymentFrequency];
+    return result.repaymentPhases.map((phase) => {
+      const label = t("repaymentPhases.atRate", {
+        when:
+          phase.firstPeriod === 1
+            ? t("repaymentPhases.fromStart")
+            : t("repaymentPhases.after", {
+                time: formatLoanLengthLabel((phase.firstPeriod - 1) / periodsPerYear),
+              }),
+        rate: formatPercent(phase.annualInterestRatePercent),
+      });
+      return {
+        key: phase.firstPeriod,
+        label: phase.interestOnly
+          ? t("repaymentPhases.interestOnly", { label })
+          : label,
+        monthlyRepayment:
+          Math.round(((phase.repayment * periodsPerYear) / 12) * 100) / 100,
+      };
+    });
+  })();
   const activeReminders = reminders.filter((item) => item.status === "active");
   // The header shows a state, not a count: a number there reads as unread mail
   // and never falls, whereas this clears itself once payments move out of range.
@@ -955,7 +996,9 @@ function AppContent() {
                     Minimum Monthly Repayment
                   </Text>
                   <Text style={styles.minimumRepaymentSubtitle}>
-                    Principal + Interest
+                    {result.repaymentPhases[0]?.interestOnly
+                      ? "Interest Only"
+                      : "Principal + Interest"}
                   </Text>
                   <Text style={styles.minimumRepaymentValue}>
                     {formatCurrency(minimumMonthlyRepayment, input.currencyCode)}
@@ -980,6 +1023,21 @@ function AppContent() {
                           ).toLowerCase()} deposits`
                         : ""}
                     </Text>
+                  ) : null}
+                  {repaymentPhaseRows.length > 0 ? (
+                    <View style={styles.monthlyBreakdownWrap}>
+                      <Text style={styles.monthlyBreakdownLabel}>
+                        {t("repaymentPhases.title")}
+                      </Text>
+                      {repaymentPhaseRows.map((row) => (
+                        <View key={row.key} style={styles.monthlyBreakdownRow}>
+                          <Text style={styles.repaymentPhaseLabel}>{row.label}</Text>
+                          <Text style={styles.monthlyBreakdownValue}>
+                            {formatCurrency(row.monthlyRepayment, input.currencyCode)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
                   ) : null}
                   {input.extraRepayment.enabled ? (
                     <View style={styles.monthlyBreakdownWrap}>
@@ -1855,6 +1913,11 @@ const createStyles = (colors: ThemeColors) =>
     monthlyBreakdownValue: {
       color: colors.text,
       fontWeight: "700",
+    },
+    repaymentPhaseLabel: {
+      flex: 1,
+      paddingRight: 12,
+      color: colors.textSecondary,
     },
     monthlyBreakdownTotalRow: {
       borderTopWidth: 1,

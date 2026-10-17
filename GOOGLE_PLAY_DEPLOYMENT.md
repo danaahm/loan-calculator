@@ -7,8 +7,8 @@ This project is now prepared for Android release builds with EAS.
 Check `app.json`:
 
 - `expo.android.package` is set to `com.danaa.loancalculator`
-- `expo.android.versionCode` is currently `2` in `app.json` (EAS can auto-increment on production builds)
-- `expo.version` is your public app version (currently `1.0.1`)
+- `expo.android.versionCode` is managed remotely by EAS and auto-incremented on production builds
+- `expo.version` is your public app version; keep `version` in `package.json` matching it
 
 If you want a different package id, change it before first production release.
 

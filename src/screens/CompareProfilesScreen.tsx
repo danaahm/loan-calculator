@@ -102,7 +102,7 @@ export const CompareProfilesScreen = ({
       winner: betterLower(
         left.input.annualInterestRatePercent,
         right.input.annualInterestRatePercent,
-        true
+        left.singleRate && right.singleRate
       ),
     },
     {
@@ -115,6 +115,12 @@ export const CompareProfilesScreen = ({
       labelKey: "compare.row.frequency",
       leftText: left.frequencyLabel,
       rightText: right.frequencyLabel,
+      winner: null,
+    },
+    {
+      labelKey: "compare.row.interestOnly",
+      leftText: left.interestOnlyLabel,
+      rightText: right.interestOnlyLabel,
       winner: null,
     },
     {

@@ -205,6 +205,11 @@ export const normalizeReminder = (raw: Partial<LoanReminder>): LoanReminder | nu
       typeof raw.finalPaymentDate === "string" && isValidIsoDate(raw.finalPaymentDate)
         ? raw.finalPaymentDate
         : null,
+    // Reminders saved before interest-only periods existed have none.
+    interestOnlyUntil:
+      typeof raw.interestOnlyUntil === "string" && isValidIsoDate(raw.interestOnlyUntil)
+        ? raw.interestOnlyUntil
+        : null,
     offsetBalance: Math.max(0, Number(raw.offsetBalance) || 0),
     offsetDeposit: normalizeRecurringAmount(raw.offsetDeposit),
     offsetEventCarry: normalizeCarry(raw.offsetEventCarry),

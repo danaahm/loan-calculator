@@ -46,7 +46,11 @@ import {
   formatNumberForInputOrBlank,
 } from "../utils/numberInput";
 import { buildSavedProfileCardSummary } from "../utils/profileSummary";
-import { createEmptyReminder, draftFromSavedProfile } from "../utils/reminderMath";
+import {
+  calculateRepaymentAfterInterestOnly,
+  createEmptyReminder,
+  draftFromSavedProfile,
+} from "../utils/reminderMath";
 import { normalizeCustomDates } from "../utils/reminderSchedule";
 
 interface ReminderEditorScreenProps {
@@ -364,6 +368,9 @@ export const ReminderEditorScreen = ({
   const [finalPaymentDate, setFinalPaymentDate] = useState<string | null>(
     initialReminder.finalPaymentDate
   );
+  const [interestOnlyUntil, setInterestOnlyUntil] = useState<string | null>(
+    initialReminder.interestOnlyUntil
+  );
   const [offsetBalance, setOffsetBalance] = useState(
     formatGroupedNumberValueOrBlank(initialReminder.offsetBalance)
   );
@@ -417,6 +424,7 @@ export const ReminderEditorScreen = ({
     setAccountFeeFrequency(initialReminder.accountFeeFrequency);
     setCustomUpcomingDates(initialReminder.customUpcomingDates);
     setFinalPaymentDate(initialReminder.finalPaymentDate);
+    setInterestOnlyUntil(initialReminder.interestOnlyUntil);
     setOffsetBalance(formatGroupedNumberValueOrBlank(initialReminder.offsetBalance));
     setOffsetDepositAmount(
       formatGroupedNumberValueOrBlank(initialReminder.offsetDeposit.amount)
@@ -458,6 +466,7 @@ export const ReminderEditorScreen = ({
     setAccountFee(formatGroupedNumberValueOrBlank(draft.accountFee));
     setAccountFeeFrequency(draft.accountFeeFrequency);
     setFinalPaymentDate(draft.finalPaymentDate);
+    setInterestOnlyUntil(draft.interestOnlyUntil);
     setOffsetBalance(formatGroupedNumberValueOrBlank(draft.offsetBalance));
     setOffsetDepositAmount(
       formatGroupedNumberValueOrBlank(draft.offsetDeposit.amount)
@@ -487,6 +496,7 @@ export const ReminderEditorScreen = ({
     setAccountFee("");
     setAccountFeeFrequency(empty.accountFeeFrequency);
     setFinalPaymentDate(null);
+    setInterestOnlyUntil(null);
     setOffsetBalance("");
     setOffsetDepositAmount("");
     setOffsetDepositFrequency(empty.offsetDeposit.frequency);
@@ -557,6 +567,59 @@ export const ReminderEditorScreen = ({
     }
   };
 
+  /** The reminder exactly as the form describes it, before validation. */
+  const formReminder = (): LoanReminder => {
+    const remaining = parseAmount(remainingBalance);
+    const now = new Date().toISOString();
+    return {
+      ...initialReminder,
+      name: name.trim(),
+      linkedProfileId: isNoneLinked(linkedProfileId) ? null : linkedProfileId,
+      currencyCode: currencyCode.trim().toUpperCase() || "AUD",
+      originalAmount: parseAmount(originalAmount),
+      remainingBalance: remaining,
+      annualInterestRatePercent: Number(interestRate),
+      repaymentAmount: parseAmount(repaymentAmount),
+      repaymentFrequency,
+      monthlyAnchor: repaymentFrequency === "monthly" ? monthlyAnchor : "onDate",
+      paymentDayOfMonth: parseIsoDate(nextPaymentIso).getDate(),
+      nextPaymentDate: nextPaymentIso,
+      customUpcomingDates: normalizeCustomDates(
+        customUpcomingDates.filter((date) => date > nextPaymentIso)
+      ),
+      accountFee: parseAmount(accountFee),
+      accountFeeFrequency,
+      finalPaymentDate,
+      interestOnlyUntil,
+      offsetBalance: parseAmount(offsetBalance),
+      offsetDeposit: toRecurringAmount(offsetDepositAmount, offsetDepositFrequency),
+      extraRepayment: toRecurringAmount(extraAmount, extraFrequency),
+      notificationsEnabled: notificationsSupported ? notificationsEnabled : false,
+      notifyLeads: notifyLeads.length > 0 ? notifyLeads : NOTIFY_LEAD_PRESETS.slice(1, 2),
+      notes: notes.trim(),
+      rateChanges: initialReminder.rateChanges ?? [],
+      status: remaining <= 0.005 ? "completed" : initialReminder.status === "archived"
+        ? "archived"
+        : "active",
+      updatedAt: now,
+      createdAt: initialReminder.createdAt || now,
+    };
+  };
+
+  // Fills the repayment field; it stays editable for the lender's own figure.
+  const workOutRepaymentAfterInterestOnly = () => {
+    const draft = formReminder();
+    const repayment = Number.isFinite(draft.annualInterestRatePercent)
+      ? calculateRepaymentAfterInterestOnly({ ...draft, status: "active" })
+      : null;
+    if (repayment == null || repayment <= 0) {
+      setError(t("editor.workOutUnavailable"));
+      return;
+    }
+    setRepaymentAmount(formatGroupedNumberValue(repayment));
+    setError(null);
+  };
+
   const submit = () => {
     const trimmedName = name.trim();
     const original = parseAmount(originalAmount);
@@ -593,41 +656,12 @@ export const ReminderEditorScreen = ({
       setError(t("editor.errorFinalDate"));
       return;
     }
+    if (interestOnlyUntil && finalPaymentDate && interestOnlyUntil >= finalPaymentDate) {
+      setError(t("editor.errorInterestOnlyEnd"));
+      return;
+    }
 
-    const day = parseIsoDate(nextIso).getDate();
-    const now = new Date().toISOString();
-    onSave({
-      ...initialReminder,
-      name: trimmedName,
-      linkedProfileId: isNoneLinked(linkedProfileId) ? null : linkedProfileId,
-      currencyCode: currencyCode.trim().toUpperCase() || "AUD",
-      originalAmount: original,
-      remainingBalance: remaining,
-      annualInterestRatePercent: rate,
-      repaymentAmount: repayment,
-      repaymentFrequency,
-      monthlyAnchor: repaymentFrequency === "monthly" ? monthlyAnchor : "onDate",
-      paymentDayOfMonth: day,
-      nextPaymentDate: nextIso,
-      customUpcomingDates: normalizeCustomDates(
-        customUpcomingDates.filter((date) => date > nextIso)
-      ),
-      accountFee: parseAmount(accountFee),
-      accountFeeFrequency,
-      finalPaymentDate,
-      offsetBalance: parseAmount(offsetBalance),
-      offsetDeposit: toRecurringAmount(offsetDepositAmount, offsetDepositFrequency),
-      extraRepayment: toRecurringAmount(extraAmount, extraFrequency),
-      notificationsEnabled: notificationsSupported ? notificationsEnabled : false,
-      notifyLeads: notifyLeads.length > 0 ? notifyLeads : NOTIFY_LEAD_PRESETS.slice(1, 2),
-      notes: notes.trim(),
-      rateChanges: initialReminder.rateChanges ?? [],
-      status: remaining <= 0.005 ? "completed" : initialReminder.status === "archived"
-        ? "archived"
-        : "active",
-      updatedAt: now,
-      createdAt: initialReminder.createdAt || now,
-    });
+    onSave(formReminder());
   };
 
   return (
@@ -729,7 +763,11 @@ export const ReminderEditorScreen = ({
           placeholderTextColor={colors.textMuted}
         />
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.repaymentEachCycle")}</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          {interestOnlyUntil
+            ? t("editor.repaymentAfterInterestOnly")
+            : t("editor.repaymentEachCycle")}
+        </Text>
         <View style={[styles.inputWrap, { borderColor: colors.borderStrong, backgroundColor: colors.inputBg }]}>
           <Text style={[styles.prefix, { color: colors.text }]}>{moneySymbol}</Text>
           <TextInput
@@ -741,6 +779,22 @@ export const ReminderEditorScreen = ({
             placeholderTextColor={colors.textMuted}
           />
         </View>
+        {interestOnlyUntil ? (
+          <Text style={[styles.linkHint, { color: colors.textMuted }]}>
+            {t("editor.repaymentAfterInterestOnlyHint")}
+          </Text>
+        ) : null}
+        {interestOnlyUntil && finalPaymentDate ? (
+          <Pressable
+            onPress={workOutRepaymentAfterInterestOnly}
+            style={styles.clearLink}
+            accessibilityRole="button"
+          >
+            <Text style={{ color: colors.accentTextStrong, fontWeight: "700" }}>
+              {t("editor.workOutRepayment")}
+            </Text>
+          </Pressable>
+        ) : null}
         {latestDatedRepayment?.repaymentAmount != null ? (
           <Text style={[styles.linkHint, { color: colors.textMuted }]}>
             {t("editor.repaymentOverridden", {
@@ -801,6 +855,26 @@ export const ReminderEditorScreen = ({
         ) : null}
         <Text style={[styles.linkHint, { color: colors.textMuted }]}>
           {t("editor.finalDateHint")}
+        </Text>
+
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          {t("editor.interestOnlyUntil")}
+        </Text>
+        <DatePickerField
+          value={interestOnlyUntil}
+          onChange={(iso) => {
+            setInterestOnlyUntil(iso);
+            setError(null);
+          }}
+          placeholderKey="editor.interestOnlyPlaceholder"
+        />
+        {interestOnlyUntil ? (
+          <Pressable onPress={() => setInterestOnlyUntil(null)} style={styles.clearLink}>
+            <Text style={{ color: colors.danger, fontWeight: "700" }}>{t("common.remove")}</Text>
+          </Pressable>
+        ) : null}
+        <Text style={[styles.linkHint, { color: colors.textMuted }]}>
+          {t("editor.interestOnlyHint")}
         </Text>
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.accountFee")}</Text>

@@ -35,6 +35,13 @@
     "calculating": "Calculating your loan...",
     "newLoan": "New loan"
   },
+  "repaymentPhases": {
+    "title": "Repayment changes (monthly)",
+    "fromStart": "From the start",
+    "after": "After {time}",
+    "atRate": "{when} at {rate}",
+    "interestOnly": "{label}, interest only"
+  },
   "loanPicker": {
     "title": "Your saved loans",
     "switchLabel": "Switch loan",
@@ -83,7 +90,12 @@
     "lumpSum": "Lump sum amount must be greater than zero.",
     "accountFee": "Account fee must be greater than zero.",
     "offsetEmpty": "Enter an offset amount or a regular offset deposit.",
-    "offsetDeposit": "Offset deposit amount must be greater than zero."
+    "offsetDeposit": "Offset deposit amount must be greater than zero.",
+    "rateChangesEmpty": "Add a rate change, or switch rate changes off.",
+    "rateChangeTiming": "Each rate change must start after the first repayment and before the loan ends.",
+    "rateChangeDuplicate": "Two rate changes start at the same repayment.",
+    "interestOnlyLength": "Enter how long the interest-only period lasts.",
+    "interestOnlyTooLong": "The interest-only period must end before the loan does."
   },
   "progress": {
     "paid": "paid",
@@ -136,6 +148,18 @@
     "loanEndDatePlaceholder": "Choose final repayment date",
     "termFromDates": "Loan term: {term}",
     "endDateHint": "The term is worked out from these two dates, to the nearest month.",
+    "enableRateChanges": "Enable Rate Changes",
+    "rateChangesHint": "For a fixed rate that ends, or a rate rise or cut. The repayment is recalculated from each change so the loan still ends on time.",
+    "rateChangeTitle": "Rate change {number}",
+    "rateChangeAfter": "Change After",
+    "rateChangeRate": "New Rate (% per year)",
+    "rateChangeRemove": "Remove",
+    "rateChangeRemoveLabel": "Remove rate change {number}",
+    "addRateChange": "Add rate change",
+    "enableInterestOnly": "Enable Interest-Only Period",
+    "interestOnlyHint": "Repayments cover only the interest at first, then switch to principal and interest over the rest of the term.",
+    "interestOnlyLength": "Interest Only For",
+    "interestOnlyPlaceholder": "e.g. 5",
     "enableAccountFee": "Enable Account Fee",
     "accountFeeHint": "Turn on if your lender charges an ongoing account or service fee.",
     "accountFee": "Account Fee (per fee event)",
@@ -275,6 +299,11 @@
     "regularExtra": "Regular extra repayment",
     "recurringAmount": "+{amount} {frequency}",
     "finalRepayment": "Final repayment",
+    "interestOnlyUntil": "Interest only until",
+    "interestOnlyEnded": "Interest-only period ended",
+    "interestOnlyDue": "{amount} · interest only",
+    "upcomingBalanceAfter": "Balance after {amount}",
+    "upcomingInterestOnly": "Interest only",
     "rateChanges": "Rate changes",
     "rateChangesHint": "Dated rates apply to interest from their effective date and to payoff estimates. Past recorded payments are not rewritten. Add the new repayment your lender sets, or use the calculated one.",
     "noRateChanges": "Starting rate {rate}. No dated changes yet.",
@@ -341,6 +370,14 @@
     "finalRepaymentDate": "Final repayment date (optional)",
     "finalDatePlaceholder": "Choose final repayment date",
     "finalDateHint": "From your loan contract. Used to work out a new repayment when your rate changes.",
+    "interestOnlyUntil": "Interest-only period ends (optional)",
+    "interestOnlyPlaceholder": "Choose the last interest-only date",
+    "interestOnlyHint": "Repayments due on or before this date cover only the interest charged. After it, your repayment pays down the loan as well.",
+    "repaymentAfterInterestOnly": "Repayment after the interest-only period",
+    "repaymentAfterInterestOnlyHint": "Principal and interest, from the first repayment after the period ends.",
+    "workOutRepayment": "Work it out from the final repayment date",
+    "workOutUnavailable": "Can't work out a repayment: check the balance, rate and that the final repayment date comes after the interest-only period.",
+    "errorInterestOnlyEnd": "The interest-only period must end before the final repayment date.",
     "accountFee": "Account fee (optional)",
     "accountFeePlaceholder": "0",
     "feeFrequency": "Fee frequency",
@@ -395,6 +432,7 @@
     "extra": "Extra {amount} {frequency}",
     "extraAfter": "{label} after {after}",
     "lumpSum": "Lump sum {amount}",
+    "interestOnly": "Interest only {length}",
     "offset": "Offset",
     "offsetWithParts": "Offset {parts}",
     "fee": "Fee {amount} {frequency}",
@@ -417,6 +455,7 @@
       "interestRate": "Interest rate",
       "term": "Term",
       "frequency": "Frequency",
+      "interestOnly": "Interest only",
       "minRepayment": "Min repayment",
       "monthlyEquivalent": "Monthly equivalent",
       "extraRepayment": "Extra repayment",
@@ -461,16 +500,13 @@
     "appearanceHint": "Choose how the app looks",
     "theme": {
       "auto": {
-        "title": "Auto",
-        "hint": "Match system setting"
+        "title": "Auto"
       },
       "light": {
-        "title": "Light",
-        "hint": "Always use light mode"
+        "title": "Light"
       },
       "dark": {
-        "title": "Dark",
-        "hint": "Always use dark mode"
+        "title": "Dark"
       }
     },
     "language": "Language",

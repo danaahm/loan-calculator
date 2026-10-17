@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { DataSection } from "../components/DataSection";
+import { SegmentedControl } from "../components/SegmentedControl";
 import {
   notificationUnavailableHint,
   permissionStatusLabel,
@@ -47,6 +48,12 @@ interface SettingsScreenProps {
 }
 
 const APPEARANCE_MODES: ThemeMode[] = ["auto", "light", "dark"];
+
+const APPEARANCE_ICONS: Record<ThemeMode, keyof typeof Ionicons.glyphMap> = {
+  auto: "contrast-outline",
+  light: "sunny-outline",
+  dark: "moon-outline",
+};
 
 const NOTIFY_HOURS = [7, 8, 9, 10, 12, 18, 21];
 
@@ -246,48 +253,16 @@ export const SettingsScreen = ({
           {t("settings.appearanceHint")}
         </Text>
 
-        {APPEARANCE_MODES.map((option) => {
-          const selected = mode === option;
-          return (
-            <Pressable
-              key={option}
-              onPress={() => setThemeMode(option)}
-              style={[
-                styles.optionRow,
-                {
-                  borderColor: selected ? colors.primary : colors.borderStrong,
-                  backgroundColor: selected ? colors.primarySoft : colors.inputBg,
-                },
-              ]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected }}
-            >
-              <View style={styles.optionCopy}>
-                <Text
-                  style={[
-                    styles.optionTitle,
-                    { color: selected ? colors.accentTextDeep : colors.text },
-                  ]}
-                >
-                  {t(`settings.theme.${option}.title`)}
-                </Text>
-                <Text style={[styles.optionHint, { color: colors.textMuted }]}>
-                  {t(`settings.theme.${option}.hint`)}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.radioOuter,
-                  { borderColor: selected ? colors.primary : colors.borderStrong },
-                ]}
-              >
-                {selected ? (
-                  <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
-                ) : null}
-              </View>
-            </Pressable>
-          );
-        })}
+        <SegmentedControl
+          options={APPEARANCE_MODES.map((option) => ({
+            value: option,
+            label: t(`settings.theme.${option}.title`),
+            icon: APPEARANCE_ICONS[option],
+          }))}
+          value={mode}
+          onChange={setThemeMode}
+          accessibilityLabel={t("settings.appearance")}
+        />
       </View>
 
       <View

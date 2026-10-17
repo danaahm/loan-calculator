@@ -74,6 +74,12 @@ export interface LoanReminder {
   feeEventCarry: number;
   /** The contracted final repayment date, when the user knows it. */
   finalPaymentDate: string | null;
+  /**
+   * Last day of an interest-only period. Repayments due on or before it cover
+   * only the interest charged; from the next one on, `repaymentAmount` repays
+   * principal and interest. Null for a loan repaid that way throughout.
+   */
+  interestOnlyUntil: string | null;
   /** Savings held against the loan. Interest is charged on balance minus this. */
   offsetBalance: number;
   offsetDeposit: ReminderRecurringAmount;

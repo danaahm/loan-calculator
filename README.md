@@ -9,6 +9,8 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - Home dashboard with the next repayment, current loan snapshot, and shortcuts
 - Loan calculator with repayment frequencies: yearly, quarterly, monthly, fortnightly, weekly
 - Advanced repayment options:
+  - rate changes: any number of new rates, each after a set number of months or years, with the repayment recalculated so the loan still ends on time
+  - an interest-only period at the start of the loan, followed by principal and interest
   - extra repayments (amount, frequency, start after months or years)
   - optional lump sum
   - offset savings, including optional recurring offset deposits
@@ -19,7 +21,7 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - Save, load, rename, delete, and reorder loan profiles
 - Side-by-side comparison of two saved loans
 - Basic calculator with local history
-- Repayment reminders: schedule, extra payments, rate changes, archive, and local notifications
+- Repayment reminders: schedule, extra payments, rate changes, an interest-only period that switches to principal and interest when it ends, archive, and local notifications
 - Settings: light / dark / system theme and reminder notification preferences
 - Backup and restore: save every loan, reminder and setting to a JSON file, restore one on another phone, or delete everything stored on the device
 
