@@ -302,6 +302,8 @@
     "interestOnlyUntil": "Interest only until",
     "interestOnlyEnded": "Interest-only period ended",
     "interestOnlyDue": "{amount} · interest only",
+    "upcomingBalanceAfter": "Balance after {amount}",
+    "upcomingInterestOnly": "Interest only",
     "rateChanges": "Rate changes",
     "rateChangesHint": "Dated rates apply to interest from their effective date and to payoff estimates. Past recorded payments are not rewritten. Add the new repayment your lender sets, or use the calculated one.",
     "noRateChanges": "Starting rate {rate}. No dated changes yet.",
@@ -498,16 +500,13 @@
     "appearanceHint": "Choose how the app looks",
     "theme": {
       "auto": {
-        "title": "Auto",
-        "hint": "Match system setting"
+        "title": "Auto"
       },
       "light": {
-        "title": "Light",
-        "hint": "Always use light mode"
+        "title": "Light"
       },
       "dark": {
-        "title": "Dark",
-        "hint": "Always use dark mode"
+        "title": "Dark"
       }
     },
     "language": "Language",

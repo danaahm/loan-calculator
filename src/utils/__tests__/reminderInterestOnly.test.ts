@@ -119,6 +119,9 @@ describe("interest-only period on a reminder", () => {
     expect(cycles.map((cycle) => cycle.amountDue)).toEqual([
       1_200, 1_200, 1_200, 2_000, 2_000,
     ]);
+    expect(cycles.map((cycle) => cycle.interestOnly)).toEqual([
+      true, true, true, false, false,
+    ]);
     expect(cycles[3].remainingAfter).toBe(119_200);
   });
 

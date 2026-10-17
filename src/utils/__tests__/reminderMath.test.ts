@@ -454,9 +454,9 @@ describe("projectUpcomingCycles", () => {
     );
 
     expect(cycles).toEqual([
-      { date: "2026-01-15", amountDue: 1_000, remainingBefore: 10_000, remainingAfter: 9_000 },
-      { date: "2026-02-15", amountDue: 1_000, remainingBefore: 9_000, remainingAfter: 8_000 },
-      { date: "2026-03-15", amountDue: 1_000, remainingBefore: 8_000, remainingAfter: 7_000 },
+      { date: "2026-01-15", amountDue: 1_000, remainingBefore: 10_000, remainingAfter: 9_000, interestOnly: false },
+      { date: "2026-02-15", amountDue: 1_000, remainingBefore: 9_000, remainingAfter: 8_000, interestOnly: false },
+      { date: "2026-03-15", amountDue: 1_000, remainingBefore: 8_000, remainingAfter: 7_000, interestOnly: false },
     ]);
   });
 

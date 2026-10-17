@@ -263,9 +263,6 @@ export const SettingsScreen = ({
           onChange={setThemeMode}
           accessibilityLabel={t("settings.appearance")}
         />
-        <Text style={[styles.appearanceHint, { color: colors.textMuted }]}>
-          {t(`settings.theme.${mode}.hint`)}
-        </Text>
       </View>
 
       <View
@@ -857,12 +854,6 @@ const styles = StyleSheet.create({
   },
   optionHint: {
     marginTop: 2,
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  appearanceHint: {
-    marginTop: 8,
-    marginLeft: 4,
     fontWeight: "600",
     fontSize: 13,
   },

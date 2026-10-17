@@ -13,6 +13,7 @@ import {
 
 import { DatePickerField } from "../components/DatePickerField";
 import { ProgressBar } from "../components/ProgressBar";
+import { UpcomingTimeline } from "../components/UpcomingTimeline";
 import { notificationUnavailableHint } from "../notifications/reminderNotifications";
 import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
@@ -35,7 +36,7 @@ import {
   calculateRepaymentAfterRateChange,
   estimatePayoffDate,
   isInterestOnlyDue,
-  listUpcomingDates,
+  projectUpcomingCycles,
   payoffProgress,
   rateAsOf,
 } from "../utils/reminderMath";
@@ -85,7 +86,10 @@ export const ReminderDetailScreen = ({
   const [rateRepaymentInput, setRateRepaymentInput] = useState("");
   const due = amountDueForReminder(reminder);
   const payoff = estimatePayoffDate(reminder);
-  const upcoming = listUpcomingDates(reminder, 6);
+  const upcoming = useMemo(
+    () => projectUpcomingCycles(reminder, 365 * 2, 6),
+    [reminder]
+  );
   const currentRate = rateAsOf(reminder, todayLocalIso());
   const rateChanges = [...(reminder.rateChanges ?? [])].sort((left, right) =>
     left.effectiveDate.localeCompare(right.effectiveDate)
@@ -387,11 +391,11 @@ export const ReminderDetailScreen = ({
           {upcoming.length === 0 ? (
             <Text style={[styles.hint, { color: colors.textMuted }]}>{t("detail.noUpcomingDates")}</Text>
           ) : (
-            upcoming.map((date) => (
-              <Text key={date} style={[styles.listLine, { color: colors.text }]}>
-                {formatDisplayDate(date)}
-              </Text>
-            ))
+            <UpcomingTimeline
+              cycles={upcoming}
+              currencyCode={reminder.currencyCode}
+              status={reminder.status}
+            />
           )}
         </View>
 

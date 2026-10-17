@@ -678,6 +678,8 @@ export interface UpcomingCycle {
    */
   remainingBefore: number;
   remainingAfter: number;
+  /** The repayment covers interest only, inside an interest-only period. */
+  interestOnly: boolean;
 }
 
 export const projectUpcomingCycles = (
@@ -708,6 +710,7 @@ export const projectUpcomingCycles = (
         amountDue: due,
         remainingBefore: current.remainingBalance,
         remainingAfter: after.remainingBalance,
+        interestOnly: isInterestOnlyDue(current, current.nextPaymentDate),
       });
       current = after;
     } else {
