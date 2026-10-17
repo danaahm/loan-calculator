@@ -55,5 +55,10 @@ serviceAccount*.json
 /ios
 /android
 
+# Build output of local Expo modules (modules/*), produced by native builds
+modules/*/android/build/
+modules/*/android/.cxx/
+modules/*/ios/build/
+
 # test coverage output
 /coverage

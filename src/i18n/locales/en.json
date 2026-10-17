@@ -50,6 +50,12 @@
   "snackbar": {
     "calculationReady": "Your loan calculation is ready"
   },
+  "updates": {
+    "readyTitle": "Update ready",
+    "readyBody": "A new version has downloaded. Restart to finish.",
+    "later": "Later",
+    "restart": "Restart"
+  },
   "catchUp": {
     "applied_one": "Applied {count} payment on {name}",
     "applied_other": "Applied {count} payments on {name}"

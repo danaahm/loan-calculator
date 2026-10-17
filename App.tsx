@@ -74,6 +74,8 @@ import {
 } from "./src/utils/format";
 import { buildSavedProfileCardSummary } from "./src/utils/profileSummary";
 import { getAppBuildInfo } from "./src/utils/appInfo";
+import { useAppUpdate } from "./src/updates/useAppUpdate";
+import { UpdateReadyBanner } from "./src/components/UpdateReadyBanner";
 import { setActiveDateFormat } from "./src/utils/dateFormat";
 import { todayLocalIso } from "./src/utils/dateIso";
 import {
@@ -243,6 +245,9 @@ function AppContent() {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarText, setSnackbarText] = useState("");
   const [loadingState, setLoadingState] = useState(true);
+  // Checks Google Play for a newer version once the saved data has loaded.
+  const { readyToRestart, restartToUpdate } = useAppUpdate(!loadingState);
+  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
   const snackbarTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reminderSettingsRef = useRef(reminderSettings);
   reminderSettingsRef.current = reminderSettings;
@@ -1398,6 +1403,11 @@ function AppContent() {
           <View style={styles.snackbarWrap}>
             <Text style={styles.snackbarText}>{snackbarText}</Text>
           </View>
+        ) : readyToRestart && !updateBannerDismissed ? (
+          <UpdateReadyBanner
+            onRestart={restartToUpdate}
+            onLater={() => setUpdateBannerDismissed(true)}
+          />
         ) : null}
         </View>
 

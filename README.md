@@ -24,6 +24,7 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - Repayment reminders: schedule, extra payments, rate changes, an interest-only period that switches to principal and interest when it ends, archive, and local notifications
 - Settings: light / dark / system theme and reminder notification preferences
 - Backup and restore: save every loan, reminder and setting to a JSON file, restore one on another phone, or delete everything stored on the device
+- Update prompts on Android: Google Play offers new versions in the app, downloads them in the background, and installs when the user taps Restart
 
 ## Tech Stack
 
@@ -50,6 +51,8 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - `src/utils/profileCompare.ts` — saved-loan comparison
 - `src/utils/__tests__/`, `src/storage/__tests__/` — unit tests
 - `src/storage/localState.ts` — AsyncStorage helpers
+- `modules/play-updates/` — local Expo module wrapping Google Play In-App Updates (Android only)
+- `src/updates/useAppUpdate.ts` — when to offer an update and when to ask for a restart
 - `src/storage/backup.ts` — backup file format, validation and restore
 - `src/storage/backupFile.ts` — writing, sharing and picking the backup file
 - `src/theme/` — light/dark tokens and theme provider

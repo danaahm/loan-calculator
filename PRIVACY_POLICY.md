@@ -41,6 +41,18 @@ document holding your financial details.
 Restoring a backup reads a file you select and replaces the data held in the
 App. Nothing is uploaded to us at any point in either direction.
 
+## App Updates
+
+On Android, when you open the App it asks the Google Play Store app on your
+device whether a newer version of the App is available. This check is made by
+Google Play, using Google Play's in-app updates service, and is governed by
+Google's privacy policy. None of your loans, reminders, or settings are part of
+it.
+
+If an update is available, Google Play asks whether you want it. If you accept,
+Google Play downloads it in the background, and the App installs it only when
+you choose to restart.
+
 ## Data Sharing
 
 We do not sell, share, or transfer your in-app loan data to third parties.
