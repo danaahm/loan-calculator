@@ -34,6 +34,7 @@ import {
   amountDueForReminder,
   calculateRepaymentAfterRateChange,
   estimatePayoffDate,
+  isInterestOnlyDue,
   listUpcomingDates,
   payoffProgress,
   rateAsOf,
@@ -167,7 +168,11 @@ export const ReminderDetailScreen = ({
           </Text>
           <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{t("detail.amountDue")}</Text>
           <Text style={[styles.rowValue, { color: colors.text }]}>
-            {formatCurrency(due, reminder.currencyCode)}
+            {isInterestOnlyDue(reminder, reminder.nextPaymentDate)
+              ? t("detail.interestOnlyDue", {
+                  amount: formatCurrency(due, reminder.currencyCode),
+                })
+              : formatCurrency(due, reminder.currencyCode)}
           </Text>
           <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>{t("detail.frequency")}</Text>
           <Text style={[styles.rowValue, { color: colors.text }]}>
@@ -212,6 +217,18 @@ export const ReminderDetailScreen = ({
                   ),
                   frequency: formatFrequencyLabel(reminder.extraRepayment.frequency),
                 })}
+              </Text>
+            </>
+          ) : null}
+          {reminder.interestOnlyUntil ? (
+            <>
+              <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+                {isInterestOnlyDue(reminder, reminder.nextPaymentDate)
+                  ? t("detail.interestOnlyUntil")
+                  : t("detail.interestOnlyEnded")}
+              </Text>
+              <Text style={[styles.rowValue, { color: colors.text }]}>
+                {formatDisplayDate(reminder.interestOnlyUntil)}
               </Text>
             </>
           ) : null}

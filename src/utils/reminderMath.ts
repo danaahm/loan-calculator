@@ -13,7 +13,13 @@ import {
   calculateLoan,
   normalizeInput,
 } from "./loanMath";
-import { addDays, daysBetween, todayLocalIso } from "./dateIso";
+import {
+  addDays,
+  addMonthsClamped,
+  daysBetween,
+  parseIsoDate,
+  todayLocalIso,
+} from "./dateIso";
 import {
   FREQUENCY_PER_YEAR,
   advancePaymentDate,
@@ -52,6 +58,7 @@ export const createEmptyReminder = (
     accountFeeFrequency: "monthly",
     feeEventCarry: 0,
     finalPaymentDate: null,
+    interestOnlyUntil: null,
     offsetBalance: 0,
     offsetDeposit: { amount: 0, frequency: "monthly" },
     offsetEventCarry: 0,
@@ -69,15 +76,23 @@ export const createEmptyReminder = (
   };
 };
 
+/**
+ * The principal-and-interest repayment of a saved loan. With an interest-only
+ * period this is the repayment that follows it: a reminder works out the
+ * interest-only repayments itself from its balance and rate.
+ */
 export const estimatePeriodRepaymentFromProfile = (
   profile: SavedLoanProfile
 ): number => {
   const result = calculateLoan(normalizeInput(profile.input));
-  const first = result.baseline.periodRows[0];
-  if (!first) {
+  const phase =
+    result.repaymentPhases.find((item) => !item.interestOnly) ??
+    result.repaymentPhases[0];
+  const row = phase ? result.baseline.periodRows[phase.firstPeriod - 1] : undefined;
+  if (!row) {
     return 0;
   }
-  return safeRound(first.principalPaid + first.interestPaid);
+  return safeRound(row.principalPaid + row.interestPaid);
 };
 
 const NO_RECURRING_AMOUNT: ReminderRecurringAmount = {
@@ -111,6 +126,28 @@ const recurringTermsFromInput = (
 const finalPaymentDateFromInput = (input: LoanInput): string | null =>
   input.loanTermMode === "endDate" ? input.loanEndDate : null;
 
+/**
+ * When the profile's interest-only period ends: its length after the loan
+ * start. A profile has a start date only when entered with an end date, so
+ * `fallbackStart` stands in for one otherwise; with neither, it is unknown.
+ */
+const interestOnlyUntilFromInput = (
+  input: LoanInput,
+  fallbackStart: string | null
+): string | null => {
+  const start = input.loanStartDate ?? fallbackStart;
+  if (!input.interestOnly.enabled || !start) {
+    return null;
+  }
+  const months =
+    input.interestOnly.lengthUnit === "years"
+      ? input.interestOnly.lengthValue * 12
+      : input.interestOnly.lengthValue;
+  return months > 0
+    ? addMonthsClamped(start, months, parseIsoDate(start).getDate())
+    : null;
+};
+
 export const draftFromSavedProfile = (
   profile: SavedLoanProfile,
   base?: LoanReminder
@@ -131,6 +168,9 @@ export const draftFromSavedProfile = (
     accountFee: input.accountFeeEnabled ? input.accountFee : 0,
     accountFeeFrequency: input.accountFeeFrequency,
     finalPaymentDate: finalPaymentDateFromInput(input),
+    // A reminder drafted from a profile tracks the loan from its start, so
+    // without a start date of its own the loan is taken to start today.
+    interestOnlyUntil: interestOnlyUntilFromInput(input, todayLocalIso()),
     offsetBalance: input.offsetSavings.enabled ? input.offsetSavings.amount : 0,
     ...recurringTermsFromInput(input),
     updatedAt: new Date().toISOString(),
@@ -152,6 +192,9 @@ export const refreshTermsFromProfile = (
     // figure the user tracks, not a term of the loan.
     ...recurringTermsFromInput(input),
     finalPaymentDate: finalPaymentDateFromInput(input) ?? reminder.finalPaymentDate,
+    // No fallback start here: "today" would move the end date on every refresh.
+    interestOnlyUntil:
+      interestOnlyUntilFromInput(input, null) ?? reminder.interestOnlyUntil,
     updatedAt: new Date().toISOString(),
   };
 };
@@ -200,9 +243,36 @@ export const repaymentAsOf = (reminder: LoanReminder, isoDate: string): number =
   return repayment;
 };
 
+/** True when the repayment due on `dueIso` covers interest only. */
+export const isInterestOnlyDue = (reminder: LoanReminder, dueIso: string): boolean =>
+  reminder.interestOnlyUntil != null && dueIso <= reminder.interestOnlyUntil;
+
+/**
+ * The interest charged in the cycle ending on the next due date, and the
+ * repayment due then. In an interest-only period the repayment is exactly
+ * that interest, so it falls as the offset grows or extras cut the balance.
+ */
+const scheduledCycle = (
+  reminder: LoanReminder
+): { interest: number; payment: number } => {
+  const dueDate = reminder.nextPaymentDate;
+  const periodsPerYear = FREQUENCY_PER_YEAR[reminder.repaymentFrequency];
+  const periodRate =
+    cycleAverageRate(reminder, dueDate) / 100 / Math.max(1, periodsPerYear);
+  // Interest is charged on the loan balance less whatever sits in the offset.
+  const interest = Math.max(
+    0,
+    Math.max(0, reminder.remainingBalance - reminder.offsetBalance) * periodRate
+  );
+  const payment = isInterestOnlyDue(reminder, dueDate)
+    ? interest
+    : Math.max(0, repaymentAsOf(reminder, dueDate));
+  return { interest, payment };
+};
+
 export const amountDueForReminder = (reminder: LoanReminder): number => {
   const { feePortion } = feeForCycle(reminder);
-  return safeRound(repaymentAsOf(reminder, reminder.nextPaymentDate) + feePortion);
+  return safeRound(scheduledCycle(reminder).payment + feePortion);
 };
 
 /** Fraction of the original balance paid down so far, clamped to 0..1. */
@@ -313,15 +383,9 @@ const applyScheduledPayment = (
   source: "auto" | "manual"
 ): LoanReminder => {
   const dueDate = reminder.nextPaymentDate;
-  const periodsPerYear = FREQUENCY_PER_YEAR[reminder.repaymentFrequency];
-  const periodRate =
-    cycleAverageRate(reminder, dueDate) / 100 / Math.max(1, periodsPerYear);
-  // Interest is charged on the loan balance less whatever sits in the offset.
-  const interest =
-    Math.max(0, reminder.remainingBalance - reminder.offsetBalance) * periodRate;
+  const { interest, payment } = scheduledCycle(reminder);
   const { feePortion, feeEventCarry } = feeForCycle(reminder);
-  const payment = Math.max(0, repaymentAsOf(reminder, dueDate));
-  const interestPortion = Math.min(payment, Math.max(0, interest));
+  const interestPortion = Math.min(payment, interest);
   const leftover = Math.max(0, payment - interestPortion);
   const principalPortion = Math.min(reminder.remainingBalance, leftover);
   const afterScheduled = Math.max(0, reminder.remainingBalance - principalPortion);
@@ -498,11 +562,12 @@ export const estimatePayoffDate = (reminder: LoanReminder): string | null => {
   while (current.status === "active" && guard < MAX_PAYOFF_PERIODS) {
     const balanceBefore = current.remainingBalance;
     const dueDate = current.nextPaymentDate;
+    const interestOnly = isInterestOnlyDue(current, dueDate);
     // Discard each payment record as we go; only the final date matters, and
     // keeping thousands of them (with undo snapshots) is pure waste.
     current = { ...applyScheduledPayment(current, "auto"), payments: [] };
 
-    if (current.remainingBalance >= balanceBefore - ZERO_EPSILON) {
+    if (!interestOnly && current.remainingBalance >= balanceBefore - ZERO_EPSILON) {
       // The repayment does not dent the principal, so the loan never clears.
       return null;
     }
@@ -516,18 +581,19 @@ export const estimatePayoffDate = (reminder: LoanReminder): string | null => {
 };
 
 /**
- * The repayment that clears the loan by its final repayment date once
- * `annualInterestRatePercent` takes effect on `effectiveDate`.
+ * The level repayment that clears the loan by its final repayment date at
+ * `annualInterestRatePercent`, starting with the first repayment on or after
+ * `fromDate`.
  *
- * The balance is projected forward to the first repayment on or after the
- * effective date, then spread over every repayment left up to and including
- * the final one. Lenders set the minimum repayment on the loan balance alone,
- * so the offset does not lower it. Returns null when there is no final
- * repayment date, or no repayment left before it.
+ * The balance is projected forward to that repayment, then spread over every
+ * repayment left up to and including the final one. Lenders set the minimum
+ * repayment on the loan balance alone, so the offset does not lower it.
+ * Returns null when there is no final repayment date, or no repayment left
+ * before it.
  */
-export const calculateRepaymentAfterRateChange = (
+const levelRepaymentFrom = (
   reminder: LoanReminder,
-  effectiveDate: string,
+  fromDate: string,
   annualInterestRatePercent: number
 ): number | null => {
   const finalDate = reminder.finalPaymentDate;
@@ -539,7 +605,7 @@ export const calculateRepaymentAfterRateChange = (
   let guard = 0;
   while (
     current.status === "active" &&
-    current.nextPaymentDate < effectiveDate &&
+    current.nextPaymentDate < fromDate &&
     guard < MAX_PAYOFF_PERIODS
   ) {
     current = { ...applyScheduledPayment(current, "auto"), payments: [] };
@@ -567,6 +633,40 @@ export const calculateRepaymentAfterRateChange = (
   return safeRound(
     calculateBaseRepayment(current.remainingBalance, periodRate, remainingCycles)
   );
+};
+
+/** The first day a repayment can fall due after the interest-only period. */
+const principalStartDate = (reminder: LoanReminder): string | null =>
+  reminder.interestOnlyUntil ? addDays(reminder.interestOnlyUntil, 1) : null;
+
+/**
+ * The repayment that clears the loan by its final repayment date once
+ * `annualInterestRatePercent` takes effect on `effectiveDate`. A change inside
+ * an interest-only period first shapes the repayment that follows it.
+ */
+export const calculateRepaymentAfterRateChange = (
+  reminder: LoanReminder,
+  effectiveDate: string,
+  annualInterestRatePercent: number
+): number | null => {
+  const principalStart = principalStartDate(reminder);
+  const fromDate =
+    principalStart && principalStart > effectiveDate ? principalStart : effectiveDate;
+  return levelRepaymentFrom(reminder, fromDate, annualInterestRatePercent);
+};
+
+/**
+ * The principal-and-interest repayment that clears the loan by its final
+ * repayment date once the interest-only period ends, at the rate in force
+ * then. Null without both dates.
+ */
+export const calculateRepaymentAfterInterestOnly = (
+  reminder: LoanReminder
+): number | null => {
+  const principalStart = principalStartDate(reminder);
+  return principalStart
+    ? levelRepaymentFrom(reminder, principalStart, rateAsOf(reminder, principalStart))
+    : null;
 };
 
 export interface UpcomingCycle {

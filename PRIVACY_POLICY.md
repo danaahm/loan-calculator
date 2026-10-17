@@ -22,7 +22,7 @@ To provide core functionality, the App stores the following data locally on your
 - Loan input values (for example: amount borrowed, interest rate and any future rate changes, interest-only period, loan length or start and final repayment dates, fee values, offset savings, and extra repayments)
 - Calculation preferences (for example: currency and repayment options)
 - Saved loan profiles you choose to store in the App
-- Repayment reminders, payment history, and notification preferences you choose to store in the App, including any interest rate changes, offset balance, regular offset deposits, and regular extra repayments you enter for a reminder
+- Repayment reminders, payment history, and notification preferences you choose to store in the App, including any interest rate changes, interest-only end date, offset balance, regular offset deposits, and regular extra repayments you enter for a reminder
 - Display settings (for example: theme, language, and date format) and basic calculator history
 
 This data is stored only on your device using local storage and is not sent to our servers.

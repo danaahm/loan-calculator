@@ -21,7 +21,7 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - Save, load, rename, delete, and reorder loan profiles
 - Side-by-side comparison of two saved loans
 - Basic calculator with local history
-- Repayment reminders: schedule, extra payments, rate changes, archive, and local notifications
+- Repayment reminders: schedule, extra payments, rate changes, an interest-only period that switches to principal and interest when it ends, archive, and local notifications
 - Settings: light / dark / system theme and reminder notification preferences
 - Backup and restore: save every loan, reminder and setting to a JSON file, restore one on another phone, or delete everything stored on the device
 
