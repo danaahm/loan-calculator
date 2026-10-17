@@ -351,13 +351,15 @@ export const ReminderDetailScreen = ({
                 })}
               </Text>
             </Pressable>
-          ) : (
+          ) : !reminder.finalPaymentDate || rateInput.trim() !== "" ? (
+            // With a final date but no rate typed yet there is nothing to
+            // calculate, so say nothing rather than claim no repayments are left.
             <Text style={[styles.hint, { color: colors.textMuted, marginTop: 6 }]}>
               {reminder.finalPaymentDate
                 ? t("detail.newRepaymentHint")
                 : t("detail.newRepaymentNeedsFinalDate")}
             </Text>
-          )}
+          ) : null}
           <Pressable
             onPress={submitRateChange}
             style={[styles.primaryBtnFull, { backgroundColor: colors.primary, marginTop: 10, marginBottom: 0 }]}
