@@ -76,6 +76,7 @@ describe("rate changes", () => {
     expect(repaymentPhases[0]).toEqual({
       firstPeriod: 1,
       annualInterestRatePercent: 6,
+      interestOnly: false,
       repayment: expect.any(Number),
     });
     expect(repaymentPhases[0].repayment).toBeCloseTo(firstPayment, 2);

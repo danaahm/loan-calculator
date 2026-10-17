@@ -137,6 +137,11 @@ const DEFAULT_INPUT: LoanInput = {
     enabled: false,
     changes: [],
   },
+  interestOnly: {
+    enabled: false,
+    lengthValue: 5,
+    lengthUnit: "years",
+  },
   repaymentFrequency: "monthly",
   loanLengthYears: 30,
   loanTermMode: "length",
@@ -292,9 +297,8 @@ function AppContent() {
       return [];
     }
     const periodsPerYear = REPAYMENT_PERIODS_PER_YEAR[input.repaymentFrequency];
-    return result.repaymentPhases.map((phase) => ({
-      key: phase.firstPeriod,
-      label: t("repaymentPhases.atRate", {
+    return result.repaymentPhases.map((phase) => {
+      const label = t("repaymentPhases.atRate", {
         when:
           phase.firstPeriod === 1
             ? t("repaymentPhases.fromStart")
@@ -302,10 +306,16 @@ function AppContent() {
                 time: formatLoanLengthLabel((phase.firstPeriod - 1) / periodsPerYear),
               }),
         rate: formatPercent(phase.annualInterestRatePercent),
-      }),
-      monthlyRepayment:
-        Math.round(((phase.repayment * periodsPerYear) / 12) * 100) / 100,
-    }));
+      });
+      return {
+        key: phase.firstPeriod,
+        label: phase.interestOnly
+          ? t("repaymentPhases.interestOnly", { label })
+          : label,
+        monthlyRepayment:
+          Math.round(((phase.repayment * periodsPerYear) / 12) * 100) / 100,
+      };
+    });
   })();
   const activeReminders = reminders.filter((item) => item.status === "active");
   // The header shows a state, not a count: a number there reads as unread mail
@@ -986,7 +996,9 @@ function AppContent() {
                     Minimum Monthly Repayment
                   </Text>
                   <Text style={styles.minimumRepaymentSubtitle}>
-                    Principal + Interest
+                    {result.repaymentPhases[0]?.interestOnly
+                      ? "Interest Only"
+                      : "Principal + Interest"}
                   </Text>
                   <Text style={styles.minimumRepaymentValue}>
                     {formatCurrency(minimumMonthlyRepayment, input.currencyCode)}

@@ -118,6 +118,12 @@ export const CompareProfilesScreen = ({
       winner: null,
     },
     {
+      labelKey: "compare.row.interestOnly",
+      leftText: left.interestOnlyLabel,
+      rightText: right.interestOnlyLabel,
+      winner: null,
+    },
+    {
       labelKey: "compare.row.minRepayment",
       leftText: left.periodRepaymentLabel,
       rightText: right.periodRepaymentLabel,

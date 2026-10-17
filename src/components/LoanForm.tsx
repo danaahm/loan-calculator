@@ -216,6 +216,15 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
   const [rateChangeDrafts, setRateChangeDrafts] = useState(() =>
     toRateChangeDrafts(initialValue)
   );
+  const [interestOnlyEnabled, setInterestOnlyEnabled] = useState(
+    initialValue.interestOnly.enabled
+  );
+  const [interestOnlyLength, setInterestOnlyLength] = useState(
+    formatNumberForInputOrBlank(initialValue.interestOnly.lengthValue, 0)
+  );
+  const [interestOnlyUnit, setInterestOnlyUnit] = useState<ExtraRepaymentStartUnit>(
+    initialValue.interestOnly.lengthUnit
+  );
   const [loanStartDate, setLoanStartDate] = useState(
     initialValue.loanStartDate ?? todayLocalIso()
   );
@@ -271,6 +280,11 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
     setLoanTermMode(initialValue.loanTermMode);
     setRateChangesEnabled(initialValue.rateChanges.enabled);
     setRateChangeDrafts(toRateChangeDrafts(initialValue));
+    setInterestOnlyEnabled(initialValue.interestOnly.enabled);
+    setInterestOnlyLength(
+      formatNumberForInputOrBlank(initialValue.interestOnly.lengthValue, 0)
+    );
+    setInterestOnlyUnit(initialValue.interestOnly.lengthUnit);
     setLoanStartDate(initialValue.loanStartDate ?? todayLocalIso());
     setLoanEndDate(initialValue.loanEndDate);
     setAccountFeeEnabled(initialValue.accountFeeEnabled);
@@ -347,6 +361,11 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
         enabled: rateChangesEnabled,
         changes: rateChangeDrafts.map(parseRateChangeDraft),
       },
+      interestOnly: {
+        enabled: interestOnlyEnabled,
+        lengthValue: parsePositiveInt(interestOnlyLength),
+        lengthUnit: interestOnlyUnit,
+      },
       repaymentFrequency,
       loanLengthYears:
         loanTermMode === "endDate" ? termFromDates : termFromLength,
@@ -390,6 +409,9 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
     extraStartAfterUnit,
     lumpSumAmount,
     lumpSumEnabled,
+    interestOnlyEnabled,
+    interestOnlyLength,
+    interestOnlyUnit,
     interestRate,
     loanEndDate,
     loanStartDate,
@@ -653,6 +675,41 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
                   + {t("loanForm.addRateChange")}
                 </Text>
               </Pressable>
+            </View>
+          ) : null}
+
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>{t("loanForm.enableInterestOnly")}</Text>
+            <Switch
+              value={interestOnlyEnabled}
+              onValueChange={setInterestOnlyEnabled}
+              trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
+              thumbColor={colors.switchThumb}
+            />
+          </View>
+          <Text style={styles.hintText}>{t("loanForm.interestOnlyHint")}</Text>
+          {interestOnlyEnabled ? (
+            <View>
+              <Text style={styles.label}>{t("loanForm.interestOnlyLength")}</Text>
+              <View style={styles.startAfterRow}>
+                <View style={styles.startAfterInputWrap}>
+                  <TextInput
+                    keyboardType="number-pad"
+                    value={interestOnlyLength}
+                    onChangeText={(value) =>
+                      setInterestOnlyLength(formatPlainNumberInput(value, 0))
+                    }
+                    style={styles.simpleInput}
+                    placeholder={t("loanForm.interestOnlyPlaceholder")}
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+                <StartAfterUnitToggle
+                  value={interestOnlyUnit}
+                  onChange={setInterestOnlyUnit}
+                  styles={styles}
+                />
+              </View>
             </View>
           ) : null}
 

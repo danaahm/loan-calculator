@@ -1,7 +1,11 @@
 import { t } from "../i18n/translate";
 import { type LoanInput, type SavedLoanProfile } from "../types/loan";
 import { calculateLoan, getRateSequence, normalizeInput } from "./loanMath";
-import { formatLoanTermLabel, formatRateLabel } from "./profileSummary";
+import {
+  formatLoanTermLabel,
+  formatRateLabel,
+  interestOnlyLabel,
+} from "./profileSummary";
 import {
   formatCurrency,
   formatLoanLengthLabel,
@@ -39,6 +43,7 @@ export interface ComparedProfile {
   /** False once rate changes apply, so the starting rate alone says little. */
   singleRate: boolean;
   rateLabel: string;
+  interestOnlyLabel: string;
   termLabel: string;
   frequencyLabel: string;
   periodRepaymentLabel: string;
@@ -124,6 +129,7 @@ export const buildComparedProfile = (profile: SavedLoanProfile): ComparedProfile
     amountLabel: formatCurrency(input.amountBorrowed, input.currencyCode),
     singleRate: getRateSequence(input).length === 1,
     rateLabel: formatRateLabel(input),
+    interestOnlyLabel: interestOnlyLabel(input) ?? t("common.none"),
     termLabel: formatLoanTermLabel(input.loanLengthYears),
     frequencyLabel: formatFrequencyLabel(input.repaymentFrequency),
     periodRepaymentLabel: t("compare.perFrequency", {

@@ -9,6 +9,8 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - Home dashboard with the next repayment, current loan snapshot, and shortcuts
 - Loan calculator with repayment frequencies: yearly, quarterly, monthly, fortnightly, weekly
 - Advanced repayment options:
+  - rate changes: any number of new rates, each after a set number of months or years, with the repayment recalculated so the loan still ends on time
+  - an interest-only period at the start of the loan, followed by principal and interest
   - extra repayments (amount, frequency, start after months or years)
   - optional lump sum
   - offset savings, including optional recurring offset deposits

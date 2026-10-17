@@ -47,12 +47,23 @@ export interface RateChangesConfig {
   changes: RateChange[];
 }
 
+/**
+ * Repayments cover interest only for a period from the start of the loan,
+ * then switch to principal and interest over the rest of the term.
+ */
+export interface InterestOnlyConfig {
+  enabled: boolean;
+  lengthValue: number;
+  lengthUnit: ExtraRepaymentStartUnit;
+}
+
 export interface LoanInput {
   currencyCode: string;
   amountBorrowed: number;
   /** The rate at the start of the loan. `rateChanges` may replace it later. */
   annualInterestRatePercent: number;
   rateChanges: RateChangesConfig;
+  interestOnly: InterestOnlyConfig;
   repaymentFrequency: RepaymentFrequency;
   /**
    * Always populated. In "endDate" mode it is derived from the two dates by
@@ -116,14 +127,18 @@ export interface LoanSchedule {
 }
 
 /**
- * A stretch of the loan with one rate and one scheduled repayment. A loan with
- * no rate changes has exactly one.
+ * A stretch of the loan with one rate and one kind of scheduled repayment. A
+ * loan with no rate changes and no interest-only period has exactly one.
  */
 export interface RepaymentPhase {
   /** 1-based index of the first repayment in this phase. */
   firstPeriod: number;
   annualInterestRatePercent: number;
-  /** Scheduled principal and interest per repayment, from the baseline schedule. */
+  interestOnly: boolean;
+  /**
+   * Scheduled repayment at the start of the phase. Interest-only repayments
+   * follow the baseline schedule, so an offset lowers them.
+   */
   repayment: number;
 }
 

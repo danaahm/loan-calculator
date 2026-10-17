@@ -48,6 +48,21 @@ const extraRepaymentTag = (input: LoanInput): string | null => {
   });
 };
 
+export const interestOnlyLabel = (input: LoanInput): string | null => {
+  if (!input.interestOnly.enabled || input.interestOnly.lengthValue <= 0) {
+    return null;
+  }
+  return t(
+    input.interestOnly.lengthUnit === "months" ? "duration.months" : "duration.years",
+    { count: input.interestOnly.lengthValue }
+  );
+};
+
+const interestOnlyTag = (input: LoanInput): string | null => {
+  const length = interestOnlyLabel(input);
+  return length ? t("profileTag.interestOnly", { length }) : null;
+};
+
 const lumpSumTag = (input: LoanInput): string | null => {
   if (!input.lumpSum.enabled || input.lumpSum.amount <= 0) {
     return null;
@@ -104,6 +119,7 @@ export const buildSavedProfileCardSummary = (
     t("profileTag.repayments", {
       frequency: formatFrequencyLabel(input.repaymentFrequency),
     }),
+    interestOnlyTag(input),
     extraRepaymentTag(input),
     lumpSumTag(input),
     offsetTag(input),

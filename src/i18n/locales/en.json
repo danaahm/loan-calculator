@@ -39,7 +39,8 @@
     "title": "Repayment changes (monthly)",
     "fromStart": "From the start",
     "after": "After {time}",
-    "atRate": "{when} at {rate}"
+    "atRate": "{when} at {rate}",
+    "interestOnly": "{label}, interest only"
   },
   "loanPicker": {
     "title": "Your saved loans",
@@ -92,7 +93,9 @@
     "offsetDeposit": "Offset deposit amount must be greater than zero.",
     "rateChangesEmpty": "Add a rate change, or switch rate changes off.",
     "rateChangeTiming": "Each rate change must start after the first repayment and before the loan ends.",
-    "rateChangeDuplicate": "Two rate changes start at the same repayment."
+    "rateChangeDuplicate": "Two rate changes start at the same repayment.",
+    "interestOnlyLength": "Enter how long the interest-only period lasts.",
+    "interestOnlyTooLong": "The interest-only period must end before the loan does."
   },
   "progress": {
     "paid": "paid",
@@ -153,6 +156,10 @@
     "rateChangeRemove": "Remove",
     "rateChangeRemoveLabel": "Remove rate change {number}",
     "addRateChange": "Add rate change",
+    "enableInterestOnly": "Enable Interest-Only Period",
+    "interestOnlyHint": "Repayments cover only the interest at first, then switch to principal and interest over the rest of the term.",
+    "interestOnlyLength": "Interest Only For",
+    "interestOnlyPlaceholder": "e.g. 5",
     "enableAccountFee": "Enable Account Fee",
     "accountFeeHint": "Turn on if your lender charges an ongoing account or service fee.",
     "accountFee": "Account Fee (per fee event)",
@@ -412,6 +419,7 @@
     "extra": "Extra {amount} {frequency}",
     "extraAfter": "{label} after {after}",
     "lumpSum": "Lump sum {amount}",
+    "interestOnly": "Interest only {length}",
     "offset": "Offset",
     "offsetWithParts": "Offset {parts}",
     "fee": "Fee {amount} {frequency}",
@@ -434,6 +442,7 @@
       "interestRate": "Interest rate",
       "term": "Term",
       "frequency": "Frequency",
+      "interestOnly": "Interest only",
       "minRepayment": "Min repayment",
       "monthlyEquivalent": "Monthly equivalent",
       "extraRepayment": "Extra repayment",
