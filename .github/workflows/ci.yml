@@ -21,6 +21,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The version check compares against the base branch, so it needs
+          # history rather than the default single commit.
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -33,6 +37,12 @@ jobs:
 
       - name: Check Expo dependency versions
         run: npx expo install --check
+
+      # Every change that reaches the app ships under a new version, so a PR
+      # that touches the app must raise it above main's. Picking patch, minor
+      # or major stays a human call: `npm run version:bump -- <kind>`.
+      - name: App version is bumped
+        run: node scripts/version.mjs check --against origin/${{ github.base_ref }}
 
       - name: TypeScript typecheck
         run: npm run typecheck

@@ -15,5 +15,6 @@ or network call, or changes how users delete their data.
 
 ## Checks
 
+- [ ] Version bumped with `npm run version:bump -- <patch|minor|major>` (patch for fixes, minor for features, major for breaking changes)
 - [ ] `npm run typecheck`
 - [ ] `npm test`

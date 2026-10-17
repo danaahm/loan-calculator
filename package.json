@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit",
     "build:privacy": "node scripts/build-privacy-policy.mjs",
     "check:privacy": "node scripts/build-privacy-policy.mjs --check",
+    "version:bump": "node scripts/version.mjs bump",
+    "check:version": "node scripts/version.mjs check",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
