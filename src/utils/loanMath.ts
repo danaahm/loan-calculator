@@ -8,7 +8,9 @@ import {
   type LoanTermMode,
   type OffsetContributionConfig,
   type PeriodRow,
+  type RateChangesConfig,
   type RepaymentFrequency,
+  type RepaymentPhase,
   type YearlyRow,
 } from "../types/loan";
 
@@ -107,7 +109,8 @@ const getBalloonAmount = (input: LoanInput, principal: number): number => {
   return Math.max(0, Math.min(input.lumpSum.amount, principal));
 };
 
-const getExtraRepaymentStartAfterPeriods = (
+/** A delay entered in months or years, as a whole number of repayments. */
+const getStartAfterPeriods = (
   startAfterValue: number,
   startAfterUnit: "months" | "years",
   periodsPerYear: number
@@ -116,6 +119,105 @@ const getExtraRepaymentStartAfterPeriods = (
     return Math.max(0, Math.round(startAfterValue * periodsPerYear));
   }
   return Math.max(0, Math.round((startAfterValue / 12) * periodsPerYear));
+};
+
+const getTotalPeriods = (input: LoanInput, periodsPerYear: number): number =>
+  Math.max(1, Math.round(input.loanLengthYears * periodsPerYear));
+
+interface RateStart {
+  /** 1-based index of the first repayment charged at this rate. */
+  firstPeriod: number;
+  annualInterestRatePercent: number;
+}
+
+/**
+ * The enabled rate changes as the repayment each first applies to, in order.
+ * A change that would land on the first repayment or after the last one is
+ * dropped; when two land on the same repayment the later entry wins.
+ * `validateLoanInput` reports both cases, so neither reaches a real result.
+ */
+const getRateStarts = (
+  rateChanges: RateChangesConfig,
+  periodsPerYear: number,
+  totalPeriods: number
+): RateStart[] => {
+  if (!rateChanges.enabled) {
+    return [];
+  }
+  const byPeriod = new Map<number, number>();
+  for (const change of rateChanges.changes) {
+    const afterPeriods = getStartAfterPeriods(
+      change.startAfterValue,
+      change.startAfterUnit,
+      periodsPerYear
+    );
+    if (afterPeriods > 0 && afterPeriods < totalPeriods) {
+      byPeriod.set(afterPeriods + 1, change.annualInterestRatePercent);
+    }
+  }
+  return Array.from(byPeriod.entries())
+    .sort((left, right) => left[0] - right[0])
+    .map(([firstPeriod, annualInterestRatePercent]) => ({
+      firstPeriod,
+      annualInterestRatePercent,
+    }));
+};
+
+/** Every rate the loan is charged, the starting rate first, in the order they apply. */
+export const getRateSequence = (input: LoanInput): number[] => {
+  const periodsPerYear = getPeriodsPerYear(input.repaymentFrequency);
+  const totalPeriods = getTotalPeriods(input, periodsPerYear);
+  return [
+    input.annualInterestRatePercent,
+    ...getRateStarts(input.rateChanges, periodsPerYear, totalPeriods).map(
+      (start) => start.annualInterestRatePercent
+    ),
+  ];
+};
+
+interface PlannedPhase extends RateStart {
+  periodRate: number;
+  /** Scheduled principal and interest per repayment. */
+  repayment: number;
+}
+
+/**
+ * The scheduled repayment for each stretch of the loan. When the rate changes
+ * the lender resets the repayment so the loan still ends on its final date,
+ * and sets it on the contracted balance: extra repayments and offset shorten
+ * the loan rather than lowering the repayment. So the repayments are worked
+ * out once along the plain contracted path, and every schedule shares them.
+ */
+const planRepaymentPhases = (input: LoanInput): PlannedPhase[] => {
+  const periodsPerYear = getPeriodsPerYear(input.repaymentFrequency);
+  const totalPeriods = getTotalPeriods(input, periodsPerYear);
+  const principal = Math.max(0, input.amountBorrowed);
+  const balloonAmount = getBalloonAmount(input, principal);
+  const starts: RateStart[] = [
+    { firstPeriod: 1, annualInterestRatePercent: input.annualInterestRatePercent },
+    ...getRateStarts(input.rateChanges, periodsPerYear, totalPeriods),
+  ];
+
+  const phases: PlannedPhase[] = [];
+  let contractedBalance = principal;
+  starts.forEach((start, index) => {
+    const periodRate =
+      start.annualInterestRatePercent / 100 / Math.max(1, periodsPerYear);
+    const repayment = calculateBaseRepayment(
+      contractedBalance,
+      periodRate,
+      totalPeriods - start.firstPeriod + 1,
+      balloonAmount
+    );
+    phases.push({ ...start, periodRate, repayment });
+
+    const nextFirstPeriod = starts[index + 1]?.firstPeriod ?? totalPeriods + 1;
+    for (let period = start.firstPeriod; period < nextFirstPeriod; period += 1) {
+      const principalPaid = Math.max(0, repayment - contractedBalance * periodRate);
+      contractedBalance = Math.max(0, contractedBalance - principalPaid);
+    }
+  });
+  return phases;
 };
 
 const computeSchedule = (
@@ -128,7 +230,7 @@ const computeSchedule = (
     ? Math.max(0, input.accountFee)
     : 0;
   const extraEventsPerYear = getPeriodsPerYear(input.extraRepayment.frequency);
-  const extraStartAfterPeriods = getExtraRepaymentStartAfterPeriods(
+  const extraStartAfterPeriods = getStartAfterPeriods(
     input.extraRepayment.startAfterValue,
     input.extraRepayment.startAfterUnit,
     periodsPerYear
@@ -137,20 +239,11 @@ const computeSchedule = (
   const offsetEventsPerYear = offsetContribution
     ? getPeriodsPerYear(offsetContribution.frequency)
     : 0;
-  const totalPeriods = Math.max(
-    1,
-    Math.round(input.loanLengthYears * periodsPerYear)
-  );
-  const periodRate =
-    input.annualInterestRatePercent / 100 / Math.max(1, periodsPerYear);
+  const totalPeriods = getTotalPeriods(input, periodsPerYear);
   const principal = Math.max(0, input.amountBorrowed);
   const balloonAmount = getBalloonAmount(input, principal);
-  const scheduledRepayment = calculateBaseRepayment(
-    principal,
-    periodRate,
-    totalPeriods,
-    balloonAmount
-  );
+  const phases = planRepaymentPhases(input);
+  let phaseIndex = 0;
 
   let balance = principal;
   let offsetBalance = getOffsetAmount(input);
@@ -172,10 +265,18 @@ const computeSchedule = (
   while (balance > ZERO_EPSILON && periodIndex < maxSimulationPeriods) {
     periodIndex += 1;
     const yearIndex = Math.ceil(periodIndex / periodsPerYear);
+    while (
+      phaseIndex + 1 < phases.length &&
+      periodIndex >= phases[phaseIndex + 1].firstPeriod
+    ) {
+      phaseIndex += 1;
+    }
+    const phase = phases[phaseIndex];
     const openingBalance = balance;
-    const interestPaid = Math.max(0, openingBalance - offsetBalance) * periodRate;
+    const interestPaid =
+      Math.max(0, openingBalance - offsetBalance) * phase.periodRate;
 
-    let principalPaid = Math.max(0, scheduledRepayment - interestPaid);
+    let principalPaid = Math.max(0, phase.repayment - interestPaid);
     principalPaid = Math.min(principalPaid, balance);
     balance = Math.max(0, balance - principalPaid);
 
@@ -360,11 +461,21 @@ export const calculateLoan = (input: LoanInput): LoanCalculationResult => {
     ? contracted.summary.payoffYears - activeSchedule.summary.payoffYears
     : 0;
 
+  // Only phases the loan reaches: a large offset can clear it before a change.
+  const repaymentPhases: RepaymentPhase[] = planRepaymentPhases(input)
+    .filter((phase) => phase.firstPeriod <= baseline.periodRows.length)
+    .map((phase) => ({
+      firstPeriod: phase.firstPeriod,
+      annualInterestRatePercent: phase.annualInterestRatePercent,
+      repayment: safeRound(phase.repayment),
+    }));
+
   return {
     contracted,
     baseline,
     withExtra,
     activeSchedule,
+    repaymentPhases,
     hasPlanComparison,
     savings: {
       moneySaved,
@@ -382,10 +493,38 @@ export interface LoanInputValidation {
   error: string | null;
 }
 
+const validateRateChanges = (input: LoanInput): string | null => {
+  if (!input.rateChanges.enabled) {
+    return null;
+  }
+  if (input.rateChanges.changes.length === 0) {
+    return t("validation.rateChangesEmpty");
+  }
+  const periodsPerYear = getPeriodsPerYear(input.repaymentFrequency);
+  const totalPeriods = getTotalPeriods(input, periodsPerYear);
+  const seen = new Set<number>();
+  for (const change of input.rateChanges.changes) {
+    const afterPeriods = getStartAfterPeriods(
+      change.startAfterValue,
+      change.startAfterUnit,
+      periodsPerYear
+    );
+    if (afterPeriods <= 0 || afterPeriods >= totalPeriods) {
+      return t("validation.rateChangeTiming");
+    }
+    if (seen.has(afterPeriods)) {
+      return t("validation.rateChangeDuplicate");
+    }
+    seen.add(afterPeriods);
+  }
+  return null;
+};
+
 /**
  * Mandatory fields are the amount borrowed, the loan length and a currency.
  * The interest rate is optional and treated as 0% when left blank. Optional
- * sections (extra repayment, lump sum, offset) only block once switched on.
+ * sections (rate changes, extra repayment, lump sum, offset) only block once
+ * switched on.
  */
 export const validateLoanInput = (input: LoanInput): LoanInputValidation => {
   const ready =
@@ -405,6 +544,10 @@ export const validateLoanInput = (input: LoanInput): LoanInputValidation => {
     }
     if (input.currencyCode.trim().length === 0) {
       return t("validation.currency");
+    }
+    const rateChangeError = validateRateChanges(input);
+    if (rateChangeError) {
+      return rateChangeError;
     }
     if (input.extraRepayment.enabled && input.extraRepayment.amount <= 0) {
       return t("validation.extraRepayment");
@@ -436,6 +579,34 @@ export const validateLoanInput = (input: LoanInput): LoanInputValidation => {
   return { ready, error };
 };
 
+/** Profiles saved before rate changes existed have none, switched off. */
+const normalizeRateChanges = (value: unknown): RateChangesConfig => {
+  const raw = (value && typeof value === "object" ? value : {}) as Partial<
+    Record<keyof RateChangesConfig, unknown>
+  >;
+  const changes = Array.isArray(raw.changes) ? raw.changes : [];
+  return {
+    enabled: Boolean(raw.enabled),
+    changes: changes
+      .filter(
+        (item): item is Record<string, unknown> =>
+          Boolean(item) && typeof item === "object"
+      )
+      .map((item, index) => ({
+        id:
+          typeof item.id === "string" && item.id.length > 0
+            ? item.id
+            : `rate-change-${index + 1}`,
+        startAfterValue: Math.max(0, Math.floor(Number(item.startAfterValue) || 0)),
+        startAfterUnit: item.startAfterUnit === "years" ? "years" : "months",
+        annualInterestRatePercent: Math.max(
+          0,
+          Number(item.annualInterestRatePercent) || 0
+        ),
+      })),
+  };
+};
+
 export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
   const repaymentFrequency = input.repaymentFrequency ?? "monthly";
   const periodsPerYear = getPeriodsPerYear(repaymentFrequency);
@@ -463,6 +634,7 @@ export const normalizeInput = (input: Partial<LoanInput>): LoanInput => {
     currencyCode: input.currencyCode ?? "AUD",
     amountBorrowed: Math.max(0, input.amountBorrowed ?? 0),
     annualInterestRatePercent: Math.max(0, input.annualInterestRatePercent ?? 0),
+    rateChanges: normalizeRateChanges(input.rateChanges),
     repaymentFrequency,
     loanLengthYears: Math.max(
       MIN_LOAN_LENGTH_YEARS,

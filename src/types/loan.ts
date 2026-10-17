@@ -33,10 +33,26 @@ export interface OffsetSavingsConfig {
   contribution: OffsetContributionConfig;
 }
 
+/** A new interest rate that applies from a point in the loan onwards. */
+export interface RateChange {
+  id: string;
+  /** How far into the loan the new rate starts, counted from the first repayment. */
+  startAfterValue: number;
+  startAfterUnit: ExtraRepaymentStartUnit;
+  annualInterestRatePercent: number;
+}
+
+export interface RateChangesConfig {
+  enabled: boolean;
+  changes: RateChange[];
+}
+
 export interface LoanInput {
   currencyCode: string;
   amountBorrowed: number;
+  /** The rate at the start of the loan. `rateChanges` may replace it later. */
   annualInterestRatePercent: number;
+  rateChanges: RateChangesConfig;
   repaymentFrequency: RepaymentFrequency;
   /**
    * Always populated. In "endDate" mode it is derived from the two dates by
@@ -99,6 +115,18 @@ export interface LoanSchedule {
   }>;
 }
 
+/**
+ * A stretch of the loan with one rate and one scheduled repayment. A loan with
+ * no rate changes has exactly one.
+ */
+export interface RepaymentPhase {
+  /** 1-based index of the first repayment in this phase. */
+  firstPeriod: number;
+  annualInterestRatePercent: number;
+  /** Scheduled principal and interest per repayment, from the baseline schedule. */
+  repayment: number;
+}
+
 export interface LoanCalculationResult {
   /**
    * The loan on its contracted terms alone: principal, rate and term. No extra
@@ -111,6 +139,8 @@ export interface LoanCalculationResult {
   withExtra?: LoanSchedule;
   /** The user's terms with every enabled feature applied. */
   activeSchedule: LoanSchedule;
+  /** Phases the loan actually reaches, in order. Always at least one. */
+  repaymentPhases: RepaymentPhase[];
   /** True when at least one of extra repayment, lump sum or offset is on. */
   hasPlanComparison: boolean;
   /**

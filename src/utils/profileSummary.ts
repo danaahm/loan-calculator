@@ -6,7 +6,7 @@ import {
   formatLoanLengthLabel,
   formatPercent,
 } from "./format";
-import { normalizeInput } from "./loanMath";
+import { getRateSequence, normalizeInput } from "./loanMath";
 
 export interface SavedProfileCardSummary {
   amountLabel: string;
@@ -19,6 +19,10 @@ export interface SavedProfileCardSummary {
 export const formatLoanTermLabel = (loanLengthYears: number): string => {
   return formatLoanLengthLabel(loanLengthYears) || t("common.emptyValue");
 };
+
+/** The starting rate, then each rate change in the order it applies. */
+export const formatRateLabel = (input: LoanInput): string =>
+  getRateSequence(input).map(formatPercent).join(" → ");
 
 const extraRepaymentTag = (input: LoanInput): string | null => {
   if (!input.extraRepayment.enabled || input.extraRepayment.amount <= 0) {
@@ -95,7 +99,7 @@ export const buildSavedProfileCardSummary = (
   const input = normalizeInput(profile.input);
   const amountLabel = formatCurrency(input.amountBorrowed, input.currencyCode);
   const termLabel = formatLoanTermLabel(input.loanLengthYears);
-  const rateLabel = formatPercent(input.annualInterestRatePercent);
+  const rateLabel = formatRateLabel(input);
   const tags = [
     t("profileTag.repayments", {
       frequency: formatFrequencyLabel(input.repaymentFrequency),

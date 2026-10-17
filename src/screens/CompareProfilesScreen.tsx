@@ -102,7 +102,7 @@ export const CompareProfilesScreen = ({
       winner: betterLower(
         left.input.annualInterestRatePercent,
         right.input.annualInterestRatePercent,
-        true
+        left.singleRate && right.singleRate
       ),
     },
     {
