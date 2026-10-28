@@ -49,6 +49,7 @@ interface ReminderDetailScreenProps {
   onEdit: () => void;
   onToggleNotifications: (enabled: boolean) => void;
   onExtraPayment: (amount: number) => void;
+  onCorrectBalance: (balance: number) => void;
   onUndoLast: () => void;
   onAddRateChange: (
     effectiveDate: string,
@@ -70,6 +71,7 @@ export const ReminderDetailScreen = ({
   onEdit,
   onToggleNotifications,
   onExtraPayment,
+  onCorrectBalance,
   onUndoLast,
   onAddRateChange,
   onRemoveRateChange,
@@ -81,6 +83,7 @@ export const ReminderDetailScreen = ({
   const { colors } = useTheme();
   const t = useTranslation();
   const [extraInput, setExtraInput] = useState("");
+  const [balanceInput, setBalanceInput] = useState("");
   const [rateDate, setRateDate] = useState(todayLocalIso());
   const [rateInput, setRateInput] = useState("");
   const [rateRepaymentInput, setRateRepaymentInput] = useState("");
@@ -116,6 +119,18 @@ export const ReminderDetailScreen = ({
     }
     onExtraPayment(amount);
     setExtraInput("");
+  };
+
+  const submitBalanceCorrection = () => {
+    const text = balanceInput.replace(/,/g, "").trim();
+    const balance = Number(text);
+    // Zero is allowed: it is how the user says the lender shows the loan paid off.
+    if (text === "" || !Number.isFinite(balance) || balance < 0) {
+      Alert.alert(t("detail.balanceRequired"), t("detail.balanceRequiredBody"));
+      return;
+    }
+    onCorrectBalance(balance);
+    setBalanceInput("");
   };
 
   const submitRateChange = () => {
@@ -431,6 +446,44 @@ export const ReminderDetailScreen = ({
           </View>
         </View>
 
+        {reminder.status !== "completed" ? (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
+              {t("detail.correctBalance")}
+            </Text>
+            <Text style={[styles.hint, { color: colors.textMuted }]}>
+              {t("detail.correctBalanceHint")}
+            </Text>
+            <View style={styles.row}>
+              <TextInput
+                keyboardType="decimal-pad"
+                value={balanceInput}
+                onChangeText={(value) => setBalanceInput(formatGroupedNumberInput(value))}
+                placeholder={formatGroupedNumberValue(reminder.remainingBalance)}
+                placeholderTextColor={colors.textMuted}
+                accessibilityLabel={t("detail.correctBalanceA11y")}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.borderStrong,
+                  },
+                ]}
+              />
+              <Pressable
+                onPress={submitBalanceCorrection}
+                accessibilityRole="button"
+                style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+              >
+                <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>
+                  {t("detail.correctBalanceApply")}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <Text style={[styles.sectionTitle, { color: colors.accentText }]}>{t("detail.paymentHistory")}</Text>
           {lastPayments.length === 0 ? (
@@ -452,13 +505,29 @@ export const ReminderDetailScreen = ({
                   </Text>
                 ) : null}
                 <Text style={[styles.hint, { color: colors.textMuted }]}>
-                  {t("detail.historyAmounts", {
-                    paid: formatCurrency(item.amountPaid, reminder.currencyCode),
-                    remaining: formatCurrency(
-                      item.remainingAfter,
-                      reminder.currencyCode
-                    ),
-                  })}
+                  {item.source === "correction"
+                    ? t(
+                        (item.balanceChange ?? 0) < 0
+                          ? "detail.historyCorrectionDown"
+                          : "detail.historyCorrectionUp",
+                        {
+                          change: formatCurrency(
+                            Math.abs(item.balanceChange ?? 0),
+                            reminder.currencyCode
+                          ),
+                          remaining: formatCurrency(
+                            item.remainingAfter,
+                            reminder.currencyCode
+                          ),
+                        }
+                      )
+                    : t("detail.historyAmounts", {
+                        paid: formatCurrency(item.amountPaid, reminder.currencyCode),
+                        remaining: formatCurrency(
+                          item.remainingAfter,
+                          reminder.currencyCode
+                        ),
+                      })}
                 </Text>
               </View>
             ))
@@ -469,7 +538,7 @@ export const ReminderDetailScreen = ({
               style={[styles.secondaryBtn, { borderColor: colors.borderStrong }]}
             >
               <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
-                {t("detail.undoLast")}
+                {t("detail.undoLastEntry")}
               </Text>
             </Pressable>
           ) : null}

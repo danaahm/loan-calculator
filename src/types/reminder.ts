@@ -4,7 +4,8 @@ import { type RepaymentFrequency } from "./loan";
 export type ReminderStatus = "active" | "archived" | "completed";
 export type MonthlyAnchor = "onDate" | "startOfMonth" | "endOfMonth";
 export type NotifyLeadUnit = "days" | "weeks";
-export type ReminderPaymentSource = "auto" | "manual" | "extra";
+/** "correction" is not a payment: the user set the balance to their lender's figure. */
+export type ReminderPaymentSource = "auto" | "manual" | "extra" | "correction";
 
 export interface NotifyLead {
   value: number;
@@ -33,6 +34,11 @@ export interface ReminderPayment {
   feePortion: number;
   /** Regular extra repayment applied on this cycle, on top of `principalPortion`. */
   extraPortion?: number;
+  /**
+   * On a correction, how far the balance moved: negative when the lender's
+   * figure was lower than the app's. Absent on every other entry.
+   */
+  balanceChange?: number;
   remainingAfter: number;
   source: ReminderPaymentSource;
   undoSnapshot: ReminderUndoSnapshot;

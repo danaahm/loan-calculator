@@ -1,6 +1,6 @@
 # Privacy Policy for Simple Loan Calculator
 
-Effective date: 2026-10-17
+Effective date: 2026-10-28
 
 Simple Loan Calculator ("the App") is designed to work fully on your device.
 
@@ -22,10 +22,12 @@ To provide core functionality, the App stores the following data locally on your
 - Loan input values (for example: amount borrowed, interest rate and any future rate changes, interest-only period, loan length or start and final repayment dates, fee values, offset savings, and extra repayments)
 - Calculation preferences (for example: currency and repayment options)
 - Saved loan profiles you choose to store in the App
-- Repayment reminders, payment history, and notification preferences you choose to store in the App, including any interest rate changes, interest-only end date, offset balance, regular offset deposits, and regular extra repayments you enter for a reminder
+- Repayment reminders, payment history, and notification preferences you choose to store in the App, including any interest rate changes, interest-only end date, offset balance, regular offset deposits, regular extra repayments, and balance corrections you enter for a reminder
 - Display settings (for example: theme, language, and date format) and basic calculator history
 
 This data is stored only on your device using local storage and is not sent to our servers.
+
+If the App finds stored data it cannot read (for example, because the device's storage was damaged), it starts without that data and tells you. It keeps a copy of the unreadable data on your device instead of overwriting it, so your loans are not lost by accident. That copy never leaves your device and is not included in backup files.
 
 ## Backup Files You Create
 
@@ -72,7 +74,7 @@ Because data is stored locally on your device, you are responsible for device-le
 ## Your Choices
 
 You can delete your saved loan profiles and reminders directly in the App at any time.
-Settings also has a "Delete everything" option that removes every loan, reminder, calculator entry, and setting the App has stored on your device. This cannot be undone, so save a backup first if you may want the data later.
+Settings also has a "Delete everything" option that removes every loan, reminder, calculator entry, and setting the App has stored on your device, along with any unreadable copy the App has kept. This cannot be undone, so save a backup first if you may want the data later.
 You can also uninstall the App to remove local app data from your device (subject to device backup settings).
 
 ## Changes to This Policy

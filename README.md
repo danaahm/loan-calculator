@@ -21,7 +21,8 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 - Save, load, rename, delete, and reorder loan profiles
 - Side-by-side comparison of two saved loans
 - Basic calculator with local history
-- Repayment reminders: schedule, extra payments, rate changes, an interest-only period that switches to principal and interest when it ends, archive, and local notifications
+- Repayment reminders: schedule, extra payments, rate changes, an interest-only period that switches to principal and interest when it ends, balance corrections to match the lender's figure, archive, and local notifications
+- Damaged storage protection: data the app cannot read is set aside rather than overwritten, and the user is told
 - Settings: light / dark / system theme and reminder notification preferences
 - Backup and restore: save every loan, reminder and setting to a JSON file, restore one on another phone, or delete everything stored on the device
 - Update prompts on Android: Google Play offers new versions in the app, downloads them in the background, and installs when the user taps Restart

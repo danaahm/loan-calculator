@@ -3,6 +3,7 @@ import { type LoanReminder } from "../../types/reminder";
 import {
   addRateChange,
   amountDueForReminder,
+  applyBalanceCorrection,
   applyExtraPayment,
   buildUpcomingRepayments,
   calculateRepaymentAfterRateChange,
@@ -405,6 +406,95 @@ describe("applyExtraPayment", () => {
     const undone = undoLastPayment(applyExtraPayment(before, 2_500));
     expect(undone.remainingBalance).toBe(before.remainingBalance);
     expect(undone.payments).toHaveLength(0);
+  });
+});
+
+describe("applyBalanceCorrection", () => {
+  it("sets the balance and logs the change without counting it as paid", () => {
+    freezeToday("2026-02-01");
+    const after = applyBalanceCorrection(
+      reminder({ remainingBalance: 10_000 }),
+      9_874.32
+    );
+
+    expect(after.remainingBalance).toBe(9_874.32);
+    const entry = after.payments[0];
+    expect(entry.source).toBe("correction");
+    expect(entry.balanceChange).toBe(-125.68);
+    expect(entry.remainingAfter).toBe(9_874.32);
+    expect(entry.amountPaid).toBe(0);
+    expect(entry.principalPortion).toBe(0);
+    expect(entry.interestPortion).toBe(0);
+    expect(entry.date).toBe("2026-02-01");
+  });
+
+  it("can raise the balance as well as lower it", () => {
+    const after = applyBalanceCorrection(
+      reminder({ remainingBalance: 10_000 }),
+      10_040
+    );
+    expect(after.remainingBalance).toBe(10_040);
+    expect(after.payments[0].balanceChange).toBe(40);
+  });
+
+  it("leaves the schedule alone", () => {
+    const before = reminder({ remainingBalance: 10_000 });
+    const after = applyBalanceCorrection(before, 9_000);
+    expect(after.nextPaymentDate).toBe(before.nextPaymentDate);
+    expect(after.status).toBe("active");
+    expect(after.notificationsEnabled).toBe(true);
+  });
+
+  it("completes the reminder when the lender shows nothing owing", () => {
+    const after = applyBalanceCorrection(
+      reminder({ remainingBalance: 312.5, notificationsEnabled: true }),
+      0
+    );
+    expect(after.remainingBalance).toBe(0);
+    expect(after.status).toBe("completed");
+    expect(after.notificationsEnabled).toBe(false);
+  });
+
+  it("records nothing when the balance already matches", () => {
+    const item = reminder({ remainingBalance: 10_000 });
+    expect(applyBalanceCorrection(item, 10_000)).toBe(item);
+    expect(applyBalanceCorrection(item, 10_000.001)).toBe(item);
+  });
+
+  it("ignores a value that is not a number", () => {
+    const item = reminder({ remainingBalance: 10_000 });
+    expect(applyBalanceCorrection(item, Number.NaN)).toBe(item);
+  });
+
+  it("treats a negative balance as paid off", () => {
+    const after = applyBalanceCorrection(reminder({ remainingBalance: 500 }), -20);
+    expect(after.remainingBalance).toBe(0);
+    expect(after.status).toBe("completed");
+  });
+
+  it("does not reopen a completed loan", () => {
+    const item = reminder({ remainingBalance: 0, status: "completed" });
+    expect(applyBalanceCorrection(item, 1_000)).toBe(item);
+  });
+
+  it("is reversible through the undo snapshot", () => {
+    const before = reminder({ remainingBalance: 10_000, notificationsEnabled: true });
+    const undone = undoLastPayment(applyBalanceCorrection(before, 0));
+    expect(undone.remainingBalance).toBe(10_000);
+    expect(undone.status).toBe("active");
+    expect(undone.notificationsEnabled).toBe(true);
+    expect(undone.payments).toHaveLength(0);
+  });
+
+  it("carries the next scheduled repayment on from the corrected balance", () => {
+    freezeToday("2026-01-20");
+    const corrected = applyBalanceCorrection(
+      reminder({ remainingBalance: 10_000, nextPaymentDate: "2026-02-15" }),
+      8_000
+    );
+    freezeToday("2026-02-15");
+    const { reminder: caught } = catchUpReminder(corrected, "2026-02-15");
+    expect(caught.remainingBalance).toBe(7_000);
   });
 });
 
