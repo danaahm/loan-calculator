@@ -69,7 +69,7 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 
 ### Prerequisites
 
-- Node.js 22.13+ (recommended)
+- Node.js 24 LTS, pinned in `.nvmrc` (run `nvm use`). CI reads the same file.
 - npm
 - For the full app (charts + reminders with phone alerts): a development build or Android emulator/device with a native binary
 - Expo Go still runs the calculator UI, but **local notification banners are not available in Expo Go** from SDK 53 onward
