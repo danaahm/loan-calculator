@@ -96,17 +96,32 @@ What it does:
    native modules including Skia charts and notifications).
 2. Builds the production `.aab` on the GitHub runner with `eas build --local`
    (free public-repo Actions minutes; does not use EAS cloud build credits).
-3. Submits it to Google Play with `eas submit`, releasing to the chosen track.
+3. Uploads it to Google Play with
+   [`r0adkll/upload-google-play`](https://github.com/r0adkll/upload-google-play),
+   releasing to the chosen track with this version's release notes. `eas submit`
+   is not used because it cannot send release notes.
 
 ### Triggering it
 
-- Push a version tag: `git tag v1.0.2 && git push origin v1.0.2` (submits to the
-  `internal` track by default), or
+- Push a version tag: `git tag -a v1.6.0 -m "1.6.0" origin/main && git push origin v1.6.0`
+  (submits to the `internal` track). The tag must match `expo.version` in
+  `app.json`, or the workflow stops before building. Or:
 - Run it manually: GitHub → Actions → "Android Release" → "Run workflow", and pick
   the track (`internal`, `alpha`, `beta`, or `production`).
 
 The workflow intentionally does not run on pull requests, so the secrets below are
 never exposed to outside contributors on this public repo.
+
+### Release notes ("What's new")
+
+Each version's notes live in `release-notes/<version>/whatsnew-<locale>`, for
+example `release-notes/1.6.0/whatsnew-en-US`. The locale must match a language on
+the Play listing; the listing's default is `en-US`. Add the file in the same PR
+that bumps the version: CI fails a PR whose version has no notes, or whose notes
+are over Google Play's 500-character limit. Run the same check locally with
+`node scripts/release-notes.mjs check`.
+
+Promoting a release to another track in Play Console carries its notes with it.
 
 ### Required GitHub secrets
 
@@ -116,11 +131,12 @@ values can never be read back once saved):
 
 | Secret name | What it is | How to create it |
 | --- | --- | --- |
-| `EXPO_TOKEN` | Expo access token used by EAS to build with your managed keystore and submit | expo.dev → Account settings → Access tokens → Create token |
+| `EXPO_TOKEN` | Expo access token used by EAS to build with your managed keystore | expo.dev → Account settings → Access tokens → Create token |
 | `GOOGLE_SERVICE_ACCOUNT_KEY` | Full JSON contents of a Google Play service account key with release permission | Play Console → Users and permissions (or Google Cloud) → create a service account, grant it release access, create a JSON key, and paste the whole file contents as the secret value |
 
-The workflow writes `GOOGLE_SERVICE_ACCOUNT_KEY` to `service-account.json` at
-runtime (gitignored) and `eas.json` points each submit profile at that path.
+The workflow passes `GOOGLE_SERVICE_ACCOUNT_KEY` straight to the upload step and
+never writes it to disk. The `submit` profiles in `eas.json` still point at a
+gitignored `service-account.json`, for submitting by hand with `eas submit`.
 
 ### One-time Google Play prerequisites
 

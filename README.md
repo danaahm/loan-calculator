@@ -160,17 +160,21 @@ GitHub Actions workflows live in `.github/workflows/`.
 
 1. `npm ci`
 2. `npx expo install --check` (SDK 57 package versions)
-3. `npm run typecheck`
-4. `npm run check:privacy` (hosted policy page matches `PRIVACY_POLICY.md`)
-5. `npm test -- --ci` (loan and reminder maths, backup validation)
-6. `npx expo-doctor` (advisory; does not fail the job)
-7. `npx expo export --platform web` (JS bundle smoke test)
+3. `node scripts/version.mjs check` (the version is raised above `main`'s)
+4. `node scripts/release-notes.mjs check` (Google Play notes exist for this version and fit in 500 characters)
+5. `npm run typecheck`
+6. `npm run check:privacy` (hosted policy page matches `PRIVACY_POLICY.md`)
+7. `npm test -- --ci` (loan and reminder maths, backup validation)
+8. `npx expo-doctor` (advisory; does not fail the job)
+9. `npx expo export --platform web` (JS bundle smoke test)
 
 Keep `package-lock.json` in sync with `package.json`. CI uses `npm ci` and will fail if they drift.
 
 Do not add an `index.html` at the project root. Expo treats that file as the web export template; the privacy page lives in `docs/` instead.
 
-**Android release** (`.github/workflows/android-release.yml`) builds a production `.aab` with `eas build --local` and submits it to Google Play. It runs on `v*` tags (internal track) or from **Actions → Android Release** (choose a track).
+**Android release** (`.github/workflows/android-release.yml`) builds a production `.aab` with `eas build --local` and uploads it to Google Play with the "What's new" text from `release-notes/<version>/whatsnew-en-US`. It runs on `v*` tags (internal track) or from **Actions → Android Release** (choose a track). A tag must match the version in `app.json`.
+
+To release: merge the PR that bumps the version and adds its notes, then tag `main` with that version, for example `git tag -a v1.6.0 -m "1.6.0" origin/main && git push origin v1.6.0`.
 
 That workflow installs JDK 17 plus the Android SDK/NDK used by Expo SDK 57, because charts (Skia) and notifications are native modules. Required secrets and Play Console setup are in `GOOGLE_PLAY_DEPLOYMENT.md`.
 

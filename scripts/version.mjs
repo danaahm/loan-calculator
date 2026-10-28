@@ -21,7 +21,7 @@ const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
 const KINDS = ["patch", "minor", "major"];
 
 /** Paths that never reach the app binary, so changing only these needs no bump. */
-const NON_APP_PATH = /^(docs\/|\.github\/|\.claude\/|scripts\/)|\.md$/;
+const NON_APP_PATH = /^(docs\/|\.github\/|\.claude\/|scripts\/|release-notes\/)|\.md$/;
 
 const fail = (message) => {
   console.error(`\n${message}\n`);
