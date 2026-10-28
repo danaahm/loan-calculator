@@ -43,6 +43,7 @@ import {
   saveLoanInput,
   saveLoanReminders,
   saveSavedLoanProfiles,
+  takeUnreadableStoredData,
 } from "./src/storage/localState";
 import { LocaleProvider, useLocale } from "./src/i18n/LocaleProvider";
 import {
@@ -80,6 +81,7 @@ import { setActiveDateFormat } from "./src/utils/dateFormat";
 import { todayLocalIso } from "./src/utils/dateIso";
 import {
   addRateChange,
+  applyBalanceCorrection,
   applyExtraPayment,
   buildUpcomingRepayments,
   catchUpReminders,
@@ -467,6 +469,19 @@ function AppContent() {
     setReminders(refilled);
     await saveLoanReminders(refilled);
     setLoadingState(false);
+    const unreadable = takeUnreadableStoredData();
+    if (unreadable.length > 0) {
+      Alert.alert(
+        t("storageRecovery.title"),
+        t("storageRecovery.body", {
+          items: unreadable.map((kind) => t(`storageRecovery.kinds.${kind}`)).join(", "),
+        }),
+        [
+          { text: t("common.ok"), style: "cancel" },
+          { text: t("storageRecovery.openSettings"), onPress: openSettings },
+        ]
+      );
+    }
     if (summaries.length > 0) {
       showSnackbar(
         summaries
@@ -1184,6 +1199,9 @@ function AppContent() {
             }}
             onExtraPayment={(amount) => {
               updateReminder(applyExtraPayment(detailReminder, amount)).catch(() => {});
+            }}
+            onCorrectBalance={(balance) => {
+              updateReminder(applyBalanceCorrection(detailReminder, balance)).catch(() => {});
             }}
             onUndoLast={() => {
               updateReminder(undoLastPayment(detailReminder)).catch(() => {});

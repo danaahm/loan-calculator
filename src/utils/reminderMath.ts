@@ -538,6 +538,49 @@ export const applyExtraPayment = (
   };
 };
 
+/**
+ * Sets the balance to the figure the lender shows, which drifts from the app's
+ * over time through rounding, day counts and charges the app never saw. It is
+ * logged in the payment history so undo can take it back, but as a change of
+ * balance rather than money paid. A completed loan is left alone: reopening it
+ * would replay repayments from its final date.
+ */
+export const applyBalanceCorrection = (
+  reminder: LoanReminder,
+  actualBalance: number
+): LoanReminder => {
+  if (reminder.status === "completed" || !Number.isFinite(actualBalance)) {
+    return reminder;
+  }
+  const remaining = safeRound(Math.max(0, actualBalance));
+  const balanceChange = safeRound(remaining - reminder.remainingBalance);
+  if (balanceChange === 0) {
+    return reminder;
+  }
+  const completed = remaining <= ZERO_EPSILON;
+  const correctionRecord: ReminderPayment = {
+    id: newId(),
+    date: todayLocalIso(),
+    amountPaid: 0,
+    interestPortion: 0,
+    principalPortion: 0,
+    feePortion: 0,
+    balanceChange,
+    remainingAfter: remaining,
+    source: "correction",
+    undoSnapshot: snapshotOf(reminder),
+  };
+
+  return {
+    ...reminder,
+    remainingBalance: remaining,
+    status: completed ? "completed" : reminder.status,
+    notificationsEnabled: completed ? false : reminder.notificationsEnabled,
+    payments: [...reminder.payments, correctionRecord],
+    updatedAt: new Date().toISOString(),
+  };
+};
+
 // Weekly repayments run 52 periods a year, so a 30-year loan is already 1560
 // cycles. Sized to cover ~100 years of weekly repayments.
 const MAX_PAYOFF_PERIODS = 5200;

@@ -56,6 +56,18 @@
     "later": "Later",
     "restart": "Restart"
   },
+  "storageRecovery": {
+    "title": "Some saved data couldn't be read",
+    "body": "The app couldn't read your {items} and started without them. A copy has been kept on this device so it is not overwritten. If you have a backup, you can restore it from Settings.",
+    "openSettings": "Open Settings",
+    "kinds": {
+      "input": "loan in progress",
+      "profiles": "saved loans",
+      "settings": "settings",
+      "basicHistory": "calculator history",
+      "reminders": "reminders"
+    }
+  },
   "catchUp": {
     "applied_one": "Applied {count} payment on {name}",
     "applied_other": "Applied {count} payments on {name}"
@@ -332,17 +344,26 @@
     "amountPlaceholder": "Amount",
     "amountRequired": "Amount required",
     "amountRequiredBody": "Enter an extra payment amount.",
+    "correctBalance": "Correct the balance",
+    "correctBalanceHint": "If your lender shows a different balance, enter it here. The app carries on from that figure. It is not counted as a payment.",
+    "correctBalanceA11y": "Balance your lender shows",
+    "correctBalanceApply": "Set",
+    "balanceRequired": "Balance required",
+    "balanceRequiredBody": "Enter the balance your lender shows, or 0 if the loan is paid off.",
     "paymentHistory": "Payment history",
     "noPayments": "No payments recorded yet.",
     "historyLine": "{date} · {source}",
     "historyAmounts": "Paid {paid} · remaining {remaining}",
     "historyExtra": "Includes {amount} extra",
+    "historyCorrectionDown": "Lowered by {change} · remaining {remaining}",
+    "historyCorrectionUp": "Raised by {change} · remaining {remaining}",
     "source": {
       "auto": "auto",
       "manual": "manual",
-      "extra": "extra"
+      "extra": "extra",
+      "correction": "balance corrected"
     },
-    "undoLast": "Undo last payment",
+    "undoLastEntry": "Undo last entry",
     "editDetails": "Edit details",
     "refreshFrom": "Refresh terms from {name}",
     "deleteReminder": "Delete reminder"

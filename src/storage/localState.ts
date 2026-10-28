@@ -38,6 +38,47 @@ const BASIC_HISTORY_KEY = "loan-calculator-basic-history-v1";
 const REMINDERS_KEY = "loan-calculator-reminders-v1";
 const MAX_BASIC_HISTORY = 50;
 
+/** What the user is told could not be read, named in words they would use. */
+export type StoredDataKind =
+  | "input"
+  | "profiles"
+  | "settings"
+  | "basicHistory"
+  | "reminders";
+
+const KIND_BY_KEY: Record<string, StoredDataKind> = {
+  [STORAGE_KEY]: "input",
+  [SAVED_PROFILES_KEY]: "profiles",
+  [SETTINGS_KEY]: "settings",
+  [BASIC_HISTORY_KEY]: "basicHistory",
+  [REMINDERS_KEY]: "reminders",
+};
+
+const unreadableKey = (key: string): string => `${key}-unreadable`;
+
+const unreadableThisSession = new Set<StoredDataKind>();
+
+/**
+ * Copies a stored value the app could not read to a key of its own. Loaders
+ * fall back to empty data, and the next save would write that over the only
+ * copy of the user's loans; setting it aside first means a damaged value is
+ * never silently replaced.
+ */
+const setAsideUnreadable = async (key: string, raw: string): Promise<void> => {
+  await AsyncStorage.setItem(unreadableKey(key), raw);
+  unreadableThisSession.add(KIND_BY_KEY[key]);
+};
+
+/**
+ * The kinds of data set aside since the last call, cleared as they are read so
+ * the user hears about each one once rather than on every reload.
+ */
+export const takeUnreadableStoredData = (): StoredDataKind[] => {
+  const kinds = [...unreadableThisSession];
+  unreadableThisSession.clear();
+  return kinds;
+};
+
 const isThemeMode = (value: unknown): value is ThemeMode =>
   value === "auto" || value === "light" || value === "dark";
 
@@ -244,6 +285,7 @@ export const loadLoanInput = async (): Promise<Partial<LoanInput> | null> => {
   try {
     return JSON.parse(raw) as Partial<LoanInput>;
   } catch {
+    await setAsideUnreadable(STORAGE_KEY, raw);
     return null;
   }
 };
@@ -260,12 +302,17 @@ export const loadSavedLoanProfiles = async (): Promise<SavedLoanProfile[]> => {
     return [];
   }
 
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw) as SavedLoanProfile[];
-    return Array.isArray(parsed) ? parsed : [];
+    parsed = JSON.parse(raw);
   } catch {
+    parsed = null;
+  }
+  if (!Array.isArray(parsed)) {
+    await setAsideUnreadable(SAVED_PROFILES_KEY, raw);
     return [];
   }
+  return parsed as SavedLoanProfile[];
 };
 
 export const saveAppSettings = async (settings: AppSettings): Promise<void> => {
@@ -308,6 +355,7 @@ export const loadAppSettings = async (): Promise<AppSettings> => {
   try {
     return normalizeAppSettings(JSON.parse(raw) as Partial<AppSettings>);
   } catch {
+    await setAsideUnreadable(SETTINGS_KEY, raw);
     return { ...DEFAULT_APP_SETTINGS };
   }
 };
@@ -333,15 +381,17 @@ export const loadBasicCalcHistory = async (): Promise<BasicCalcHistoryEntry[]> =
     return [];
   }
 
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw) as BasicCalcHistoryEntry[];
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.slice(0, MAX_BASIC_HISTORY);
+    parsed = JSON.parse(raw);
   } catch {
+    parsed = null;
+  }
+  if (!Array.isArray(parsed)) {
+    await setAsideUnreadable(BASIC_HISTORY_KEY, raw);
     return [];
   }
+  return (parsed as BasicCalcHistoryEntry[]).slice(0, MAX_BASIC_HISTORY);
 };
 
 export const saveLoanReminders = async (reminders: LoanReminder[]): Promise<void> => {
@@ -354,17 +404,25 @@ export const loadLoanReminders = async (): Promise<LoanReminder[]> => {
     return [];
   }
 
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw) as Partial<LoanReminder>[];
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed
-      .map((item) => normalizeReminder(item))
-      .filter((item): item is LoanReminder => item !== null);
+    parsed = JSON.parse(raw);
   } catch {
+    parsed = null;
+  }
+  if (!Array.isArray(parsed)) {
+    await setAsideUnreadable(REMINDERS_KEY, raw);
     return [];
   }
+  const reminders = (parsed as Partial<LoanReminder>[])
+    .map((item) => normalizeReminder(item))
+    .filter((item): item is LoanReminder => item !== null);
+  // A reminder dropped here would be gone after the next save, payment
+  // history and all, so the whole list is kept as it was found.
+  if (reminders.length < parsed.length) {
+    await setAsideUnreadable(REMINDERS_KEY, raw);
+  }
+  return reminders;
 };
 
 export const MAX_BASIC_CALC_HISTORY = MAX_BASIC_HISTORY;
@@ -386,10 +444,14 @@ export const OWNED_STORAGE_KEYS = [
   REMINDERS_KEY,
 ] as const;
 
+/** Where each owned key's unreadable copy would be, if one was ever set aside. */
+export const UNREADABLE_STORAGE_KEYS = OWNED_STORAGE_KEYS.map(unreadableKey);
+
 /**
  * Removes only this app's keys rather than calling `AsyncStorage.clear()`,
  * which would also throw away anything a library has stored alongside them.
+ * Unreadable copies go too: they hold the same loans the user asked to delete.
  */
 export const clearAllStoredData = async (): Promise<void> => {
-  await AsyncStorage.multiRemove([...OWNED_STORAGE_KEYS]);
+  await AsyncStorage.multiRemove([...OWNED_STORAGE_KEYS, ...UNREADABLE_STORAGE_KEYS]);
 };
