@@ -1,0 +1,3 @@
+• Correct a reminder's balance: if your lender shows a different balance, enter it and your reminder carries on from that figure. The change is recorded in payment history and can be undone.
+• Safer saved data: if the app can't read something it has stored, it now keeps a copy instead of overwriting it, lets you know, and points you to Settings to restore a backup.
+• Updated libraries and minor fixes.

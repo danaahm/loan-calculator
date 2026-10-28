@@ -44,6 +44,11 @@ jobs:
       - name: App version is bumped
         run: node scripts/version.mjs check --against origin/${{ github.base_ref }}
 
+      # The release uploads release-notes/<version>/ as Google Play's "What's
+      # new", so the notes for this version must exist before it can ship.
+      - name: Release notes are ready
+        run: node scripts/release-notes.mjs check
+
       - name: TypeScript typecheck
         run: npm run typecheck
 

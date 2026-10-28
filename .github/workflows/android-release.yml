@@ -1,6 +1,7 @@
 name: Android Release
 
-# Builds a production Android App Bundle (.aab) and submits it to Google Play.
+# Builds a production Android App Bundle (.aab) and submits it to Google Play,
+# with the "What's new" text from release-notes/<version>/.
 # The build runs locally on the GitHub runner (eas build --local), so it uses
 # free public-repo Actions minutes and does NOT consume EAS cloud build credits.
 #
@@ -40,6 +41,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Runs before the two-hour build so a wrong tag or missing notes fails in
+      # seconds. A manual run has no tag to check; it releases app.json's version.
+      - name: Check tag and release notes
+        id: release
+        run: |
+          if [ "$REF_TYPE" = "tag" ]; then
+            node scripts/release-notes.mjs check --tag "$REF_NAME"
+          else
+            node scripts/release-notes.mjs check
+          fi
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
 
       # The preinstalled SDK is huge; delete it, then recreate the default
       # ANDROID_HOME parent so setup-android can write without root.
@@ -88,23 +103,20 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
-      - name: Write Google Play service account key
-        run: printf '%s' "$GOOGLE_SERVICE_ACCOUNT_KEY" > service-account.json
-        env:
-          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
-
       - name: Build Android app bundle (local, no EAS build credits)
         run: eas build --local --non-interactive --platform android --profile production --output app.aab
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           ORG_GRADLE_PROJECT_org.gradle.jvmargs: "-Xmx4g -XX:MaxMetaspaceSize=512m"
 
+      # eas submit cannot send release notes, so the upload goes through the
+      # Play Developer API directly. Pinned to a commit: this step holds the
+      # Play service account key.
       - name: Submit to Google Play
-        run: eas submit --non-interactive --platform android --profile "${SUBMIT_PROFILE}" --path app.aab
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          SUBMIT_PROFILE: ${{ github.event.inputs.track || 'internal' }}
-
-      - name: Remove service account key
-        if: always()
-        run: rm -f service-account.json
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+          packageName: com.danaa.loancalculator
+          releaseFiles: app.aab
+          track: ${{ github.event.inputs.track || 'internal' }}
+          whatsNewDirectory: ${{ steps.release.outputs.notes_dir }}
