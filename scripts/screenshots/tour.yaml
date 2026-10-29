@@ -1,10 +1,11 @@
 # Maestro tour for the App Store screenshots. capture-ios.sh seeds the sample
-# data and passes OUT, the folder each screenshot is saved to.
+# data, runs this, and collects each screenshot from Maestro's output folder.
 #
 # Selectors are regexes matched against the whole accessibility label, using
 # English text from src/i18n/locales/en.json. On iOS a tappable card or tile
 # exposes one label made of all the text inside it ("Reminders, 2 active"),
-# so most selectors match the start of a label with ".*".
+# so most selectors match part of a label with ".*". A Home tile's label starts
+# with ", " because its icon adds an empty part. Matching ignores case.
 appId: com.danaa.loancalculator
 ---
 # No clearState: that would wipe the seeded data.
@@ -17,7 +18,7 @@ appId: com.danaa.loancalculator
     visible: ".*Next repayment.*"
     timeout: 15000
 - waitForAnimationToEnd
-- takeScreenshot: ${OUT}/01-home
+- takeScreenshot: 01-home
 
 # The stored loan opens straight into its results; no Calculate needed.
 - tapOn: "Loan"
@@ -29,47 +30,47 @@ appId: com.danaa.loancalculator
     direction: DOWN
     centerElement: true
 - waitForAnimationToEnd
-- takeScreenshot: ${OUT}/02-breakdown
+- takeScreenshot: 02-breakdown
 - scrollUntilVisible:
     element: ".*Original loan.*"
     direction: DOWN
     centerElement: true
 - waitForAnimationToEnd
-- takeScreenshot: ${OUT}/03-balance-chart
+- takeScreenshot: 03-balance-chart
 - scrollUntilVisible:
     element: ".*Yearly Loan Plan.*"
     direction: DOWN
     centerElement: true
 - waitForAnimationToEnd
-- takeScreenshot: ${OUT}/04-yearly-plan
+- takeScreenshot: 04-yearly-plan
 
 - tapOn: "Saved"
 - extendedWaitUntil:
-    visible: "Investment unit.*"
+    visible: ".*Investment unit.*"
     timeout: 15000
 - waitForAnimationToEnd
-- takeScreenshot: ${OUT}/05-saved-loans
+- takeScreenshot: 05-saved-loans
 
 # Compare: enter select mode, pick two loans, then open the comparison.
 - tapOn: "Compare"
-- tapOn: "Family home.*"
-- tapOn: "Investment unit.*"
+- tapOn: ".*Family home.*"
+- tapOn: ".*Investment unit.*"
 - tapOn: "Compare"
 - extendedWaitUntil:
     visible: ".*Compare loans.*"
     timeout: 15000
 - waitForAnimationToEnd
-- takeScreenshot: ${OUT}/06-compare
+- takeScreenshot: 06-compare
 - tapOn: "Back"
 
 - tapOn: "Home"
-- tapOn: "Reminders.*"
+- tapOn: ", Reminders, .*"
 - extendedWaitUntil:
     visible: "Active.*"
     timeout: 15000
-- tapOn: "Family home.*"
+- tapOn: ".*Family home.*"
 - extendedWaitUntil:
     visible: ".*Next payment.*"
     timeout: 15000
 - waitForAnimationToEnd
-- takeScreenshot: ${OUT}/07-reminder
+- takeScreenshot: 07-reminder

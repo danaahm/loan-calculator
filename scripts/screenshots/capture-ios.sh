@@ -45,7 +45,7 @@ xcrun simctl status_bar "$udid" override \
   --time "9:41" \
   --dataNetwork wifi --wifiMode active --wifiBars 3 \
   --cellularMode active --cellularBars 4 \
-  --batteryState charged --batteryLevel 100
+  --batteryState discharging --batteryLevel 100
 
 xcrun simctl install "$udid" "$APP_PATH"
 
@@ -57,12 +57,17 @@ mkdir -p "$storage"
 node "$here/seed.mjs" > "$storage/manifest.json"
 
 mkdir -p "$out"
-if ! maestro --device "$udid" test --env OUT="$PWD/$out" "$here/tour.yaml"; then
+# Maestro only writes screenshots inside its own output folder, so they are
+# copied out of it afterwards.
+maestro_out=$(mktemp -d)
+if ! maestro --device "$udid" test --test-output-dir "$maestro_out" "$here/tour.yaml"; then
   # What was on screen, and the labels Maestro could see, for fixing the tour.
   xcrun simctl io "$udid" screenshot "$out/failure.png" || true
   maestro --device "$udid" hierarchy > "$out/failure-hierarchy.json" || true
+  find "$maestro_out" -name '[0-9][0-9]-*.png' -exec cp {} "$out" \;
   exit 1
 fi
+find "$maestro_out" -name '[0-9][0-9]-*.png' -exec cp {} "$out" \;
 
 xcrun simctl shutdown "$udid"
 ls -l "$out"
