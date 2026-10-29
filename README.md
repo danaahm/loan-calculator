@@ -173,6 +173,8 @@ To release: merge the PR that bumps the version and adds its notes, then tag `ma
 
 That workflow installs JDK 17 plus the Android SDK/NDK used by Expo SDK 58, because charts (Skia) and notifications are native modules. Required secrets and Play Console setup are in `GOOGLE_PLAY_DEPLOYMENT.md`.
 
+**iOS release** (`.github/workflows/ios-release.yml`) runs on the same `v*` tags, or from **Actions → iOS Release**. It builds a production `.ipa` with `eas build --local` on a GitHub macOS runner and uploads it to TestFlight with `eas submit`. Submitting a TestFlight build to the App Store is done by hand in App Store Connect. The Apple setup it depends on is in `IOS_APP_STORE_DEPLOYMENT.md`.
+
 ## Build and Release (Android / Google Play)
 
 See the full guide in `GOOGLE_PLAY_DEPLOYMENT.md`.

@@ -1,0 +1,95 @@
+name: iOS Release
+
+# Builds a production iOS app (.ipa) and uploads it to App Store Connect, where
+# it lands in TestFlight. Shipping it to the App Store is done by hand in App
+# Store Connect, the same way Android production is promoted in Play Console.
+# The build runs locally on a GitHub macOS runner (eas build --local), so it
+# uses free public-repo Actions minutes and does NOT consume EAS cloud build
+# credits.
+#
+# Signing credentials (distribution certificate, provisioning profile) and the
+# App Store Connect API key live on EAS, so EXPO_TOKEN is the only secret here.
+# IOS_APP_STORE_DEPLOYMENT.md covers the one-time setup that puts them there.
+#
+# Triggers match the Android release: version tags and manual runs, neither of
+# which runs for pull requests from forks.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-submit:
+    name: Build IPA and upload to TestFlight
+    # Apple only accepts uploads built with the iOS 26 SDK or newer.
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Runs before the build so a wrong tag, missing notes or unfinished App
+      # Store setup fails in seconds rather than after the build.
+      - name: Check tag and release notes
+        run: |
+          if [ "$REF_TYPE" = "tag" ]; then
+            node scripts/release-notes.mjs check --tag "$REF_NAME"
+          else
+            node scripts/release-notes.mjs check
+          fi
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+
+      # eas submit needs the App Store Connect app ID to run non-interactively.
+      - name: Check App Store Connect app ID
+        run: |
+          node -e '
+            const id = require("./eas.json").submit?.testflight?.ios?.ascAppId;
+            if (!/^\d+$/.test(id ?? "")) {
+              console.error("eas.json has no submit.testflight.ios.ascAppId. Finish the setup in IOS_APP_STORE_DEPLOYMENT.md.");
+              process.exit(1);
+            }
+          '
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check Expo dependency versions
+        run: npx expo install --check
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      # CocoaPods and fastlane, which the local iOS build uses, come with the
+      # macOS runner image.
+      - name: Build iOS app (local, no EAS build credits)
+        run: eas build --local --non-interactive --platform ios --profile production --output app.ipa
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      # Uses the App Store Connect API key stored on EAS. App Store "What's
+      # New" text is entered by hand when the build is promoted, so nothing
+      # from release-notes/ is sent here.
+      - name: Upload to TestFlight
+        run: eas submit --non-interactive --platform ios --profile testflight --path app.ipa
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
