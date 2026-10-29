@@ -1,0 +1,68 @@
+# Maestro tour for the App Store screenshots. capture-ios.sh seeds the sample
+# data and passes OUT, the folder each screenshot is saved to. Taps are by
+# visible English text from src/i18n/locales/en.json, matched in full.
+appId: com.danaa.loancalculator
+---
+# No clearState: that would wipe the seeded data.
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Next repayment"
+    timeout: 60000
+- waitForAnimationToEnd
+- takeScreenshot: ${OUT}/01-home
+
+# The stored loan opens straight into its results; no Calculate needed.
+- tapOn: "Loan"
+- extendedWaitUntil:
+    visible: "Loan Profile"
+    timeout: 15000
+- scrollUntilVisible:
+    element: "Total Paid"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- takeScreenshot: ${OUT}/02-breakdown
+- scrollUntilVisible:
+    element: "Original loan"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- takeScreenshot: ${OUT}/03-balance-chart
+- scrollUntilVisible:
+    element: "Yearly Loan Plan"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- takeScreenshot: ${OUT}/04-yearly-plan
+
+- tapOn: "Saved"
+- extendedWaitUntil:
+    visible: "Investment unit"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: ${OUT}/05-saved-loans
+
+# Compare: enter select mode, pick two loans, then open the comparison.
+- tapOn: "Compare"
+- tapOn: "Family home"
+- tapOn: "Investment unit"
+- tapOn: "Compare"
+- extendedWaitUntil:
+    visible: "Compare loans"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: ${OUT}/06-compare
+- tapOn: "Back"
+
+- tapOn: "Home"
+- tapOn: "Reminders"
+- extendedWaitUntil:
+    visible: "Archive"
+    timeout: 15000
+- tapOn: "Family home"
+- extendedWaitUntil:
+    visible: "Next payment"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: ${OUT}/07-reminder
