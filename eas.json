@@ -28,6 +28,11 @@
     }
   },
   "submit": {
+    "testflight": {
+      "ios": {
+        "ascAppId": "6828378613"
+      }
+    },
     "internal": {
       "android": {
         "serviceAccountKeyPath": "./service-account.json",

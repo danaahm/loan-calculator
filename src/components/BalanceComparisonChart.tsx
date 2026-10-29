@@ -18,7 +18,7 @@ import {
   vec,
   type Matrix4,
 } from "@shopify/react-native-skia";
-import { Gesture } from "react-native-gesture-handler";
+import { Gesture, type ComposedGesture } from "react-native-gesture-handler";
 import {
   runOnJS,
   useAnimatedReaction,
@@ -249,6 +249,11 @@ export const BalanceComparisonChart = ({
   const { state: transformState } = useChartTransformState();
   const plotLeft = useSharedValue(0);
   const plotRight = useSharedValue(0);
+  // victory-native 42 composes these with Gesture Handler's builder API
+  // (Gesture.Race / Gesture.Simultaneous), so they must be builder gestures.
+  // Gesture Handler 3 still runs those, but its exported `ComposedGesture`
+  // type now names the v3 hook gestures, which victory's prop type picked up.
+  // The cast bridges types only; drop it once victory-native supports v3.
   const chartTransformGestures = useMemo(
     () =>
       Gesture.Simultaneous(
@@ -286,7 +291,7 @@ export const BalanceComparisonChart = ({
           .onFinalize(() => {
             transformState.panActive.value = false;
           })
-      ),
+      ) as unknown as ComposedGesture,
     [transformState]
   );
 

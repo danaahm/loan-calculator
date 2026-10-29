@@ -92,7 +92,7 @@ upload it to Play Console by hand.
 
 What it does:
 
-1. Installs JDK 17, Android SDK, NDK 27.1, and CMake (required for Expo SDK 57
+1. Installs JDK 17, Android SDK 37, NDK 27.1, and CMake (required for Expo SDK 58
    native modules including Skia charts and notifications).
 2. Builds the production `.aab` on the GitHub runner with `eas build --local`
    (free public-repo Actions minutes; does not use EAS cloud build credits).

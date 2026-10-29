@@ -6,7 +6,7 @@
  */
 module.exports = {
   preset: "jest-expo",
-  testEnvironment: "<rootDir>/jest.environment.js",
+  testEnvironment: "node",
   setupFiles: ["<rootDir>/jest.setup.js"],
   testMatch: ["<rootDir>/src/**/__tests__/**/*.test.ts"],
   testPathIgnorePatterns: ["/node_modules/", "/dist/", "/.expo/"],
