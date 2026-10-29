@@ -27,8 +27,12 @@ appId: com.danaa.loancalculator
     timeout: 15000
 # The balance chart takes pan and pinch gestures, so a swipe that lands on it
 # never scrolls the page; scrollUntilVisible swipes mid-screen and gets stuck.
-# These swipe slowly, in small steps, in the page's left margin, and stop as
-# soon as the text under each card appears, leaving the whole card in view.
+# These swipe slowly, in small steps, in the page's left margin.
+#
+# Maestro counts text hidden behind the tab bar as visible, so a card's title
+# "appears" while it is still at the very bottom. For the chart and the yearly
+# plan the tour stops on the title, then makes one long swipe that lifts it
+# into the top third of the screen, with the card below it.
 - repeat:
     while:
       notVisible: "Total Paid"
@@ -42,30 +46,32 @@ appId: com.danaa.loancalculator
 - takeScreenshot: 02-breakdown
 - repeat:
     while:
-      notVisible: "Hold a point for details.*"
-    times: 20
+      notVisible: "Loan Balance Over Time"
+    times: 30
     commands:
       - swipe:
           start: "1%, 70%"
-          end: "1%, 50%"
-          duration: 800
-- waitForAnimationToEnd
-- takeScreenshot: 03-balance-chart
-# Stop at the table's column headings, then one more step so rows fill the
-# screen below them.
-- repeat:
-    while:
-      notVisible: "Closing"
-    times: 20
-    commands:
-      - swipe:
-          start: "1%, 70%"
-          end: "1%, 50%"
+          end: "1%, 55%"
           duration: 800
 - swipe:
-    start: "1%, 70%"
-    end: "1%, 40%"
-    duration: 800
+    start: "1%, 85%"
+    end: "1%, 30%"
+    duration: 1200
+- waitForAnimationToEnd
+- takeScreenshot: 03-balance-chart
+- repeat:
+    while:
+      notVisible: "Yearly Loan Plan"
+    times: 30
+    commands:
+      - swipe:
+          start: "1%, 70%"
+          end: "1%, 55%"
+          duration: 800
+- swipe:
+    start: "1%, 85%"
+    end: "1%, 30%"
+    duration: 1200
 - waitForAnimationToEnd
 - takeScreenshot: 04-yearly-plan
 
@@ -88,8 +94,9 @@ appId: com.danaa.loancalculator
 - takeScreenshot: 06-compare
 - tapOn: "Back"
 
-- tapOn: "Home"
-- tapOn: ", Reminders, .*"
+# The bell in the header, which stays on screen; the Home tile can sit
+# behind the tab bar.
+- tapOn: "Repayment reminders.*"
 - extendedWaitUntil:
     visible: "Active.*"
     timeout: 15000
