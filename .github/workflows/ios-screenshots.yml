@@ -86,7 +86,9 @@ jobs:
       - name: iPhone 6.9" screenshots
         run: bash scripts/screenshots/capture-ios.sh "iPhone [0-9]+ Pro Max" screenshots/iphone-6.9
 
+      # Runs even when the iPhone tour fails, so one run shows both.
       - name: iPad 13" screenshots
+        if: success() || failure()
         run: bash scripts/screenshots/capture-ios.sh "iPad Pro 13-inch" screenshots/ipad-13
 
       - name: Upload screenshots

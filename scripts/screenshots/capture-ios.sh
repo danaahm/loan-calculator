@@ -57,7 +57,12 @@ mkdir -p "$storage"
 node "$here/seed.mjs" > "$storage/manifest.json"
 
 mkdir -p "$out"
-maestro --device "$udid" test --env OUT="$PWD/$out" "$here/tour.yaml"
+if ! maestro --device "$udid" test --env OUT="$PWD/$out" "$here/tour.yaml"; then
+  # What was on screen, and the labels Maestro could see, for fixing the tour.
+  xcrun simctl io "$udid" screenshot "$out/failure.png" || true
+  maestro --device "$udid" hierarchy > "$out/failure-hierarchy.json" || true
+  exit 1
+fi
 
 xcrun simctl shutdown "$udid"
 ls -l "$out"

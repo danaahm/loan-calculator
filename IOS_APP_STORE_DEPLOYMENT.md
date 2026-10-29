@@ -97,7 +97,12 @@ arrive in TestFlight without any further steps.
 On the app's **App Store** tab:
 
 - Screenshots: 6.9" iPhone (1320 × 2868). `app.json` sets `supportsTablet: true`,
-  so Apple also requires 13" iPad screenshots (2064 × 2752).
+  so Apple also requires 13" iPad screenshots (2064 × 2752). Run **Actions → iOS
+  Screenshots** to get both: it builds the app for the simulator, fills it with
+  sample loans and reminders (`scripts/screenshots/seed.mjs`), taps through the
+  screens with Maestro (`scripts/screenshots/tour.yaml`), and attaches the PNGs
+  to the run as `app-store-screenshots`. Drag each folder into the matching
+  size on the version page.
 - Description, keywords, and a support URL. The GitHub repo or the privacy
   policy page is enough as a support URL.
 - Privacy policy URL: <https://slc.danaahmadi2014.workers.dev>
