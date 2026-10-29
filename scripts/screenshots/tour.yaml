@@ -25,22 +25,47 @@ appId: com.danaa.loancalculator
 - extendedWaitUntil:
     visible: ".*Loan Profile.*"
     timeout: 15000
-- scrollUntilVisible:
-    element: ".*Total Paid.*"
-    direction: DOWN
-    centerElement: true
+# The balance chart takes pan and pinch gestures, so a swipe that lands on it
+# never scrolls the page; scrollUntilVisible swipes mid-screen and gets stuck.
+# These swipe slowly, in small steps, in the page's left margin, and stop as
+# soon as the text under each card appears, leaving the whole card in view.
+- repeat:
+    while:
+      notVisible: "Total Paid"
+    times: 20
+    commands:
+      - swipe:
+          start: "1%, 70%"
+          end: "1%, 50%"
+          duration: 800
 - waitForAnimationToEnd
 - takeScreenshot: 02-breakdown
-- scrollUntilVisible:
-    element: ".*Original loan.*"
-    direction: DOWN
-    centerElement: true
+- repeat:
+    while:
+      notVisible: "Hold a point for details.*"
+    times: 20
+    commands:
+      - swipe:
+          start: "1%, 70%"
+          end: "1%, 50%"
+          duration: 800
 - waitForAnimationToEnd
 - takeScreenshot: 03-balance-chart
-- scrollUntilVisible:
-    element: ".*Yearly Loan Plan.*"
-    direction: DOWN
-    centerElement: true
+# Stop at the table's column headings, then one more step so rows fill the
+# screen below them.
+- repeat:
+    while:
+      notVisible: "Closing"
+    times: 20
+    commands:
+      - swipe:
+          start: "1%, 70%"
+          end: "1%, 50%"
+          duration: 800
+- swipe:
+    start: "1%, 70%"
+    end: "1%, 40%"
+    duration: 800
 - waitForAnimationToEnd
 - takeScreenshot: 04-yearly-plan
 
