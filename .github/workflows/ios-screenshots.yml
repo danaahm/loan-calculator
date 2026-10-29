@@ -1,7 +1,7 @@
 name: iOS Screenshots
 
 # Takes App Store screenshots on the iPhone and iPad simulators and uploads
-# them as a workflow artifact, sized for App Store Connect's 6.9" iPhone and
+# them as a workflow artifact, sized for App Store Connect's 6.9" and 6.3" iPhone and
 # 13" iPad slots. The app is built for the simulator without signing, so no
 # secrets are needed. Each simulator starts with sample loans and reminders
 # (scripts/screenshots/seed.mjs), then Maestro taps through the screens
@@ -91,7 +91,13 @@ jobs:
       - name: iPhone 6.9" screenshots
         run: bash scripts/screenshots/capture-ios.sh "iPhone [0-9]+ Pro Max" screenshots/iphone-6.9
 
-      # Runs even when the iPhone tour fails, so one run shows both.
+      # App Store Connect's required iPhone slot is the 6.3" "medium display"
+      # one, which rejects 6.9" files. The later steps run even when an
+      # earlier tour fails, so one run shows every device.
+      - name: iPhone 6.3" screenshots
+        if: success() || failure()
+        run: bash scripts/screenshots/capture-ios.sh "iPhone [0-9]+ Pro$" screenshots/iphone-6.3
+
       - name: iPad 13" screenshots
         if: success() || failure()
         run: bash scripts/screenshots/capture-ios.sh "iPad Pro 13-inch" screenshots/ipad-13
