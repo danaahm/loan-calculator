@@ -76,17 +76,8 @@ It is a number such as `6741234567`.
 
 ### 4) Put the app ID in `eas.json`
 
-Add a `testflight` submit profile with that number:
-
-```json
-"testflight": {
-  "ios": {
-    "ascAppId": "6741234567"
-  }
-}
-```
-
-The release workflow refuses to build until this is in place.
+The `testflight` submit profile in `eas.json` holds that number as `ascAppId`
+(currently `6828378613`). The release workflow refuses to build without it.
 
 ### 5) Run the first release
 
