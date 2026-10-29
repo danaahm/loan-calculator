@@ -1,0 +1,108 @@
+# Maestro tour for the App Store screenshots. capture-ios.sh seeds the sample
+# data, runs this, and collects each screenshot from Maestro's output folder.
+#
+# Selectors are regexes matched against the whole accessibility label, using
+# English text from src/i18n/locales/en.json. On iOS a tappable card or tile
+# exposes one label made of all the text inside it ("Reminders, 2 active"),
+# so most selectors match part of a label with ".*". A Home tile's label starts
+# with ", " because its icon adds an empty part. Matching ignores case.
+appId: com.danaa.loancalculator
+---
+# No clearState: that would wipe the seeded data.
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Simple Loan Calculator"
+    timeout: 60000
+- extendedWaitUntil:
+    visible: ".*Next repayment.*"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: 01-home
+
+# The stored loan opens straight into its results; no Calculate needed.
+- tapOn: "Loan"
+- extendedWaitUntil:
+    visible: ".*Loan Profile.*"
+    timeout: 15000
+# The balance chart takes pan and pinch gestures, so a swipe that lands on it
+# never scrolls the page; scrollUntilVisible swipes mid-screen and gets stuck.
+# These swipe slowly, in small steps, in the page's left margin.
+#
+# Maestro counts text hidden behind the tab bar as visible, so a card's title
+# "appears" while it is still at the very bottom. For the chart and the yearly
+# plan the tour stops on the title, then makes one long swipe that lifts it
+# into the top third of the screen, with the card below it.
+- repeat:
+    while:
+      notVisible: "Total Paid"
+    times: 20
+    commands:
+      - swipe:
+          start: "1%, 70%"
+          end: "1%, 50%"
+          duration: 800
+- waitForAnimationToEnd
+- takeScreenshot: 02-breakdown
+- repeat:
+    while:
+      notVisible: "Loan Balance Over Time"
+    times: 30
+    commands:
+      - swipe:
+          start: "1%, 70%"
+          end: "1%, 55%"
+          duration: 800
+- swipe:
+    start: "1%, 85%"
+    end: "1%, 30%"
+    duration: 1200
+- waitForAnimationToEnd
+- takeScreenshot: 03-balance-chart
+- repeat:
+    while:
+      notVisible: "Yearly Loan Plan"
+    times: 30
+    commands:
+      - swipe:
+          start: "1%, 70%"
+          end: "1%, 55%"
+          duration: 800
+- swipe:
+    start: "1%, 85%"
+    end: "1%, 30%"
+    duration: 1200
+- waitForAnimationToEnd
+- takeScreenshot: 04-yearly-plan
+
+- tapOn: "Saved"
+- extendedWaitUntil:
+    visible: ".*Investment unit.*"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: 05-saved-loans
+
+# Compare: enter select mode, pick two loans, then open the comparison.
+- tapOn: "Compare"
+- tapOn: ".*Family home.*"
+- tapOn: ".*Investment unit.*"
+- tapOn: "Compare"
+- extendedWaitUntil:
+    visible: ".*Compare loans.*"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: 06-compare
+- tapOn: "Back"
+
+# The bell in the header, which stays on screen; the Home tile can sit
+# behind the tab bar.
+- tapOn: "Repayment reminders.*"
+- extendedWaitUntil:
+    visible: "Active.*"
+    timeout: 15000
+- tapOn: ".*Family home.*"
+- extendedWaitUntil:
+    visible: ".*Next payment.*"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: 07-reminder

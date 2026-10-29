@@ -1,0 +1,111 @@
+name: iOS Screenshots
+
+# Takes App Store screenshots on the iPhone and iPad simulators and uploads
+# them as a workflow artifact, sized for App Store Connect's 6.9" and 6.3" iPhone and
+# 13" iPad slots. The app is built for the simulator without signing, so no
+# secrets are needed. Each simulator starts with sample loans and reminders
+# (scripts/screenshots/seed.mjs), then Maestro taps through the screens
+# (scripts/screenshots/tour.yaml).
+#
+# Pull requests that change the tour run it too, so a broken tap shows up
+# before merge. Nothing here uses secrets, so fork PRs are safe.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/ios-screenshots.yml"
+      - "scripts/screenshots/**"
+
+concurrency:
+  group: ios-screenshots
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    name: Capture iPhone and iPad screenshots
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      # Maestro's driver app can take minutes to start on a freshly booted
+      # runner simulator; the default wait is too short there.
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000"
+      MAESTRO_CLI_NO_ANALYTICS: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Maestro runs on the JVM.
+      - name: Set up Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the iOS project
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: Install CocoaPods
+        run: pod install
+        working-directory: ios
+
+      # Release, so the JavaScript is bundled into the app and no Metro server
+      # or dev menu shows up in the screenshots.
+      - name: Build for the simulator
+        run: |
+          workspace=$(ls -d ios/*.xcworkspace | head -1)
+          scheme=$(basename "$workspace" .xcworkspace)
+          xcodebuild \
+            -workspace "$workspace" \
+            -scheme "$scheme" \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath build/ios \
+            ARCHS=arm64 \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet
+          app=$(ls -d build/ios/Build/Products/Release-iphonesimulator/*.app | head -1)
+          echo "APP_PATH=$PWD/$app" >> "$GITHUB_ENV"
+
+      - name: Install Maestro
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: iPhone 6.9" screenshots
+        run: bash scripts/screenshots/capture-ios.sh "iPhone [0-9]+ Pro Max" screenshots/iphone-6.9
+
+      # App Store Connect's required iPhone slot is the 6.3" "medium display"
+      # one, which rejects 6.9" files. The later steps run even when an
+      # earlier tour fails, so one run shows every device.
+      - name: iPhone 6.3" screenshots
+        if: success() || failure()
+        run: bash scripts/screenshots/capture-ios.sh "iPhone [0-9]+ Pro$" screenshots/iphone-6.3
+
+      - name: iPad 13" screenshots
+        if: success() || failure()
+        run: bash scripts/screenshots/capture-ios.sh "iPad Pro 13-inch" screenshots/ipad-13
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-store-screenshots
+          path: screenshots/
+          if-no-files-found: error
