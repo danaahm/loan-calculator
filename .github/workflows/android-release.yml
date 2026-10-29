@@ -77,8 +77,9 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # eas build --local compiles on the runner. Expo SDK 57 / RN 0.86 and
-      # Skia (charts) need the Android SDK plus NDK 27, matching EAS cloud images.
+      # eas build --local compiles on the runner. Expo SDK 58 / RN 0.88 compile
+      # against Android 37 with build-tools 37.0.0 and NDK 27.1 (see
+      # react-native/gradle/libs.versions.toml); Skia charts need the NDK.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
@@ -86,8 +87,8 @@ jobs:
         run: |
           sdkmanager --install \
             "ndk;27.1.12297006" \
-            "platforms;android-36" \
-            "build-tools;36.0.0" \
+            "platforms;android-37" \
+            "build-tools;37.0.0" \
             "cmake;3.22.1" \
             "platform-tools"
           yes | sdkmanager --licenses >/dev/null || true

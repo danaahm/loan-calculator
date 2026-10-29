@@ -29,8 +29,8 @@ It runs on Android and iOS, works fully offline, and stores data on the device o
 
 ## Tech Stack
 
-- Expo SDK 57
-- React Native 0.86
+- Expo SDK 58
+- React Native 0.88
 - TypeScript
 - AsyncStorage for local persistence
 - `victory-native` + `@shopify/react-native-skia` for charts
@@ -147,11 +147,6 @@ npm test
 `jest.setup.js` swaps AsyncStorage for the in-memory mock the package ships, so
 the storage tests exercise the real read and write paths.
 
-`jest.environment.js` wraps the standard Node environment. Node 22.4 and newer
-expose a `localStorage` global that throws unless the process is started with
-`--localstorage-file`, and Jest 29 trips it while building the test context;
-the wrapper neutralises it so the suite runs on Node 22 through 25.
-
 ## CI / CD
 
 GitHub Actions workflows live in `.github/workflows/`.
@@ -159,7 +154,7 @@ GitHub Actions workflows live in `.github/workflows/`.
 **CI** (`.github/workflows/ci.yml`) runs on pull requests targeting `main`:
 
 1. `npm ci`
-2. `npx expo install --check` (SDK 57 package versions)
+2. `npx expo install --check` (SDK 58 package versions)
 3. `node scripts/version.mjs check` (the version is raised above `main`'s)
 4. `node scripts/release-notes.mjs check` (Google Play notes exist for this version and fit in 500 characters)
 5. `npm run typecheck`
@@ -176,7 +171,7 @@ Do not add an `index.html` at the project root. Expo treats that file as the web
 
 To release: merge the PR that bumps the version and adds its notes, then tag `main` with that version, for example `git tag -a v1.6.0 -m "1.6.0" origin/main && git push origin v1.6.0`.
 
-That workflow installs JDK 17 plus the Android SDK/NDK used by Expo SDK 57, because charts (Skia) and notifications are native modules. Required secrets and Play Console setup are in `GOOGLE_PLAY_DEPLOYMENT.md`.
+That workflow installs JDK 17 plus the Android SDK/NDK used by Expo SDK 58, because charts (Skia) and notifications are native modules. Required secrets and Play Console setup are in `GOOGLE_PLAY_DEPLOYMENT.md`.
 
 ## Build and Release (Android / Google Play)
 

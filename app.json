@@ -2,14 +2,15 @@
   "expo": {
     "name": "SLC",
     "slug": "loan-calculator",
-    "version": "1.6.0",
+    "version": "1.7.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.danaa.loancalculator",
       "supportsTablet": true,
-      "infoPlist": {
-        "NSUserNotificationsUsageDescription": "SLC uses notifications to remind you about upcoming loan repayments at the times you choose."
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
