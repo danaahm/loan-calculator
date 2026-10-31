@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
   FlatList,
@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { BottomSheet } from "../components/BottomSheet";
 import { DataSection } from "../components/DataSection";
 import { SegmentedControl } from "../components/SegmentedControl";
 import {
@@ -118,12 +119,19 @@ export const SettingsScreen = ({
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
   const [dateFormatPickerOpen, setDateFormatPickerOpen] = useState(false);
   const [dueBandPicker, setDueBandPicker] = useState<DueBand | null>(null);
+  // The sheet is still sliding away after the picker closes, so it keeps
+  // showing the band it opened for rather than flipping to the other one.
+  const lastDueBandRef = useRef<DueBand>("soon");
+  if (dueBandPicker) {
+    lastDueBandRef.current = dueBandPicker;
+  }
+  const shownDueBand = dueBandPicker ?? lastDueBandRef.current;
 
   // Red has to stay strictly inside amber, so each list drops the values that
   // would break it. Choices that cannot be made are absent rather than offered
   // and then silently corrected.
   const dueDayOptions =
-    dueBandPicker === "soon"
+    shownDueBand === "soon"
       ? DUE_SOON_DAY_OPTIONS.filter((days) => days > thresholds.urgentDays)
       : DUE_URGENT_DAY_OPTIONS.filter((days) => days < thresholds.soonDays);
   const [currencySearch, setCurrencySearch] = useState("");
@@ -553,165 +561,141 @@ export const SettingsScreen = ({
         </Text>
       </View>
 
-      <Modal
+      <BottomSheet
         visible={dueBandPicker !== null}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setDueBandPicker(null)}
+        onClose={() => setDueBandPicker(null)}
+        style={[styles.sheet, { backgroundColor: colors.card }]}
       >
+        <Text style={[styles.modalTitle, { color: colors.text }]}>
+          {shownDueBand === "urgent"
+            ? t("settings.dueUrgentFrom")
+            : t("settings.dueSoonFrom")}
+        </Text>
+        <ScrollView>
+          {dueDayOptions.map((days) => {
+            const selected =
+              shownDueBand === "urgent"
+                ? thresholds.urgentDays === days
+                : thresholds.soonDays === days;
+            return (
+              <Pressable
+                key={days}
+                onPress={() => {
+                  setDueThresholds(
+                    shownDueBand === "urgent"
+                      ? { urgentDays: days }
+                      : { soonDays: days }
+                  );
+                  setDueBandPicker(null);
+                }}
+                style={[
+                  styles.optionRow,
+                  {
+                    borderColor: selected ? colors.primary : colors.borderStrong,
+                    backgroundColor: selected ? colors.primarySoft : colors.inputBg,
+                  },
+                ]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+              >
+                <View style={styles.optionCopy}>
+                  <Text
+                    style={[
+                      styles.optionTitle,
+                      { color: selected ? colors.accentTextDeep : colors.text },
+                    ]}
+                  >
+                    {dayLabel(days, t)}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.radioOuter,
+                    { borderColor: selected ? colors.primary : colors.borderStrong },
+                  ]}
+                >
+                  {selected ? (
+                    <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
         <Pressable
-          style={[styles.sheetBackdrop, { backgroundColor: colors.modalBackdrop }]}
+          style={[styles.modalCloseButton, { backgroundColor: colors.primary }]}
           onPress={() => setDueBandPicker(null)}
         >
-          {/* Swallows taps on the sheet itself so only the backdrop closes it. */}
-          <Pressable
-            style={[styles.sheet, { backgroundColor: colors.card }]}
-            onPress={() => {}}
-          >
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {dueBandPicker === "urgent"
-                ? t("settings.dueUrgentFrom")
-                : t("settings.dueSoonFrom")}
-            </Text>
-            <ScrollView>
-              {dueDayOptions.map((days) => {
-                const selected =
-                  dueBandPicker === "urgent"
-                    ? thresholds.urgentDays === days
-                    : thresholds.soonDays === days;
-                return (
-                  <Pressable
-                    key={days}
-                    onPress={() => {
-                      setDueThresholds(
-                        dueBandPicker === "urgent"
-                          ? { urgentDays: days }
-                          : { soonDays: days }
-                      );
-                      setDueBandPicker(null);
-                    }}
-                    style={[
-                      styles.optionRow,
-                      {
-                        borderColor: selected ? colors.primary : colors.borderStrong,
-                        backgroundColor: selected ? colors.primarySoft : colors.inputBg,
-                      },
-                    ]}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}
-                  >
-                    <View style={styles.optionCopy}>
-                      <Text
-                        style={[
-                          styles.optionTitle,
-                          { color: selected ? colors.accentTextDeep : colors.text },
-                        ]}
-                      >
-                        {dayLabel(days, t)}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.radioOuter,
-                        { borderColor: selected ? colors.primary : colors.borderStrong },
-                      ]}
-                    >
-                      {selected ? (
-                        <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
-                      ) : null}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            <Pressable
-              style={[styles.modalCloseButton, { backgroundColor: colors.primary }]}
-              onPress={() => setDueBandPicker(null)}
-            >
-              <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
-                {t("common.close")}
-              </Text>
-            </Pressable>
-          </Pressable>
+          <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
+            {t("common.close")}
+          </Text>
         </Pressable>
-      </Modal>
+      </BottomSheet>
 
-      <Modal
+      <BottomSheet
         visible={dateFormatPickerOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setDateFormatPickerOpen(false)}
+        onClose={() => setDateFormatPickerOpen(false)}
+        style={[styles.sheet, { backgroundColor: colors.card }]}
       >
+        <Text style={[styles.modalTitle, { color: colors.text }]}>
+          {t("settings.dateFormats.pickerTitle")}
+        </Text>
+        <ScrollView>
+          {DATE_FORMATS.map((format) => {
+            const selected = dateFormat === format;
+            return (
+              <Pressable
+                key={format}
+                onPress={() => {
+                  setDateFormat(format);
+                  setDateFormatPickerOpen(false);
+                }}
+                style={[
+                  styles.optionRow,
+                  {
+                    borderColor: selected ? colors.primary : colors.borderStrong,
+                    backgroundColor: selected ? colors.primarySoft : colors.inputBg,
+                  },
+                ]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+              >
+                <View style={styles.optionCopy}>
+                  <Text
+                    style={[
+                      styles.optionTitle,
+                      { color: selected ? colors.accentTextDeep : colors.text },
+                    ]}
+                  >
+                    {exampleDate(format)}
+                  </Text>
+                  <Text style={[styles.optionHint, { color: colors.textMuted }]}>
+                    {t(`settings.dateFormats.${format}`)}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.radioOuter,
+                    { borderColor: selected ? colors.primary : colors.borderStrong },
+                  ]}
+                >
+                  {selected ? (
+                    <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
         <Pressable
-          style={[styles.sheetBackdrop, { backgroundColor: colors.modalBackdrop }]}
+          style={[styles.modalCloseButton, { backgroundColor: colors.primary }]}
           onPress={() => setDateFormatPickerOpen(false)}
         >
-          {/* Swallows taps on the sheet itself so only the backdrop closes it. */}
-          <Pressable
-            style={[styles.sheet, { backgroundColor: colors.card }]}
-            onPress={() => {}}
-          >
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {t("settings.dateFormats.pickerTitle")}
-            </Text>
-            <ScrollView>
-              {DATE_FORMATS.map((format) => {
-                const selected = dateFormat === format;
-                return (
-                  <Pressable
-                    key={format}
-                    onPress={() => {
-                      setDateFormat(format);
-                      setDateFormatPickerOpen(false);
-                    }}
-                    style={[
-                      styles.optionRow,
-                      {
-                        borderColor: selected ? colors.primary : colors.borderStrong,
-                        backgroundColor: selected ? colors.primarySoft : colors.inputBg,
-                      },
-                    ]}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}
-                  >
-                    <View style={styles.optionCopy}>
-                      <Text
-                        style={[
-                          styles.optionTitle,
-                          { color: selected ? colors.accentTextDeep : colors.text },
-                        ]}
-                      >
-                        {exampleDate(format)}
-                      </Text>
-                      <Text style={[styles.optionHint, { color: colors.textMuted }]}>
-                        {t(`settings.dateFormats.${format}`)}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.radioOuter,
-                        { borderColor: selected ? colors.primary : colors.borderStrong },
-                      ]}
-                    >
-                      {selected ? (
-                        <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
-                      ) : null}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            <Pressable
-              style={[styles.modalCloseButton, { backgroundColor: colors.primary }]}
-              onPress={() => setDateFormatPickerOpen(false)}
-            >
-              <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
-                {t("common.close")}
-              </Text>
-            </Pressable>
-          </Pressable>
+          <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
+            {t("common.close")}
+          </Text>
         </Pressable>
-      </Modal>
+      </BottomSheet>
 
       <Modal
         visible={currencyModalVisible}
@@ -908,10 +892,6 @@ const styles = StyleSheet.create({
   duePreview: {
     gap: 8,
     marginBottom: 16,
-  },
-  sheetBackdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
   },
   sheet: {
     // Capped so a long list scrolls inside the sheet rather than filling the
