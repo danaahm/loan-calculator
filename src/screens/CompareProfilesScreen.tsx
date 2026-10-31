@@ -1,6 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { ScreenHeader } from "../components/ScreenHeader";
 import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { type SavedLoanProfile } from "../types/loan";
@@ -184,17 +184,11 @@ export const CompareProfilesScreen = ({
 
   return (
     <View style={[styles.page, { backgroundColor: colors.page }]}>
-      <Pressable
-        onPress={onBack}
-        style={styles.backRow}
-        accessibilityRole="button"
-        accessibilityLabel={t("common.back")}
-      >
-        <Ionicons name="chevron-back" size={22} color={colors.accentTextStrong} />
-        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>{t("common.back")}</Text>
-      </Pressable>
-
-      <Text style={[styles.title, { color: colors.text }]}>{t("compare.title")}</Text>
+      <ScreenHeader
+        title={t("compare.title")}
+        onBack={onBack}
+        style={styles.header}
+      />
       <Text style={[styles.hint, { color: colors.textMuted }]}>
         Highlighted values are lower cost, lower repayment, or an earlier payoff.
         {sameCurrency ? "" : " Currencies differ, so money totals are not ranked."}
@@ -244,22 +238,8 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
   },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    marginTop: 8,
-    marginLeft: 16,
-    gap: 2,
-  },
-  backText: {
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "800",
-    paddingHorizontal: 16,
+  header: {
+    marginHorizontal: 16,
     marginTop: 8,
   },
   hint: {

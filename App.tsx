@@ -388,20 +388,48 @@ function AppContent() {
     setScreen("reminders");
   };
 
-  const refillAndPersist = async (next: LoanReminder[]) => {
-    const settings = reminderSettingsRef.current;
-    const refilled = await refillReminderNotifications(next, {
-      masterEnabled: settings.reminderNotificationsEnabled,
-      notifyHour: settings.defaultNotifyHour,
-    });
-    setReminders(refilled);
-    await saveLoanReminders(refilled);
-    return refilled;
+  // A refill cancels and re-schedules the whole OS queue, then saves its list.
+  // Two at once can interleave, and one started from the reminders in memory
+  // just before a restore or a wipe would write the replaced reminders back
+  // over the new ones. So every refill waits for the one before it.
+  const reminderQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const queueReminderWork = <T,>(task: () => Promise<T>): Promise<T> => {
+    const run = reminderQueueRef.current.then(task);
+    reminderQueueRef.current = run.catch(() => {});
+    return run;
   };
 
-  const runCatchUp = async (list: LoanReminder[]) => {
-    const { reminders: caught, summaries } = catchUpReminders(list, todayLocalIso());
-    await refillAndPersist(caught);
+  const applyReminders = async (refilled: LoanReminder[]) => {
+    // Set ahead of the render so the next queued refill already reads it.
+    remindersRef.current = refilled;
+    setReminders(refilled);
+    await saveLoanReminders(refilled);
+  };
+
+  /**
+   * Pass a function, not a list, from work that is not a direct user action:
+   * it is then read when this refill's turn comes, after any reload queued
+   * ahead of it has landed.
+   */
+  const refillAndPersist = (next: LoanReminder[] | (() => LoanReminder[])) =>
+    queueReminderWork(async () => {
+      const list = typeof next === "function" ? next() : next;
+      const settings = reminderSettingsRef.current;
+      const refilled = await refillReminderNotifications(list, {
+        masterEnabled: settings.reminderNotificationsEnabled,
+        notifyHour: settings.defaultNotifyHour,
+      });
+      await applyReminders(refilled);
+      return refilled;
+    });
+
+  const runCatchUp = async () => {
+    let summaries: ReturnType<typeof catchUpReminders>["summaries"] = [];
+    await refillAndPersist(() => {
+      const caught = catchUpReminders(remindersRef.current, todayLocalIso());
+      summaries = caught.summaries;
+      return caught.reminders;
+    });
     if (summaries.length > 0) {
       showSnackbar(
         summaries
@@ -447,7 +475,9 @@ function AppContent() {
     const initialHash = JSON.stringify(initial);
     setInput(initial);
     setDraftInput(initial);
-    setResult(calculateLoan(initial));
+    // Defaults are not a calculation the user made, and showing one on the
+    // dashboard after "Delete everything" reads as data that survived it.
+    setResult(savedInput ? calculateLoan(initial) : null);
     setLastCalculatedHash(initialHash);
     setLastSavedHash(initialHash);
     setSavedProfiles(loadedProfiles);
@@ -458,16 +488,18 @@ function AppContent() {
     // LocaleProvider applies this too, but on its own read; the notifications
     // scheduled just below must not race it and go out in the device format.
     setActiveDateFormat(loadedSettings.dateFormat);
-    const { reminders: caught, summaries } = catchUpReminders(
-      loadedReminders,
-      todayLocalIso()
-    );
-    const refilled = await refillReminderNotifications(caught, {
-      masterEnabled: loadedSettings.reminderNotificationsEnabled,
-      notifyHour: loadedSettings.defaultNotifyHour,
+    // Queued like any other refill: a settings reload just before this one can
+    // start a refill from the reminders being replaced, and this must land
+    // after it, not be overwritten by it.
+    const summaries = await queueReminderWork(async () => {
+      const caught = catchUpReminders(loadedReminders, todayLocalIso());
+      const refilled = await refillReminderNotifications(caught.reminders, {
+        masterEnabled: loadedSettings.reminderNotificationsEnabled,
+        notifyHour: loadedSettings.defaultNotifyHour,
+      });
+      await applyReminders(refilled);
+      return caught.summaries;
     });
-    setReminders(refilled);
-    await saveLoanReminders(refilled);
     setLoadingState(false);
     const unreadable = takeUnreadableStoredData();
     if (unreadable.length > 0) {
@@ -520,7 +552,7 @@ function AppContent() {
       return;
     }
     notifiedDateFormatRef.current = dateFormat;
-    refillAndPersist(remindersRef.current).catch(() => {});
+    refillAndPersist(() => remindersRef.current).catch(() => {});
   }, [dateFormat, loadingState]);
 
   const handleSubmit = async (nextInput: LoanInput) => {
@@ -550,7 +582,7 @@ function AppContent() {
         getOsPermissionStatus()
           .then(setOsPermissionStatus)
           .catch(() => {});
-        runCatchUp(remindersRef.current).catch(() => {});
+        runCatchUp().catch(() => {});
       }
     });
     return () => sub.remove();
@@ -1287,11 +1319,10 @@ function AppContent() {
                 </>
               ) : (
                 <>
-                  <Text style={styles.compareHint}>
-                    {savedProfiles.length < 2
-                      ? t("compare.needTwo")
-                      : t("compare.hint")}
-                  </Text>
+                  {/* Only said when the button is disabled, to say why. */}
+                  {savedProfiles.length < 2 ? (
+                    <Text style={styles.compareHint}>{t("compare.needTwo")}</Text>
+                  ) : null}
                   <Pressable
                     style={[
                       styles.compareActionButton,

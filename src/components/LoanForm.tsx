@@ -43,6 +43,7 @@ import {
 import { CardHeader } from "./CardHeader";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { DatePickerField } from "./DatePickerField";
+import { ModalPage } from "./ModalPage";
 
 type FormStyles = ReturnType<typeof createStyles>;
 
@@ -591,7 +592,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           )}
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>{t("loanForm.enableRateChanges")}</Text>
+            <Text style={styles.switchLabel}>{t("loanForm.rateChangesToggle")}</Text>
             <Switch
               value={rateChangesEnabled}
               onValueChange={toggleRateChanges}
@@ -599,9 +600,9 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
               thumbColor={colors.switchThumb}
             />
           </View>
-          <Text style={styles.hintText}>{t("loanForm.rateChangesHint")}</Text>
           {rateChangesEnabled ? (
             <View>
+              <Text style={styles.hintText}>{t("loanForm.rateChangesHint")}</Text>
               {rateChangeDrafts.map((draft, index) => (
                 <View key={draft.id} style={styles.rateChangeBlock}>
                   <View style={styles.rateChangeHeader}>
@@ -679,7 +680,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           ) : null}
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>{t("loanForm.enableInterestOnly")}</Text>
+            <Text style={styles.switchLabel}>{t("loanForm.interestOnlyToggle")}</Text>
             <Switch
               value={interestOnlyEnabled}
               onValueChange={setInterestOnlyEnabled}
@@ -687,9 +688,9 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
               thumbColor={colors.switchThumb}
             />
           </View>
-          <Text style={styles.hintText}>{t("loanForm.interestOnlyHint")}</Text>
           {interestOnlyEnabled ? (
             <View>
+              <Text style={styles.hintText}>{t("loanForm.interestOnlyHint")}</Text>
               <Text style={styles.label}>{t("loanForm.interestOnlyLength")}</Text>
               <View style={styles.startAfterRow}>
                 <View style={styles.startAfterInputWrap}>
@@ -714,7 +715,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           ) : null}
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>{t("loanForm.enableAccountFee")}</Text>
+            <Text style={styles.switchLabel}>{t("loanForm.accountFeeToggle")}</Text>
             <Switch
               value={accountFeeEnabled}
               onValueChange={setAccountFeeEnabled}
@@ -722,12 +723,9 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
               thumbColor={colors.switchThumb}
             />
           </View>
-          <Text style={styles.hintText}>
-            {t("loanForm.accountFeeHint")}
-          </Text>
-
           {accountFeeEnabled ? (
             <View>
+              <Text style={styles.hintText}>{t("loanForm.accountFeeHint")}</Text>
               <Text style={styles.label}>{t("loanForm.accountFee")}</Text>
               <View style={styles.inputWrap}>
                 <Text style={styles.prefixText}>{moneySymbol}</Text>
@@ -751,7 +749,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           ) : null}
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>{t("loanForm.enableExtra")}</Text>
+            <Text style={styles.switchLabel}>{t("loanForm.extraToggle")}</Text>
             <Switch
               value={extraEnabled}
               onValueChange={setExtraEnabled}
@@ -806,7 +804,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           ) : null}
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>{t("loanForm.enableLumpSum")}</Text>
+            <Text style={styles.switchLabel}>{t("loanForm.lumpSumToggle")}</Text>
             <Switch
               value={lumpSumEnabled}
               onValueChange={setLumpSumEnabled}
@@ -814,11 +812,9 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
               thumbColor={colors.switchThumb}
             />
           </View>
-          <Text style={styles.hintText}>
-            {t("loanForm.lumpSumHint")}
-          </Text>
           {lumpSumEnabled ? (
             <View>
+              <Text style={styles.hintText}>{t("loanForm.lumpSumHint")}</Text>
               <Text style={styles.label}>{t("loanForm.lumpSumAmount")}</Text>
               <View style={styles.inputWrap}>
                 <Text style={styles.prefixText}>{moneySymbol}</Text>
@@ -835,7 +831,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           ) : null}
 
           <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>{t("loanForm.enableOffset")}</Text>
+            <Text style={styles.switchLabel}>{t("loanForm.offsetToggle")}</Text>
             <Switch
               value={offsetEnabled}
               onValueChange={setOffsetEnabled}
@@ -843,11 +839,9 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
               thumbColor={colors.switchThumb}
             />
           </View>
-          <Text style={styles.hintText}>
-            {t("loanForm.offsetHint")}
-          </Text>
           {offsetEnabled ? (
             <View>
+              <Text style={styles.hintText}>{t("loanForm.offsetHint")}</Text>
               <Text style={styles.label}>{t("loanForm.offsetAmount")}</Text>
               <View style={styles.inputWrap}>
                 <Text style={styles.prefixText}>{moneySymbol}</Text>
@@ -870,11 +864,9 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
                   thumbColor={colors.switchThumb}
                 />
               </View>
-              <Text style={styles.hintText}>
-                {t("loanForm.offsetDepositHint")}
-              </Text>
               {offsetContributionEnabled ? (
                 <View>
+                  <Text style={styles.hintText}>{t("loanForm.offsetDepositHint")}</Text>
                   <Text style={styles.label}>{t("loanForm.offsetDepositAmount")}</Text>
                   <View style={styles.inputWrap}>
                     <Text style={styles.prefixText}>{moneySymbol}</Text>
@@ -908,7 +900,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
         animationType="slide"
         onRequestClose={() => setCurrencyModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
+        <ModalPage style={styles.modalContainer}>
           <Text style={styles.modalTitle}>{t("loanForm.selectCurrency")}</Text>
           <TextInput
             style={styles.modalSearch}
@@ -937,7 +929,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           >
             <Text style={styles.modalCloseText}>{t("common.close")}</Text>
           </Pressable>
-        </View>
+        </ModalPage>
       </Modal>
     </View>
   );
@@ -1134,10 +1126,7 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "700",
     },
     modalContainer: {
-      flex: 1,
       backgroundColor: colors.card,
-      padding: 16,
-      paddingTop: 56,
     },
     modalTitle: {
       fontSize: 20,

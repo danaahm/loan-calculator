@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ReminderCard } from "../components/ReminderCard";
+import { ScreenHeader } from "../components/ScreenHeader";
 import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { REMINDER_DISCLAIMER, type LoanReminder } from "../types/reminder";
@@ -67,26 +68,21 @@ export const RemindersScreen = ({
 
   return (
     <View style={[styles.page, { backgroundColor: colors.page }]}>
-      <Pressable
-        onPress={onBack}
-        style={styles.backRow}
-        accessibilityRole="button"
-        accessibilityLabel={t("common.back")}
-      >
-        <Ionicons name="chevron-back" size={22} color={colors.accentTextStrong} />
-        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>{t("common.back")}</Text>
-      </Pressable>
-      <View style={styles.headerRow}>
-        <Text style={[styles.title, { color: colors.text }]}>{t("reminders.title")}</Text>
-        <Pressable
-          onPress={onAdd}
-          style={[styles.addButton, { backgroundColor: colors.primary }]}
-          accessibilityRole="button"
-          accessibilityLabel={t("reminders.addA11y")}
-        >
-          <Ionicons name="add" size={22} color={colors.textInverse} />
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title={t("reminders.title")}
+        onBack={onBack}
+        style={styles.header}
+        actions={
+          <Pressable
+            onPress={onAdd}
+            style={[styles.addButton, { backgroundColor: colors.primary }]}
+            accessibilityRole="button"
+            accessibilityLabel={t("reminders.addA11y")}
+          >
+            <Ionicons name="add" size={22} color={colors.textInverse} />
+          </Pressable>
+        }
+      />
       <Text style={[styles.disclaimer, { color: colors.textMuted }]}>
         {REMINDER_DISCLAIMER()}
       </Text>
@@ -133,26 +129,8 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    marginBottom: 12,
-    gap: 2,
-  },
-  backText: {
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  header: {
     marginBottom: 8,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "800",
   },
   addButton: {
     width: 40,

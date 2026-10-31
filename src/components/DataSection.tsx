@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { useLocale } from "../i18n/LocaleProvider";
+import { dismissDeliveredReminderNotifications } from "../notifications/reminderNotifications";
 import { useDueThresholds } from "../settings/DueThresholdsProvider";
 import {
   countStoredData,
@@ -154,6 +155,9 @@ export const DataSection = ({
     setBusy("delete");
     try {
       await clearAllStoredData();
+      // Delivered notifications carry loan names and amounts, so they go too.
+      // Scheduled ones are cancelled by the reload, which finds no reminders.
+      await dismissDeliveredReminderNotifications();
       await reloadEverything();
       onNotify(t("settings.data.deleteDone"));
     } catch {
