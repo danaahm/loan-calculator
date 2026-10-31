@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { DatePickerField } from "../components/DatePickerField";
 import { notificationUnavailableHint } from "../notifications/reminderNotifications";
@@ -227,7 +228,7 @@ const LinkedProfilePicker = ({
         <Ionicons name="chevron-down" size={18} color={colors.accentTextStrong} />
       </Pressable>
       <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
-        <View style={[styles.modalPage, { backgroundColor: colors.card }]}>
+        <SafeAreaView style={[styles.modalPage, { backgroundColor: colors.card }]}>
           <Text style={[styles.modalTitle, { color: colors.text }]}>{t("editor.linkSavedLoan")}</Text>
           <Pressable
             onPress={() => {
@@ -309,7 +310,7 @@ const LinkedProfilePicker = ({
               Close
             </Text>
           </Pressable>
-        </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -1119,7 +1120,6 @@ const styles = StyleSheet.create({
   modalPage: {
     flex: 1,
     padding: 16,
-    paddingTop: 56,
   },
   modalTitle: {
     fontSize: 20,

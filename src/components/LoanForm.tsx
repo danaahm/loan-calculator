@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useTranslation } from "../i18n/LocaleProvider";
 import { addMonthsClamped, parseIsoDate, todayLocalIso } from "../utils/dateIso";
@@ -908,7 +909,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
         animationType="slide"
         onRequestClose={() => setCurrencyModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer}>
           <Text style={styles.modalTitle}>{t("loanForm.selectCurrency")}</Text>
           <TextInput
             style={styles.modalSearch}
@@ -937,7 +938,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           >
             <Text style={styles.modalCloseText}>{t("common.close")}</Text>
           </Pressable>
-        </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -1137,7 +1138,6 @@ const createStyles = (colors: ThemeColors) =>
       flex: 1,
       backgroundColor: colors.card,
       padding: 16,
-      paddingTop: 56,
     },
     modalTitle: {
       fontSize: 20,

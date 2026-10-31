@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomSheet } from "../components/BottomSheet";
 import { DataSection } from "../components/DataSection";
@@ -702,7 +703,7 @@ export const SettingsScreen = ({
         animationType="slide"
         onRequestClose={() => setCurrencyModalVisible(false)}
       >
-        <View style={[styles.modalContainer, { backgroundColor: colors.page }]}>
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.page }]}>
           <Text style={[styles.modalTitle, { color: colors.text }]}>
             {t("settings.selectDefaultCurrency")}
           </Text>
@@ -748,7 +749,7 @@ export const SettingsScreen = ({
               {t("common.close")}
             </Text>
           </Pressable>
-        </View>
+        </SafeAreaView>
       </Modal>
     </ScrollView>
   );
