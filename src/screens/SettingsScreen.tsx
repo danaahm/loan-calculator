@@ -11,10 +11,10 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomSheet } from "../components/BottomSheet";
 import { DataSection } from "../components/DataSection";
+import { ModalPage } from "../components/ModalPage";
 import { SegmentedControl } from "../components/SegmentedControl";
 import {
   notificationUnavailableHint,
@@ -703,7 +703,7 @@ export const SettingsScreen = ({
         animationType="slide"
         onRequestClose={() => setCurrencyModalVisible(false)}
       >
-        <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.page }]}>
+        <ModalPage style={{ backgroundColor: colors.page }}>
           <Text style={[styles.modalTitle, { color: colors.text }]}>
             {t("settings.selectDefaultCurrency")}
           </Text>
@@ -749,7 +749,7 @@ export const SettingsScreen = ({
               {t("common.close")}
             </Text>
           </Pressable>
-        </SafeAreaView>
+        </ModalPage>
       </Modal>
     </ScrollView>
   );
@@ -921,10 +921,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontWeight: "600",
     fontSize: 13,
-  },
-  modalContainer: {
-    flex: 1,
-    padding: 16,
   },
   modalTitle: {
     fontSize: 20,

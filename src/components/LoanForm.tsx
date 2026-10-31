@@ -9,7 +9,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useTranslation } from "../i18n/LocaleProvider";
 import { addMonthsClamped, parseIsoDate, todayLocalIso } from "../utils/dateIso";
@@ -44,6 +43,7 @@ import {
 import { CardHeader } from "./CardHeader";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { DatePickerField } from "./DatePickerField";
+import { ModalPage } from "./ModalPage";
 
 type FormStyles = ReturnType<typeof createStyles>;
 
@@ -909,7 +909,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
         animationType="slide"
         onRequestClose={() => setCurrencyModalVisible(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <ModalPage style={styles.modalContainer}>
           <Text style={styles.modalTitle}>{t("loanForm.selectCurrency")}</Text>
           <TextInput
             style={styles.modalSearch}
@@ -938,7 +938,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           >
             <Text style={styles.modalCloseText}>{t("common.close")}</Text>
           </Pressable>
-        </SafeAreaView>
+        </ModalPage>
       </Modal>
     </View>
   );
@@ -1135,9 +1135,7 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "700",
     },
     modalContainer: {
-      flex: 1,
       backgroundColor: colors.card,
-      padding: 16,
     },
     modalTitle: {
       fontSize: 20,
