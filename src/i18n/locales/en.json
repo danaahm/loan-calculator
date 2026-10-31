@@ -495,6 +495,11 @@
   },
   "basicCalc": {
     "error": "Error",
+    "hideHistory": "Hide history",
+    "showHistory": "Show history",
+    "keypad": "Keypad",
+    "history": "History",
+    "emptyHistory": "No calculations yet.",
     "clearAll": "Clear all",
     "clearTitle": "Clear the tape?",
     "clearBody": "Every calculation on the tape will be removed.",

@@ -94,6 +94,8 @@ export const BasicCalculatorScreen = () => {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [calc, setCalc] = useState<CalcState>(createInitialCalcState);
   const [history, setHistory] = useState<BasicCalcHistoryEntry[]>([]);
+  // History stretches the tape over the keypad to show more of it at once.
+  const [historyOpen, setHistoryOpen] = useState(false);
   // Only a line added while watching slides in; the stored tape just appears.
   const [freshEntryId, setFreshEntryId] = useState<string | null>(null);
 
@@ -124,6 +126,7 @@ export const BasicCalculatorScreen = () => {
 
   const recallEntry = (entry: BasicCalcHistoryEntry) => {
     setCalc((current) => recallCalcValue(current, entry.result));
+    setHistoryOpen(false);
   };
 
   const deleteEntry = (id: string) => {
@@ -182,8 +185,25 @@ export const BasicCalculatorScreen = () => {
   return (
     <View style={styles.screen}>
       <View style={styles.displayCard}>
-        {history.length > 0 ? (
-          <View style={styles.tapeTopRow}>
+        <View style={styles.displayTopRow}>
+          <Pressable
+            onPress={() => setHistoryOpen((open) => !open)}
+            style={styles.historyToggle}
+            accessibilityRole="button"
+            accessibilityLabel={
+              historyOpen ? t("basicCalc.hideHistory") : t("basicCalc.showHistory")
+            }
+          >
+            <Ionicons
+              name={historyOpen ? "keypad-outline" : "time-outline"}
+              size={22}
+              color={colors.accentTextStrong}
+            />
+            <Text style={styles.historyToggleText}>
+              {historyOpen ? t("basicCalc.keypad") : t("basicCalc.history")}
+            </Text>
+          </Pressable>
+          {historyOpen && history.length > 0 ? (
             <Pressable
               onPress={confirmClearHistory}
               hitSlop={8}
@@ -191,10 +211,14 @@ export const BasicCalculatorScreen = () => {
               accessibilityRole="button"
               accessibilityLabel={t("basicCalc.clearAll")}
             >
-              <Ionicons name="trash-outline" size={15} color={colors.textMuted} />
+              <Ionicons name="trash-outline" size={15} color={colors.danger} />
               <Text style={styles.clearText}>{t("basicCalc.clearAll")}</Text>
             </Pressable>
-          </View>
+          ) : null}
+        </View>
+
+        {historyOpen && history.length === 0 ? (
+          <Text style={styles.emptyHistory}>{t("basicCalc.emptyHistory")}</Text>
         ) : null}
 
         {/*
@@ -210,7 +234,7 @@ export const BasicCalculatorScreen = () => {
           renderItem={({ item, index }) => (
             <Animated.View
               entering={item.id === freshEntryId ? FadeInDown.duration(220) : undefined}
-              style={{ opacity: tapeOpacity(index) }}
+              style={{ opacity: historyOpen ? 1 : tapeOpacity(index) }}
             >
               <Pressable
                 onPress={() => recallEntry(item)}
@@ -242,22 +266,24 @@ export const BasicCalculatorScreen = () => {
           )}
         />
 
-        <View style={[styles.live, history.length > 0 && styles.liveUnderTape]}>
-          <Text style={styles.chain} numberOfLines={1} ellipsizeMode="head">
-            {chain}
-          </Text>
-          <Text
-            style={[styles.display, calc.error && styles.displayError]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.4}
-          >
-            {showCalcText(calc.display)}
-          </Text>
-        </View>
+        {historyOpen ? null : (
+          <View style={[styles.live, history.length > 0 && styles.liveUnderTape]}>
+            <Text style={styles.chain} numberOfLines={1} ellipsizeMode="head">
+              {chain}
+            </Text>
+            <Text
+              style={[styles.display, calc.error && styles.displayError]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.4}
+            >
+              {showCalcText(calc.display)}
+            </Text>
+          </View>
+        )}
       </View>
 
-      <View style={styles.keypad}>
+      <View style={[styles.keypad, historyOpen && styles.keypadHidden]}>
         {KEYPAD.map((row) => (
           <View key={row.map((item) => item.key).join("-")} style={styles.keyRow}>
             {row.map((item) => {
@@ -310,21 +336,40 @@ const createStyles = (colors: ThemeColors) =>
       marginBottom: 10,
       minHeight: 140,
     },
-    tapeTopRow: {
+    displayTopRow: {
       flexDirection: "row",
-      justifyContent: "flex-end",
+      alignItems: "center",
+      justifyContent: "space-between",
       marginBottom: 4,
+    },
+    historyToggle: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingVertical: 4,
+      paddingRight: 8,
+    },
+    historyToggleText: {
+      color: colors.accentTextStrong,
+      fontWeight: "700",
+      fontSize: 13,
     },
     clearButton: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      paddingVertical: 2,
+      paddingVertical: 4,
     },
     clearText: {
-      color: colors.textMuted,
+      color: colors.danger,
       fontWeight: "700",
-      fontSize: 12,
+      fontSize: 13,
+    },
+    emptyHistory: {
+      color: colors.textMuted,
+      fontWeight: "600",
+      textAlign: "center",
+      marginTop: 32,
     },
     tape: {
       flex: 1,
@@ -383,6 +428,10 @@ const createStyles = (colors: ThemeColors) =>
       gap: 8,
       paddingBottom: 4,
       minHeight: 280,
+    },
+    // Kept mounted while History has the room, so returning is instant.
+    keypadHidden: {
+      display: "none",
     },
     keyRow: {
       flex: 1,
