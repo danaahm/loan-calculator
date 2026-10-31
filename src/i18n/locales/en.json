@@ -471,7 +471,6 @@
     "twoSelected": "Two loans selected",
     "selectTwo": "Select two saved loans",
     "needTwo": "Save at least two loans to compare offers.",
-    "hint": "Compare two saved loans side by side.",
     "perFrequency": "{amount} / {frequency}",
     "amountPerFrequency": "{amount} {frequency}",
     "offsetStart": "{amount} start",

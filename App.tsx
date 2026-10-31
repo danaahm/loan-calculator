@@ -1319,11 +1319,10 @@ function AppContent() {
                 </>
               ) : (
                 <>
-                  <Text style={styles.compareHint}>
-                    {savedProfiles.length < 2
-                      ? t("compare.needTwo")
-                      : t("compare.hint")}
-                  </Text>
+                  {/* Only said when the button is disabled, to say why. */}
+                  {savedProfiles.length < 2 ? (
+                    <Text style={styles.compareHint}>{t("compare.needTwo")}</Text>
+                  ) : null}
                   <Pressable
                     style={[
                       styles.compareActionButton,
