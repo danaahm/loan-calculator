@@ -15,6 +15,7 @@ import {
 import { BottomSheet } from "../components/BottomSheet";
 import { DataSection } from "../components/DataSection";
 import { ModalPage } from "../components/ModalPage";
+import { ScreenHeader } from "../components/ScreenHeader";
 import { SegmentedControl } from "../components/SegmentedControl";
 import {
   notificationUnavailableHint,
@@ -152,606 +153,598 @@ export const SettingsScreen = ({
   );
 
   return (
-    <ScrollView
-      style={[styles.page, { backgroundColor: colors.page }]}
-      contentContainerStyle={styles.content}
-    >
-      <Pressable
-        onPress={onBack}
-        style={styles.backRow}
-        accessibilityRole="button"
-        accessibilityLabel={t("common.back")}
-      >
-        <Ionicons name="chevron-back" size={22} color={colors.accentTextStrong} />
-        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>{t("common.back")}</Text>
-      </Pressable>
+    <View style={[styles.page, { backgroundColor: colors.page }]}>
+      <ScreenHeader
+        title={t("settings.title")}
+        onBack={onBack}
+        style={styles.header}
+      />
+      <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+        <View
+          style={[
+            styles.sectionCard,
+            { backgroundColor: colors.card, borderColor: colors.cardBorder },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
+            {t("settings.dateFormat")}
+          </Text>
+          <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+            {t("settings.dateFormatHint")}
+          </Text>
 
-      <Text style={[styles.pageTitle, { color: colors.text }]}>{t("settings.title")}</Text>
-
-      <View
-        style={[
-          styles.sectionCard,
-          { backgroundColor: colors.card, borderColor: colors.cardBorder },
-        ]}
-      >
-        <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
-          {t("settings.dateFormat")}
-        </Text>
-        <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
-          {t("settings.dateFormatHint")}
-        </Text>
-
-        {([
-          {
-            key: "auto",
-            selected: dateFormat === "auto",
-            title: t("settings.dateFormats.auto"),
-            hint: t("settings.dateFormats.autoHint", { example: exampleDate("auto") }),
-            onPress: () => setDateFormat("auto"),
-          },
-          {
-            key: "chosen",
-            selected: dateFormat !== "auto",
-            title: t("settings.dateFormats.chosen"),
-            hint:
-              dateFormat === "auto"
-                ? t("settings.dateFormats.chosenHint")
-                : t("settings.dateFormats.chosenValue", {
-                    example: exampleDate(dateFormat),
-                    pattern: t(`settings.dateFormats.${dateFormat}`),
-                  }),
-            onPress: () => setDateFormatPickerOpen(true),
-          },
-        ] as const).map((row) => (
-          <Pressable
-            key={row.key}
-            onPress={row.onPress}
-            style={[
-              styles.optionRow,
-              {
-                borderColor: row.selected ? colors.primary : colors.borderStrong,
-                backgroundColor: row.selected ? colors.primarySoft : colors.inputBg,
-              },
-            ]}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: row.selected }}
-          >
-            <View style={styles.optionCopy}>
-              <Text
-                style={[
-                  styles.optionTitle,
-                  { color: row.selected ? colors.accentTextDeep : colors.text },
-                ]}
-              >
-                {row.title}
-              </Text>
-              <Text style={[styles.optionHint, { color: colors.textMuted }]}>
-                {row.hint}
-              </Text>
-            </View>
-            {row.key === "chosen" ? (
-              <Ionicons
-                name="chevron-down"
-                size={18}
-                color={colors.textMuted}
-                style={styles.pickerChevron}
-              />
-            ) : null}
-            <View
-              style={[
-                styles.radioOuter,
-                { borderColor: row.selected ? colors.primary : colors.borderStrong },
-              ]}
-            >
-              {row.selected ? (
-                <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
-              ) : null}
-            </View>
-          </Pressable>
-        ))}
-      </View>
-
-      <View
-        style={[
-          styles.sectionCard,
-          { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
-        ]}
-      >
-        <Text style={[styles.sectionTitle, { color: colors.accentText }]}>{t("settings.appearance")}</Text>
-        <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
-          {t("settings.appearanceHint")}
-        </Text>
-
-        <SegmentedControl
-          options={APPEARANCE_MODES.map((option) => ({
-            value: option,
-            label: t(`settings.theme.${option}.title`),
-            icon: APPEARANCE_ICONS[option],
-          }))}
-          value={mode}
-          onChange={setThemeMode}
-          accessibilityLabel={t("settings.appearance")}
-        />
-      </View>
-
-      <View
-        style={[
-          styles.sectionCard,
-          { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
-        ]}
-      >
-        <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
-          {t("settings.language")}
-        </Text>
-        <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
-          {t("settings.languageHint")}
-        </Text>
-
-        {SUPPORTED_LANGUAGES.map((option) => {
-          const selected = language === option.code;
-          return (
+          {([
+            {
+              key: "auto",
+              selected: dateFormat === "auto",
+              title: t("settings.dateFormats.auto"),
+              hint: t("settings.dateFormats.autoHint", { example: exampleDate("auto") }),
+              onPress: () => setDateFormat("auto"),
+            },
+            {
+              key: "chosen",
+              selected: dateFormat !== "auto",
+              title: t("settings.dateFormats.chosen"),
+              hint:
+                dateFormat === "auto"
+                  ? t("settings.dateFormats.chosenHint")
+                  : t("settings.dateFormats.chosenValue", {
+                      example: exampleDate(dateFormat),
+                      pattern: t(`settings.dateFormats.${dateFormat}`),
+                    }),
+              onPress: () => setDateFormatPickerOpen(true),
+            },
+          ] as const).map((row) => (
             <Pressable
-              key={option.code}
-              onPress={() => setLanguage(option.code)}
+              key={row.key}
+              onPress={row.onPress}
               style={[
                 styles.optionRow,
                 {
-                  borderColor: selected ? colors.primary : colors.borderStrong,
-                  backgroundColor: selected ? colors.primarySoft : colors.inputBg,
+                  borderColor: row.selected ? colors.primary : colors.borderStrong,
+                  backgroundColor: row.selected ? colors.primarySoft : colors.inputBg,
                 },
               ]}
               accessibilityRole="radio"
-              accessibilityState={{ selected }}
+              accessibilityState={{ selected: row.selected }}
             >
               <View style={styles.optionCopy}>
                 <Text
                   style={[
                     styles.optionTitle,
-                    { color: selected ? colors.accentTextDeep : colors.text },
+                    { color: row.selected ? colors.accentTextDeep : colors.text },
                   ]}
                 >
-                  {option.endonym}
+                  {row.title}
+                </Text>
+                <Text style={[styles.optionHint, { color: colors.textMuted }]}>
+                  {row.hint}
                 </Text>
               </View>
+              {row.key === "chosen" ? (
+                <Ionicons
+                  name="chevron-down"
+                  size={18}
+                  color={colors.textMuted}
+                  style={styles.pickerChevron}
+                />
+              ) : null}
               <View
                 style={[
                   styles.radioOuter,
-                  { borderColor: selected ? colors.primary : colors.borderStrong },
+                  { borderColor: row.selected ? colors.primary : colors.borderStrong },
                 ]}
               >
-                {selected ? (
+                {row.selected ? (
                   <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
                 ) : null}
               </View>
             </Pressable>
-          );
-        })}
-      </View>
+          ))}
+        </View>
 
-      <View
-        style={[
-          styles.sectionCard,
-          { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
-        ]}
-      >
-        <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
-          {t("settings.defaultCurrency")}
-        </Text>
-        <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
-          {t("settings.defaultCurrencyHint")}
-        </Text>
-
-        <Pressable
-          onPress={() => setCurrencyModalVisible(true)}
+        <View
           style={[
-            styles.optionRow,
-            { borderColor: colors.borderStrong, backgroundColor: colors.inputBg },
+            styles.sectionCard,
+            { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
           ]}
-          accessibilityRole="button"
         >
-          <View style={styles.optionCopy}>
-            <Text style={[styles.optionTitle, { color: colors.text }]}>
-              {selectedCurrency
-                ? selectedCurrency.label
-                : t("settings.currencyAuto", { code: defaultCurrencyCode })}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-        </Pressable>
-      </View>
+          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>{t("settings.appearance")}</Text>
+          <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+            {t("settings.appearanceHint")}
+          </Text>
 
-      <View
-        style={[
-          styles.sectionCard,
-          { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
-        ]}
-      >
-        <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
-          {t("settings.reminders")}
-        </Text>
-        <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
-          {notificationsSupported
-            ? t("settings.remindersHint")
-            : notificationUnavailableHint()}
-        </Text>
-
-        <View style={styles.switchRow}>
-          <View style={styles.optionCopy}>
-            <Text style={[styles.optionTitle, { color: colors.text }]}>
-              {t("settings.reminderNotifications")}
-            </Text>
-            <Text style={[styles.optionHint, { color: colors.textMuted }]}>
-              {permissionStatusLabel(osPermissionStatus)}
-            </Text>
-          </View>
-          <Switch
-            value={reminderNotificationsEnabled && osPermissionStatus === "granted"}
-            disabled={!notificationsSupported || blockedOnPhone}
-            onValueChange={onToggleReminderNotifications}
-            trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
-            thumbColor={colors.switchThumb}
+          <SegmentedControl
+            options={APPEARANCE_MODES.map((option) => ({
+              value: option,
+              label: t(`settings.theme.${option}.title`),
+              icon: APPEARANCE_ICONS[option],
+            }))}
+            value={mode}
+            onChange={setThemeMode}
+            accessibilityLabel={t("settings.appearance")}
           />
         </View>
 
-        {blockedOnPhone ? (
+        <View
+          style={[
+            styles.sectionCard,
+            { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
+            {t("settings.language")}
+          </Text>
+          <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+            {t("settings.languageHint")}
+          </Text>
+
+          {SUPPORTED_LANGUAGES.map((option) => {
+            const selected = language === option.code;
+            return (
+              <Pressable
+                key={option.code}
+                onPress={() => setLanguage(option.code)}
+                style={[
+                  styles.optionRow,
+                  {
+                    borderColor: selected ? colors.primary : colors.borderStrong,
+                    backgroundColor: selected ? colors.primarySoft : colors.inputBg,
+                  },
+                ]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+              >
+                <View style={styles.optionCopy}>
+                  <Text
+                    style={[
+                      styles.optionTitle,
+                      { color: selected ? colors.accentTextDeep : colors.text },
+                    ]}
+                  >
+                    {option.endonym}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.radioOuter,
+                    { borderColor: selected ? colors.primary : colors.borderStrong },
+                  ]}
+                >
+                  {selected ? (
+                    <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
+                  ) : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View
+          style={[
+            styles.sectionCard,
+            { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
+            {t("settings.defaultCurrency")}
+          </Text>
+          <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+            {t("settings.defaultCurrencyHint")}
+          </Text>
+
           <Pressable
-            onPress={onOpenPhoneSettings}
+            onPress={() => setCurrencyModalVisible(true)}
             style={[
-              styles.openSettingsButton,
+              styles.optionRow,
               { borderColor: colors.borderStrong, backgroundColor: colors.inputBg },
             ]}
+            accessibilityRole="button"
           >
-            <Text style={[styles.openSettingsText, { color: colors.accentTextStrong }]}>
-              {t("settings.openPhoneSettings")}
-            </Text>
+            <View style={styles.optionCopy}>
+              <Text style={[styles.optionTitle, { color: colors.text }]}>
+                {selectedCurrency
+                  ? selectedCurrency.label
+                  : t("settings.currencyAuto", { code: defaultCurrencyCode })}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </Pressable>
-        ) : null}
-
-        <Text style={[styles.hourLabel, { color: colors.textSecondary }]}>{t("settings.defaultAlertTime")}</Text>
-        <View style={styles.hourWrap}>
-          {NOTIFY_HOURS.map((hour) => {
-            const selected = defaultNotifyHour === hour;
-            return (
-              <Pressable
-                key={hour}
-                onPress={() => onChangeNotifyHour(hour)}
-                style={[
-                  styles.hourChip,
-                  {
-                    borderColor: selected ? colors.primary : colors.borderStrong,
-                    backgroundColor: selected ? colors.primarySoft : colors.inputBg,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: selected ? colors.accentTextDeep : colors.textSecondary,
-                    fontWeight: selected ? "700" : "600",
-                    fontSize: 13,
-                  }}
-                >
-                  {formatHour(hour, language)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      <View
-        style={[
-          styles.sectionCard,
-          { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
-        ]}
-      >
-        <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
-          {t("settings.dueColours")}
-        </Text>
-        <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
-          {t("settings.dueColoursHint")}
-        </Text>
-
-        <View style={styles.duePreview}>
-          <View style={styles.duePreviewRow}>
-            <View style={[styles.dueSwatch, { backgroundColor: colors.dueDotUrgent }]} />
-            <Text style={[styles.duePreviewText, { color: colors.textSecondary }]}>
-              {thresholds.urgentDays === 0
-                ? t("settings.duePreviewUrgentToday")
-                : t("settings.duePreviewUrgent", { count: thresholds.urgentDays })}
-            </Text>
-          </View>
-          <View style={styles.duePreviewRow}>
-            <View style={[styles.dueSwatch, { backgroundColor: colors.dueDotSoon }]} />
-            <Text style={[styles.duePreviewText, { color: colors.textSecondary }]}>
-              {t("settings.duePreviewSoon", { count: thresholds.soonDays })}
-            </Text>
-          </View>
-          <View style={styles.duePreviewRow}>
-            <View style={[styles.dueSwatch, { backgroundColor: colors.primary }]} />
-            <Text style={[styles.duePreviewText, { color: colors.textSecondary }]}>
-              {t("settings.duePreviewNormal")}
-            </Text>
-          </View>
         </View>
 
-        <Pressable
-          onPress={() => setDueBandPicker("soon")}
+        <View
           style={[
-            styles.optionRow,
-            { borderColor: colors.borderStrong, backgroundColor: colors.inputBg },
+            styles.sectionCard,
+            { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
           ]}
-          accessibilityRole="button"
-          accessibilityLabel={t("settings.dueSoonFrom")}
         >
-          <View
-            style={[
-              styles.dueSwatch,
-              styles.dueRowSwatch,
-              { backgroundColor: colors.dueDotSoon },
-            ]}
-          />
-          <View style={styles.optionCopy}>
-            <Text style={[styles.optionTitle, { color: colors.text }]}>
-              {t("settings.dueSoonFrom")}
-            </Text>
-            <Text style={[styles.optionHint, { color: colors.textMuted }]}>
-              {dayLabel(thresholds.soonDays, t)}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-        </Pressable>
-
-        <Pressable
-          onPress={() => setDueBandPicker("urgent")}
-          style={[
-            styles.optionRow,
-            { borderColor: colors.borderStrong, backgroundColor: colors.inputBg },
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={t("settings.dueUrgentFrom")}
-        >
-          <View
-            style={[
-              styles.dueSwatch,
-              styles.dueRowSwatch,
-              { backgroundColor: colors.dueDotUrgent },
-            ]}
-          />
-          <View style={styles.optionCopy}>
-            <Text style={[styles.optionTitle, { color: colors.text }]}>
-              {t("settings.dueUrgentFrom")}
-            </Text>
-            <Text style={[styles.optionHint, { color: colors.textMuted }]}>
-              {dayLabel(thresholds.urgentDays, t)}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-        </Pressable>
-      </View>
-
-      <DataSection
-        appVersion={buildInfo.version}
-        onDataReplaced={onDataReplaced}
-        onNotify={onNotify}
-      />
-
-      <View style={styles.footer}>
-        {/* Selectable so a user can paste exactly which build they run. */}
-        <Text selectable style={[styles.footerVersion, { color: colors.textSecondary }]}>
-          {buildInfo.buildNumber
-            ? t("settings.about.versionWithBuild", {
-                version: buildInfo.version,
-                build: buildInfo.buildNumber,
-              })
-            : t("settings.about.version", { version: buildInfo.version })}
-        </Text>
-        {buildInfo.binaryVersion ? (
-          <Text selectable style={[styles.footerDetail, { color: colors.textMuted }]}>
-            {t("settings.about.binaryVersion", { version: buildInfo.binaryVersion })}
+          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
+            {t("settings.reminders")}
           </Text>
-        ) : null}
-        {buildInfo.channel !== "production" ? (
-          <View style={[styles.footerBadge, { borderColor: colors.borderStrong }]}>
-            <Text style={[styles.footerBadgeText, { color: colors.textSecondary }]}>
-              {t(`settings.about.channel.${buildInfo.channel}`)}
-            </Text>
-          </View>
-        ) : null}
-        <Text style={[styles.footerSignature, { color: colors.textMuted }]}>
-          {t("settings.about.madeBy", { name: DEVELOPER_NAME })}
-        </Text>
-      </View>
+          <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+            {notificationsSupported
+              ? t("settings.remindersHint")
+              : notificationUnavailableHint()}
+          </Text>
 
-      <BottomSheet
-        visible={dueBandPicker !== null}
-        onClose={() => setDueBandPicker(null)}
-        style={[styles.sheet, { backgroundColor: colors.card }]}
-      >
-        <Text style={[styles.modalTitle, { color: colors.text }]}>
-          {shownDueBand === "urgent"
-            ? t("settings.dueUrgentFrom")
-            : t("settings.dueSoonFrom")}
-        </Text>
-        <ScrollView>
-          {dueDayOptions.map((days) => {
-            const selected =
-              shownDueBand === "urgent"
-                ? thresholds.urgentDays === days
-                : thresholds.soonDays === days;
-            return (
-              <Pressable
-                key={days}
-                onPress={() => {
-                  setDueThresholds(
-                    shownDueBand === "urgent"
-                      ? { urgentDays: days }
-                      : { soonDays: days }
-                  );
-                  setDueBandPicker(null);
-                }}
-                style={[
-                  styles.optionRow,
-                  {
-                    borderColor: selected ? colors.primary : colors.borderStrong,
-                    backgroundColor: selected ? colors.primarySoft : colors.inputBg,
-                  },
-                ]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-              >
-                <View style={styles.optionCopy}>
-                  <Text
-                    style={[
-                      styles.optionTitle,
-                      { color: selected ? colors.accentTextDeep : colors.text },
-                    ]}
-                  >
-                    {dayLabel(days, t)}
-                  </Text>
-                </View>
-                <View
+          <View style={styles.switchRow}>
+            <View style={styles.optionCopy}>
+              <Text style={[styles.optionTitle, { color: colors.text }]}>
+                {t("settings.reminderNotifications")}
+              </Text>
+              <Text style={[styles.optionHint, { color: colors.textMuted }]}>
+                {permissionStatusLabel(osPermissionStatus)}
+              </Text>
+            </View>
+            <Switch
+              value={reminderNotificationsEnabled && osPermissionStatus === "granted"}
+              disabled={!notificationsSupported || blockedOnPhone}
+              onValueChange={onToggleReminderNotifications}
+              trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
+              thumbColor={colors.switchThumb}
+            />
+          </View>
+
+          {blockedOnPhone ? (
+            <Pressable
+              onPress={onOpenPhoneSettings}
+              style={[
+                styles.openSettingsButton,
+                { borderColor: colors.borderStrong, backgroundColor: colors.inputBg },
+              ]}
+            >
+              <Text style={[styles.openSettingsText, { color: colors.accentTextStrong }]}>
+                {t("settings.openPhoneSettings")}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          <Text style={[styles.hourLabel, { color: colors.textSecondary }]}>{t("settings.defaultAlertTime")}</Text>
+          <View style={styles.hourWrap}>
+            {NOTIFY_HOURS.map((hour) => {
+              const selected = defaultNotifyHour === hour;
+              return (
+                <Pressable
+                  key={hour}
+                  onPress={() => onChangeNotifyHour(hour)}
                   style={[
-                    styles.radioOuter,
-                    { borderColor: selected ? colors.primary : colors.borderStrong },
+                    styles.hourChip,
+                    {
+                      borderColor: selected ? colors.primary : colors.borderStrong,
+                      backgroundColor: selected ? colors.primarySoft : colors.inputBg,
+                    },
                   ]}
                 >
-                  {selected ? (
-                    <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
-                  ) : null}
-                </View>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-        <Pressable
-          style={[styles.modalCloseButton, { backgroundColor: colors.primary }]}
-          onPress={() => setDueBandPicker(null)}
-        >
-          <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
-            {t("common.close")}
-          </Text>
-        </Pressable>
-      </BottomSheet>
-
-      <BottomSheet
-        visible={dateFormatPickerOpen}
-        onClose={() => setDateFormatPickerOpen(false)}
-        style={[styles.sheet, { backgroundColor: colors.card }]}
-      >
-        <Text style={[styles.modalTitle, { color: colors.text }]}>
-          {t("settings.dateFormats.pickerTitle")}
-        </Text>
-        <ScrollView>
-          {DATE_FORMATS.map((format) => {
-            const selected = dateFormat === format;
-            return (
-              <Pressable
-                key={format}
-                onPress={() => {
-                  setDateFormat(format);
-                  setDateFormatPickerOpen(false);
-                }}
-                style={[
-                  styles.optionRow,
-                  {
-                    borderColor: selected ? colors.primary : colors.borderStrong,
-                    backgroundColor: selected ? colors.primarySoft : colors.inputBg,
-                  },
-                ]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-              >
-                <View style={styles.optionCopy}>
                   <Text
-                    style={[
-                      styles.optionTitle,
-                      { color: selected ? colors.accentTextDeep : colors.text },
-                    ]}
+                    style={{
+                      color: selected ? colors.accentTextDeep : colors.textSecondary,
+                      fontWeight: selected ? "700" : "600",
+                      fontSize: 13,
+                    }}
                   >
-                    {exampleDate(format)}
+                    {formatHour(hour, language)}
                   </Text>
-                  <Text style={[styles.optionHint, { color: colors.textMuted }]}>
-                    {t(`settings.dateFormats.${format}`)}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.radioOuter,
-                    { borderColor: selected ? colors.primary : colors.borderStrong },
-                  ]}
-                >
-                  {selected ? (
-                    <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
-                  ) : null}
-                </View>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-        <Pressable
-          style={[styles.modalCloseButton, { backgroundColor: colors.primary }]}
-          onPress={() => setDateFormatPickerOpen(false)}
-        >
-          <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
-            {t("common.close")}
-          </Text>
-        </Pressable>
-      </BottomSheet>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
 
-      <Modal
-        visible={currencyModalVisible}
-        animationType="slide"
-        onRequestClose={() => setCurrencyModalVisible(false)}
-      >
-        <ModalPage style={{ backgroundColor: colors.page }}>
+        <View
+          style={[
+            styles.sectionCard,
+            { backgroundColor: colors.card, borderColor: colors.cardBorder, marginTop: 14 },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
+            {t("settings.dueColours")}
+          </Text>
+          <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+            {t("settings.dueColoursHint")}
+          </Text>
+
+          <View style={styles.duePreview}>
+            <View style={styles.duePreviewRow}>
+              <View style={[styles.dueSwatch, { backgroundColor: colors.dueDotUrgent }]} />
+              <Text style={[styles.duePreviewText, { color: colors.textSecondary }]}>
+                {thresholds.urgentDays === 0
+                  ? t("settings.duePreviewUrgentToday")
+                  : t("settings.duePreviewUrgent", { count: thresholds.urgentDays })}
+              </Text>
+            </View>
+            <View style={styles.duePreviewRow}>
+              <View style={[styles.dueSwatch, { backgroundColor: colors.dueDotSoon }]} />
+              <Text style={[styles.duePreviewText, { color: colors.textSecondary }]}>
+                {t("settings.duePreviewSoon", { count: thresholds.soonDays })}
+              </Text>
+            </View>
+            <View style={styles.duePreviewRow}>
+              <View style={[styles.dueSwatch, { backgroundColor: colors.primary }]} />
+              <Text style={[styles.duePreviewText, { color: colors.textSecondary }]}>
+                {t("settings.duePreviewNormal")}
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() => setDueBandPicker("soon")}
+            style={[
+              styles.optionRow,
+              { borderColor: colors.borderStrong, backgroundColor: colors.inputBg },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={t("settings.dueSoonFrom")}
+          >
+            <View
+              style={[
+                styles.dueSwatch,
+                styles.dueRowSwatch,
+                { backgroundColor: colors.dueDotSoon },
+              ]}
+            />
+            <View style={styles.optionCopy}>
+              <Text style={[styles.optionTitle, { color: colors.text }]}>
+                {t("settings.dueSoonFrom")}
+              </Text>
+              <Text style={[styles.optionHint, { color: colors.textMuted }]}>
+                {dayLabel(thresholds.soonDays, t)}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => setDueBandPicker("urgent")}
+            style={[
+              styles.optionRow,
+              { borderColor: colors.borderStrong, backgroundColor: colors.inputBg },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={t("settings.dueUrgentFrom")}
+          >
+            <View
+              style={[
+                styles.dueSwatch,
+                styles.dueRowSwatch,
+                { backgroundColor: colors.dueDotUrgent },
+              ]}
+            />
+            <View style={styles.optionCopy}>
+              <Text style={[styles.optionTitle, { color: colors.text }]}>
+                {t("settings.dueUrgentFrom")}
+              </Text>
+              <Text style={[styles.optionHint, { color: colors.textMuted }]}>
+                {dayLabel(thresholds.urgentDays, t)}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </Pressable>
+        </View>
+
+        <DataSection
+          appVersion={buildInfo.version}
+          onDataReplaced={onDataReplaced}
+          onNotify={onNotify}
+        />
+
+        <View style={styles.footer}>
+          {/* Selectable so a user can paste exactly which build they run. */}
+          <Text selectable style={[styles.footerVersion, { color: colors.textSecondary }]}>
+            {buildInfo.buildNumber
+              ? t("settings.about.versionWithBuild", {
+                  version: buildInfo.version,
+                  build: buildInfo.buildNumber,
+                })
+              : t("settings.about.version", { version: buildInfo.version })}
+          </Text>
+          {buildInfo.binaryVersion ? (
+            <Text selectable style={[styles.footerDetail, { color: colors.textMuted }]}>
+              {t("settings.about.binaryVersion", { version: buildInfo.binaryVersion })}
+            </Text>
+          ) : null}
+          {buildInfo.channel !== "production" ? (
+            <View style={[styles.footerBadge, { borderColor: colors.borderStrong }]}>
+              <Text style={[styles.footerBadgeText, { color: colors.textSecondary }]}>
+                {t(`settings.about.channel.${buildInfo.channel}`)}
+              </Text>
+            </View>
+          ) : null}
+          <Text style={[styles.footerSignature, { color: colors.textMuted }]}>
+            {t("settings.about.madeBy", { name: DEVELOPER_NAME })}
+          </Text>
+        </View>
+
+        <BottomSheet
+          visible={dueBandPicker !== null}
+          onClose={() => setDueBandPicker(null)}
+          style={[styles.sheet, { backgroundColor: colors.card }]}
+        >
           <Text style={[styles.modalTitle, { color: colors.text }]}>
-            {t("settings.selectDefaultCurrency")}
+            {shownDueBand === "urgent"
+              ? t("settings.dueUrgentFrom")
+              : t("settings.dueSoonFrom")}
           </Text>
-          <TextInput
-            style={[
-              styles.modalSearch,
-              {
-                borderColor: colors.borderStrong,
-                backgroundColor: colors.inputBg,
-                color: colors.text,
-              },
-            ]}
-            placeholder={t("loanForm.currencySearchPlaceholder")}
-            placeholderTextColor={colors.textMuted}
-            value={currencySearch}
-            onChangeText={setCurrencySearch}
-          />
-          <FlatList
-            data={filteredCurrencies}
-            keyExtractor={(item) => item.code}
-            renderItem={({ item }) => (
-              <Pressable
-                style={[styles.currencyRow, { borderBottomColor: colors.border }]}
-                onPress={() => {
-                  setDefaultCurrencyCode(item.code);
-                  setCurrencyModalVisible(false);
-                }}
-              >
-                <Text style={[styles.currencyRowCode, { color: colors.text }]}>
-                  {item.code}
-                </Text>
-                <Text style={[styles.currencyRowLabel, { color: colors.textMuted }]}>
-                  {item.symbol}
-                </Text>
-              </Pressable>
-            )}
-          />
+          <ScrollView>
+            {dueDayOptions.map((days) => {
+              const selected =
+                shownDueBand === "urgent"
+                  ? thresholds.urgentDays === days
+                  : thresholds.soonDays === days;
+              return (
+                <Pressable
+                  key={days}
+                  onPress={() => {
+                    setDueThresholds(
+                      shownDueBand === "urgent"
+                        ? { urgentDays: days }
+                        : { soonDays: days }
+                    );
+                    setDueBandPicker(null);
+                  }}
+                  style={[
+                    styles.optionRow,
+                    {
+                      borderColor: selected ? colors.primary : colors.borderStrong,
+                      backgroundColor: selected ? colors.primarySoft : colors.inputBg,
+                    },
+                  ]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                >
+                  <View style={styles.optionCopy}>
+                    <Text
+                      style={[
+                        styles.optionTitle,
+                        { color: selected ? colors.accentTextDeep : colors.text },
+                      ]}
+                    >
+                      {dayLabel(days, t)}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.radioOuter,
+                      { borderColor: selected ? colors.primary : colors.borderStrong },
+                    ]}
+                  >
+                    {selected ? (
+                      <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
+                    ) : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
           <Pressable
             style={[styles.modalCloseButton, { backgroundColor: colors.primary }]}
-            onPress={() => setCurrencyModalVisible(false)}
+            onPress={() => setDueBandPicker(null)}
           >
             <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
               {t("common.close")}
             </Text>
           </Pressable>
-        </ModalPage>
-      </Modal>
-    </ScrollView>
+        </BottomSheet>
+
+        <BottomSheet
+          visible={dateFormatPickerOpen}
+          onClose={() => setDateFormatPickerOpen(false)}
+          style={[styles.sheet, { backgroundColor: colors.card }]}
+        >
+          <Text style={[styles.modalTitle, { color: colors.text }]}>
+            {t("settings.dateFormats.pickerTitle")}
+          </Text>
+          <ScrollView>
+            {DATE_FORMATS.map((format) => {
+              const selected = dateFormat === format;
+              return (
+                <Pressable
+                  key={format}
+                  onPress={() => {
+                    setDateFormat(format);
+                    setDateFormatPickerOpen(false);
+                  }}
+                  style={[
+                    styles.optionRow,
+                    {
+                      borderColor: selected ? colors.primary : colors.borderStrong,
+                      backgroundColor: selected ? colors.primarySoft : colors.inputBg,
+                    },
+                  ]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                >
+                  <View style={styles.optionCopy}>
+                    <Text
+                      style={[
+                        styles.optionTitle,
+                        { color: selected ? colors.accentTextDeep : colors.text },
+                      ]}
+                    >
+                      {exampleDate(format)}
+                    </Text>
+                    <Text style={[styles.optionHint, { color: colors.textMuted }]}>
+                      {t(`settings.dateFormats.${format}`)}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.radioOuter,
+                      { borderColor: selected ? colors.primary : colors.borderStrong },
+                    ]}
+                  >
+                    {selected ? (
+                      <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
+                    ) : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <Pressable
+            style={[styles.modalCloseButton, { backgroundColor: colors.primary }]}
+            onPress={() => setDateFormatPickerOpen(false)}
+          >
+            <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
+              {t("common.close")}
+            </Text>
+          </Pressable>
+        </BottomSheet>
+
+        <Modal
+          visible={currencyModalVisible}
+          animationType="slide"
+          onRequestClose={() => setCurrencyModalVisible(false)}
+        >
+          <ModalPage style={{ backgroundColor: colors.page }}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              {t("settings.selectDefaultCurrency")}
+            </Text>
+            <TextInput
+              style={[
+                styles.modalSearch,
+                {
+                  borderColor: colors.borderStrong,
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                },
+              ]}
+              placeholder={t("loanForm.currencySearchPlaceholder")}
+              placeholderTextColor={colors.textMuted}
+              value={currencySearch}
+              onChangeText={setCurrencySearch}
+            />
+            <FlatList
+              data={filteredCurrencies}
+              keyExtractor={(item) => item.code}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={[styles.currencyRow, { borderBottomColor: colors.border }]}
+                  onPress={() => {
+                    setDefaultCurrencyCode(item.code);
+                    setCurrencyModalVisible(false);
+                  }}
+                >
+                  <Text style={[styles.currencyRowCode, { color: colors.text }]}>
+                    {item.code}
+                  </Text>
+                  <Text style={[styles.currencyRowLabel, { color: colors.textMuted }]}>
+                    {item.symbol}
+                  </Text>
+                </Pressable>
+              )}
+            />
+            <Pressable
+              style={[styles.modalCloseButton, { backgroundColor: colors.primary }]}
+              onPress={() => setCurrencyModalVisible(false)}
+            >
+              <Text style={[styles.modalCloseText, { color: colors.textInverse }]}>
+                {t("common.close")}
+              </Text>
+            </Pressable>
+          </ModalPage>
+        </Modal>
+      </ScrollView>
+    </View>
   );
 };
 
@@ -759,8 +752,13 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
   },
+  header: {
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
   content: {
     padding: 16,
+    paddingTop: 8,
     paddingBottom: 32,
   },
   footer: {
@@ -790,22 +788,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     fontStyle: "italic",
-  },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    marginBottom: 12,
-    gap: 2,
-  },
-  backText: {
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    marginBottom: 16,
   },
   sectionCard: {
     borderWidth: 1,

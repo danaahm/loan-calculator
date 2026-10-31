@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
 import {
   Alert,
   Pressable,
@@ -13,6 +12,7 @@ import {
 
 import { DatePickerField } from "../components/DatePickerField";
 import { ProgressBar } from "../components/ProgressBar";
+import { ScreenHeader } from "../components/ScreenHeader";
 import { UpcomingTimeline } from "../components/UpcomingTimeline";
 import { notificationUnavailableHint } from "../notifications/reminderNotifications";
 import { useTranslation } from "../i18n/LocaleProvider";
@@ -152,13 +152,9 @@ export const ReminderDetailScreen = ({
 
   return (
     <View style={[styles.page, { backgroundColor: colors.page }]}>
-      <Pressable onPress={onBack} style={styles.backRow} accessibilityRole="button">
-        <Ionicons name="chevron-back" size={22} color={colors.accentTextStrong} />
-        <Text style={[styles.backText, { color: colors.accentTextStrong }]}>{t("common.back")}</Text>
-      </Pressable>
+      <ScreenHeader title={reminder.name} onBack={onBack} style={styles.header} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.title, { color: colors.text }]}>{reminder.name}</Text>
         <Text style={[styles.disclaimer, { color: colors.textMuted }]}>
           {REMINDER_DISCLAIMER()}
         </Text>
@@ -595,28 +591,16 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
   },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
+  header: {
+    marginHorizontal: 16,
     marginTop: 8,
-    marginLeft: 16,
-    gap: 2,
-  },
-  backText: {
-    fontWeight: "700",
-    fontSize: 16,
   },
   scroll: {
     padding: 16,
+    paddingTop: 8,
     paddingBottom: 32,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "800",
-  },
   disclaimer: {
-    marginTop: 6,
     marginBottom: 14,
     fontWeight: "600",
   },
