@@ -1,6 +1,6 @@
 # Privacy Policy for Simple Loan Calculator
 
-Effective date: 2026-10-28
+Effective date: 2026-10-31
 
 Simple Loan Calculator ("the App") is designed to work fully on your device.
 
@@ -74,7 +74,7 @@ Because data is stored locally on your device, you are responsible for device-le
 ## Your Choices
 
 You can delete your saved loan profiles and reminders directly in the App at any time.
-Settings also has a "Delete everything" option that removes every loan, reminder, calculator entry, and setting the App has stored on your device, along with any unreadable copy the App has kept. This cannot be undone, so save a backup first if you may want the data later.
+Settings also has a "Delete everything" option that removes every loan, reminder, calculator entry, and setting the App has stored on your device, along with any unreadable copy the App has kept. It also cancels any scheduled reminder notifications and clears the App's reminder notifications already showing on your device. This cannot be undone, so save a backup first if you may want the data later.
 You can also uninstall the App to remove local app data from your device (subject to device backup settings).
 
 ## Changes to This Policy
