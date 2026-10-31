@@ -16,5 +16,6 @@ module.exports = {
     "src/utils/reminderMath.ts",
     "src/utils/reminderSchedule.ts",
     "src/utils/dateIso.ts",
+    "src/utils/basicCalc.ts",
   ],
 };

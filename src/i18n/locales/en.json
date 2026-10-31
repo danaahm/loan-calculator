@@ -495,13 +495,12 @@
   },
   "basicCalc": {
     "error": "Error",
-    "hideHistory": "Hide history",
-    "showHistory": "Show history",
-    "keypad": "Keypad",
-    "history": "History",
     "clearAll": "Clear all",
-    "emptyHistory": "No calculations yet.",
-    "deleteHistoryItem": "Delete history item",
+    "clearTitle": "Clear the tape?",
+    "clearBody": "Every calculation on the tape will be removed.",
+    "removeLineTitle": "Remove this line?",
+    "useResultHint": "Uses this result in the current calculation. Long press to remove it.",
+    "deleteHistoryItem": "Remove from tape",
     "backspace": "Backspace"
   },
   "settings": {
