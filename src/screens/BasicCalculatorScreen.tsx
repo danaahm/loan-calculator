@@ -182,40 +182,51 @@ export const BasicCalculatorScreen = () => {
 
   const chain = showCalcText(chainText(calc));
 
+  const historyToggle = (
+    <Pressable
+      onPress={() => setHistoryOpen((open) => !open)}
+      style={styles.historyToggle}
+      accessibilityRole="button"
+      accessibilityLabel={
+        historyOpen ? t("basicCalc.hideHistory") : t("basicCalc.showHistory")
+      }
+    >
+      <Ionicons
+        name={historyOpen ? "keypad-outline" : "time-outline"}
+        size={22}
+        color={colors.accentTextStrong}
+      />
+      <Text style={styles.historyToggleText}>
+        {historyOpen ? t("basicCalc.keypad") : t("basicCalc.history")}
+      </Text>
+    </Pressable>
+  );
+
   return (
     <View style={styles.screen}>
       <View style={styles.displayCard}>
-        <View style={styles.displayTopRow}>
-          <Pressable
-            onPress={() => setHistoryOpen((open) => !open)}
-            style={styles.historyToggle}
-            accessibilityRole="button"
-            accessibilityLabel={
-              historyOpen ? t("basicCalc.hideHistory") : t("basicCalc.showHistory")
-            }
-          >
-            <Ionicons
-              name={historyOpen ? "keypad-outline" : "time-outline"}
-              size={22}
-              color={colors.accentTextStrong}
-            />
-            <Text style={styles.historyToggleText}>
-              {historyOpen ? t("basicCalc.keypad") : t("basicCalc.history")}
-            </Text>
-          </Pressable>
-          {historyOpen && history.length > 0 ? (
-            <Pressable
-              onPress={confirmClearHistory}
-              hitSlop={8}
-              style={styles.clearButton}
-              accessibilityRole="button"
-              accessibilityLabel={t("basicCalc.clearAll")}
-            >
-              <Ionicons name="trash-outline" size={15} color={colors.danger} />
-              <Text style={styles.clearText}>{t("basicCalc.clearAll")}</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        {/*
+          With the keypad showing, History shares the chain's line at the
+          bottom so the tape keeps the card's full height; a row of its own
+          up here left the tape too little room on a phone.
+        */}
+        {historyOpen ? (
+          <View style={styles.displayTopRow}>
+            {historyToggle}
+            {history.length > 0 ? (
+              <Pressable
+                onPress={confirmClearHistory}
+                hitSlop={8}
+                style={styles.clearButton}
+                accessibilityRole="button"
+                accessibilityLabel={t("basicCalc.clearAll")}
+              >
+                <Ionicons name="trash-outline" size={15} color={colors.danger} />
+                <Text style={styles.clearText}>{t("basicCalc.clearAll")}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         {historyOpen && history.length === 0 ? (
           <Text style={styles.emptyHistory}>{t("basicCalc.emptyHistory")}</Text>
@@ -268,9 +279,12 @@ export const BasicCalculatorScreen = () => {
 
         {historyOpen ? null : (
           <View style={[styles.live, history.length > 0 && styles.liveUnderTape]}>
-            <Text style={styles.chain} numberOfLines={1} ellipsizeMode="head">
-              {chain}
-            </Text>
+            <View style={styles.chainRow}>
+              {historyToggle}
+              <Text style={styles.chain} numberOfLines={1} ellipsizeMode="head">
+                {chain}
+              </Text>
+            </View>
             <Text
               style={[styles.display, calc.error && styles.displayError]}
               numberOfLines={1}
@@ -373,6 +387,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     tape: {
       flex: 1,
+      // A tape longer than its space scrolls inside it, never over its neighbours.
+      overflow: "hidden",
     },
     tapeLine: {
       alignItems: "flex-end",
@@ -403,12 +419,18 @@ const createStyles = (colors: ThemeColors) =>
       paddingTop: 8,
       marginTop: 4,
     },
+    chainRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "stretch",
+      gap: 8,
+      marginBottom: 2,
+    },
     chain: {
+      flex: 1,
       color: colors.textMuted,
       fontSize: 18,
       fontWeight: "600",
-      marginBottom: 2,
-      width: "100%",
       textAlign: "right",
       minHeight: 24,
     },
