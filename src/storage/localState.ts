@@ -343,6 +343,8 @@ export const normalizeAppSettings = (
     defaultNotifyHour: clampHour(parsed.defaultNotifyHour),
     dueSoonDays: dueThresholds.soonDays,
     dueUrgentDays: dueThresholds.urgentDays,
+    // Settings saved before the card existed have no value: it starts open.
+    liveRepaymentCollapsed: parsed.liveRepaymentCollapsed === true,
   };
 };
 

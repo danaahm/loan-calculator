@@ -22,6 +22,8 @@ export interface AppSettings {
    */
   dueSoonDays: number;
   dueUrgentDays: number;
+  /** Whether the live repayment card on the loan screen is folded to one line. */
+  liveRepaymentCollapsed: boolean;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -33,4 +35,5 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   defaultNotifyHour: 9,
   dueSoonDays: DEFAULT_DUE_THRESHOLDS.soonDays,
   dueUrgentDays: DEFAULT_DUE_THRESHOLDS.urgentDays,
+  liveRepaymentCollapsed: false,
 };

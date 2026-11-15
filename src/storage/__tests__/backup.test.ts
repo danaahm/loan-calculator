@@ -318,6 +318,7 @@ describe("parseBackup", () => {
             language: "elvish",
             defaultCurrencyCode: "not a code",
             defaultNotifyHour: 99,
+            liveRepaymentCollapsed: "yes",
           },
         },
       });
@@ -332,6 +333,7 @@ describe("parseBackup", () => {
       expect(settings.language).toBe("en");
       expect(settings.defaultCurrencyCode).toBeNull();
       expect(settings.defaultNotifyHour).toBe(23);
+      expect(settings.liveRepaymentCollapsed).toBe(false);
     });
 
     it("keeps a history entry missing its result", () => {
@@ -446,6 +448,7 @@ describe("serializeBackup", () => {
           defaultNotifyHour: 9,
           dueSoonDays: 7,
           dueUrgentDays: 2,
+          liveRepaymentCollapsed: false,
         },
         reminders: [],
         basicHistory: [],

@@ -13,16 +13,13 @@ import {
 } from "react-native";
 
 import { DatePickerField } from "../components/DatePickerField";
+import { FrequencySelector } from "../components/FrequencySelector";
 import { ModalPage } from "../components/ModalPage";
 import { ScreenHeader } from "../components/ScreenHeader";
 import { notificationUnavailableHint } from "../notifications/reminderNotifications";
 import { useTranslation } from "../i18n/LocaleProvider";
 import { useTheme } from "../theme/ThemeProvider";
-import {
-  FREQUENCIES,
-  type RepaymentFrequency,
-  type SavedLoanProfile,
-} from "../types/loan";
+import { type RepaymentFrequency, type SavedLoanProfile } from "../types/loan";
 import {
   MONTHLY_ANCHORS,
   NOTIFY_LEAD_PRESETS,
@@ -36,7 +33,6 @@ import {
 import { formatDisplayDate, parseIsoDate } from "../utils/dateIso";
 import {
   formatCurrency,
-  formatFrequencyLabel,
   formatMonthAnchorLabel,
   getCurrencySymbol,
 } from "../utils/format";
@@ -155,25 +151,6 @@ const MoneyField = ({
     </View>
   );
 };
-
-const FrequencyChips = ({
-  value,
-  onChange,
-}: {
-  value: RepaymentFrequency;
-  onChange: (next: RepaymentFrequency) => void;
-}) => (
-  <View style={[styles.chipWrap, styles.chipWrapSpaced]}>
-    {FREQUENCIES.map((item) => (
-      <Chip
-        key={item}
-        label={formatFrequencyLabel(item)}
-        selected={value === item}
-        onPress={() => onChange(item)}
-      />
-    ))}
-  </View>
-);
 
 const LinkedProfilePicker = ({
   profiles,
@@ -805,16 +782,11 @@ export const ReminderEditorScreen = ({
         ) : null}
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.repaymentFrequency")}</Text>
-        <View style={styles.chipWrap}>
-          {FREQUENCIES.map((item) => (
-            <Chip
-              key={item}
-              label={formatFrequencyLabel(item)}
-              selected={repaymentFrequency === item}
-              onPress={() => setRepaymentFrequency(item)}
-            />
-          ))}
-        </View>
+        <FrequencySelector
+          value={repaymentFrequency}
+          onChange={setRepaymentFrequency}
+          accessibilityLabel={t("editor.repaymentFrequency")}
+        />
 
         {repaymentFrequency === "monthly" ? (
           <>
@@ -890,16 +862,11 @@ export const ReminderEditorScreen = ({
           />
         </View>
         <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.feeFrequency")}</Text>
-        <View style={styles.chipWrap}>
-          {FREQUENCIES.map((item) => (
-            <Chip
-              key={item}
-              label={formatFrequencyLabel(item)}
-              selected={accountFeeFrequency === item}
-              onPress={() => setAccountFeeFrequency(item)}
-            />
-          ))}
-        </View>
+        <FrequencySelector
+          value={accountFeeFrequency}
+          onChange={setAccountFeeFrequency}
+          accessibilityLabel={t("editor.feeFrequency")}
+        />
 
         <Text style={[styles.sectionTitle, { color: colors.accentText }]}>
           {t("editor.offsetAndExtra")}
@@ -923,9 +890,11 @@ export const ReminderEditorScreen = ({
           placeholder={t("editor.optionalAmountPlaceholder")}
         />
         {parseAmount(offsetDepositAmount) > 0 ? (
-          <FrequencyChips
+          <FrequencySelector
+            style={styles.frequencyBelowField}
             value={offsetDepositFrequency}
             onChange={setOffsetDepositFrequency}
+            accessibilityLabel={t("editor.offsetDeposit")}
           />
         ) : null}
         <MoneyField
@@ -937,7 +906,12 @@ export const ReminderEditorScreen = ({
           placeholder={t("editor.optionalAmountPlaceholder")}
         />
         {parseAmount(extraAmount) > 0 ? (
-          <FrequencyChips value={extraFrequency} onChange={setExtraFrequency} />
+          <FrequencySelector
+            style={styles.frequencyBelowField}
+            value={extraFrequency}
+            onChange={setExtraFrequency}
+            accessibilityLabel={t("editor.extraRepayment")}
+          />
         ) : null}
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>{t("editor.extraDates")}</Text>
@@ -1071,7 +1045,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
   },
-  chipWrapSpaced: {
+  frequencyBelowField: {
     marginTop: 8,
   },
   sectionTitle: {
