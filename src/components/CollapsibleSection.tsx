@@ -26,6 +26,10 @@ interface CollapsibleSectionProps {
  * stuck shut. Children unmount only after a collapse completes (charts and the
  * amortization grid are expensive to keep alive) and remount when an expand
  * starts.
+ *
+ * A section that mounts collapsed has never rendered its children, so its
+ * first expand has no height to animate to. It opens at once instead, straight
+ * into the unconstrained state, and animates from then on.
  */
 export const CollapsibleSection = ({
   collapsed,
@@ -36,6 +40,8 @@ export const CollapsibleSection = ({
   const progress = useSharedValue(collapsed ? 0 : 1);
   const contentHeight = useSharedValue(0);
   const isFirstRun = useRef(true);
+  // Whether the children have been laid out, so `contentHeight` can be trusted.
+  const measured = useRef(false);
 
   const finishCollapse = useCallback(() => setRendered(false), []);
   const finishExpand = useCallback(() => setConstrained(false), []);
@@ -45,6 +51,15 @@ export const CollapsibleSection = ({
     if (isFirstRun.current) {
       isFirstRun.current = false;
       progress.value = collapsed ? 0 : 1;
+      return;
+    }
+
+    // Never measured: animating would run from zero to a height of zero and
+    // leave the section shut. Show it at its natural height straight away.
+    if (!collapsed && !measured.current) {
+      progress.value = 1;
+      setRendered(true);
+      setConstrained(false);
       return;
     }
 
@@ -84,6 +99,7 @@ export const CollapsibleSection = ({
           const next = event.nativeEvent.layout.height;
           if (next > 0) {
             contentHeight.value = next;
+            measured.current = true;
           }
         }}
       >
