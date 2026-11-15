@@ -49,6 +49,7 @@ const seedDevice = async (): Promise<void> => {
     reminderNotificationsEnabled: true,
     dueSoonDays: 10,
     dueUrgentDays: 3,
+    liveRepaymentCollapsed: true,
   });
   await saveBasicCalcHistory([
     {
@@ -97,6 +98,7 @@ describe("backup round trip", () => {
     expect(settings.themeMode).toBe("dark");
     expect(settings.reminderNotificationsEnabled).toBe(true);
     expect(settings.dueSoonDays).toBe(10);
+    expect(settings.liveRepaymentCollapsed).toBe(true);
 
     expect(await loadBasicCalcHistory()).toHaveLength(1);
     expect((await loadLoanInput())?.amountBorrowed).toBe(450_000);

@@ -62,7 +62,33 @@ export const formatCurrency = (value: number, currencyCode: string): string => {
   }
 };
 
-export const formatPercent = (value: number): string => {
+/**
+ * A rounded amount without its cents, for figures shown side by side where the
+ * decimals would not fit. The currency's own grouping and symbol are kept: the
+ * fraction is cut from the library's output, not rebuilt here.
+ */
+export const formatCurrencyWhole = (value: number, currencyCode: string): string => {
+  const rounded = Math.round(Number.isFinite(value) ? value : 0);
+  try {
+    const [formatted, numberPart] = formatWithLibrary({
+      amount: rounded,
+      code: currencyCode,
+    });
+    // How many decimals this currency prints, read off a sample. A currency
+    // with none (the yen) has no separator left to match.
+    const [, sample] = formatWithLibrary({ amount: 1.5, code: currencyCode });
+    const fraction = /\D(\d+)$/.exec(sample);
+    if (!fraction) {
+      return formatted;
+    }
+    const whole = numberPart.slice(0, -(fraction[1].length + 1));
+    return formatted.replace(numberPart, whole);
+  } catch {
+    return `${currencyCode} ${rounded}`;
+  }
+};
+
+export const formatPercent =(value: number): string => {
   return t("format.percent", {
     value: (Number.isFinite(value) ? value : 0).toFixed(2),
   });

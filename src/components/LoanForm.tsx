@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
@@ -24,7 +25,6 @@ import {
 import { useTheme } from "../theme/ThemeProvider";
 import { type ThemeColors } from "../theme/tokens";
 import {
-  FREQUENCIES,
   type ExtraRepaymentStartUnit,
   type LoanInput,
   type LoanTermMode,
@@ -37,13 +37,15 @@ import {
   getAvailableCurrencies,
   getCurrencySymbol,
   type CurrencyOption,
-  formatFrequencyLabel,
   formatLoanLengthLabel,
+  formatPercent,
 } from "../utils/format";
 import { CardHeader } from "./CardHeader";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { DatePickerField } from "./DatePickerField";
+import { FrequencySelector } from "./FrequencySelector";
 import { ModalPage } from "./ModalPage";
+import { SegmentedOptions } from "./SegmentedOptions";
 
 type FormStyles = ReturnType<typeof createStyles>;
 
@@ -157,34 +159,11 @@ const StartAfterUnitToggle = ({
   );
 };
 
-const FrequencySelector = ({
-  value,
-  onChange,
-  styles,
-}: {
-  value: RepaymentFrequency;
-  onChange: (next: RepaymentFrequency) => void;
-  styles: FormStyles;
-}) => {
-  return (
-    <View style={styles.frequencyWrap}>
-      {FREQUENCIES.map((option) => {
-        const selected = option === value;
-        return (
-          <Pressable
-            key={option}
-            onPress={() => onChange(option)}
-            style={[styles.frequencyButton, selected && styles.frequencyButtonActive]}
-          >
-            <Text style={[styles.frequencyText, selected && styles.frequencyTextActive]}>
-              {formatFrequencyLabel(option)}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-};
+/** Shortcuts beside the amount field, for stepping a loan up in round sums. */
+const AMOUNT_QUICK_ADDS = [
+  { amount: 10000, labelKey: "loanForm.quickAdd10k" },
+  { amount: 50000, labelKey: "loanForm.quickAdd50k" },
+] as const;
 
 export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
   const { colors } = useTheme();
@@ -315,6 +294,12 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
     parsePositiveInt(loanLengthMonths)
   );
   const termFromDates = loanYearsBetween(loanStartDate, loanEndDate);
+
+  const addToAmountBorrowed = (amount: number) => {
+    setAmountBorrowed(
+      formatGroupedNumberValue(parsePositiveNumber(amountBorrowed) + amount)
+    );
+  };
 
   // Carry the term across when switching, so neither mode starts blank.
   const changeTermMode = (next: LoanTermMode) => {
@@ -476,30 +461,75 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
 
       <CollapsibleSection collapsed={collapsed}>
         <View>
-          <Text style={styles.label}>{t("loanForm.currency")}</Text>
-          <Pressable
-            style={styles.currencySelectButton}
-            onPress={() => setCurrencyModalVisible(true)}
-          >
-            <Text style={styles.currencySelectText}>
-              {currencyCode} ({moneySymbol})
-            </Text>
-          </Pressable>
+          <View style={styles.currencyAmountRow}>
+            <View style={styles.currencyColumn}>
+              <Text style={styles.label} numberOfLines={1}>
+                {t("loanForm.currency")}
+              </Text>
+              <Pressable
+                style={styles.currencySelectButton}
+                onPress={() => setCurrencyModalVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`${t("loanForm.currency")}: ${currencyCode}`}
+              >
+                <Text style={styles.currencySelectText} numberOfLines={1}>
+                  {currencyCode} ({moneySymbol})
+                </Text>
+                <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
+              </Pressable>
+            </View>
 
-          <Text style={styles.label}>{t("loanForm.amountBorrowed")}</Text>
-          <View style={styles.inputWrap}>
-            <Text style={styles.prefixText}>{moneySymbol}</Text>
-            <TextInput
-              keyboardType="decimal-pad"
-              value={amountBorrowed}
-          onChangeText={(value) => setAmountBorrowed(formatGroupedNumberInput(value))}
-              style={styles.input}
-              placeholder={t("loanForm.amountPlaceholder")}
-              placeholderTextColor={colors.textMuted}
-            />
+            <View style={styles.amountColumn}>
+              <View style={styles.labelRow}>
+                <Text
+                  style={styles.labelRowText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  {t("loanForm.amountBorrowed")}
+                </Text>
+                {AMOUNT_QUICK_ADDS.map((quickAdd) => (
+                  <Pressable
+                    key={quickAdd.amount}
+                    style={styles.quickAddButton}
+                    onPress={() => addToAmountBorrowed(quickAdd.amount)}
+                    hitSlop={{ top: 10, bottom: 10, left: 2, right: 2 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("loanForm.quickAddLabel", {
+                      amount: formatGroupedNumberValue(quickAdd.amount),
+                    })}
+                  >
+                    <Text style={styles.quickAddText}>{t(quickAdd.labelKey)}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={styles.inputWrap}>
+                <Text style={styles.prefixText}>{moneySymbol}</Text>
+                <TextInput
+                  keyboardType="decimal-pad"
+                  value={amountBorrowed}
+                  onChangeText={(value) =>
+                    setAmountBorrowed(formatGroupedNumberInput(value))
+                  }
+                  style={styles.input}
+                  placeholder={t("loanForm.amountPlaceholder")}
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+            </View>
           </View>
 
-          <Text style={styles.label}>{t("loanForm.interestRate")}</Text>
+          <View style={styles.labelRow}>
+            <Text style={styles.labelRowText} numberOfLines={1}>
+              {t("loanForm.interestRate")}
+            </Text>
+            {interestRate.trim().length > 0 ? (
+              <Text style={styles.rateBadge}>
+                {formatPercent(parsePositiveNumber(interestRate))}
+              </Text>
+            ) : null}
+          </View>
           <TextInput
             keyboardType="decimal-pad"
             value={interestRate}
@@ -513,34 +543,21 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
           <FrequencySelector
             value={repaymentFrequency}
             onChange={setRepaymentFrequency}
-            styles={styles}
+            accessibilityLabel={t("loanForm.repaymentFrequency")}
           />
 
           <Text style={styles.label}>{t("loanForm.loanLength")}</Text>
-          <View style={[styles.startAfterToggle, styles.termModeToggle]}>
-            {(["length", "endDate"] as const).map((mode) => (
-              <Pressable
-                key={mode}
-                style={[
-                  styles.startAfterToggleButton,
-                  styles.termModeButton,
-                  loanTermMode === mode && styles.startAfterToggleButtonActive,
-                ]}
-                onPress={() => changeTermMode(mode)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: loanTermMode === mode }}
-              >
-                <Text
-                  style={[
-                    styles.startAfterToggleText,
-                    loanTermMode === mode && styles.startAfterToggleTextActive,
-                  ]}
-                >
-                  {t(mode === "length" ? "loanForm.termByLength" : "loanForm.termByEndDate")}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <SegmentedOptions
+            style={styles.termModeToggle}
+            equalWidths
+            options={[
+              { value: "length", label: t("loanForm.termByLength") },
+              { value: "endDate", label: t("loanForm.termByEndDate") },
+            ]}
+            value={loanTermMode}
+            onChange={changeTermMode}
+            accessibilityLabel={t("loanForm.loanLength")}
+          />
           {loanTermMode === "endDate" ? (
             <View>
               <Text style={styles.label}>{t("loanForm.loanStartDate")}</Text>
@@ -743,7 +760,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
               <FrequencySelector
                 value={accountFeeFrequency}
                 onChange={setAccountFeeFrequency}
-                styles={styles}
+                accessibilityLabel={t("loanForm.accountFeeFrequency")}
               />
             </View>
           ) : null}
@@ -777,7 +794,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
               <FrequencySelector
                 value={extraFrequency}
                 onChange={setExtraFrequency}
-                styles={styles}
+                accessibilityLabel={t("loanForm.extraFrequency")}
               />
 
               <Text style={styles.label}>{t("loanForm.startExtraAfter")}</Text>
@@ -885,7 +902,7 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
                   <FrequencySelector
                     value={offsetContributionFrequency}
                     onChange={setOffsetContributionFrequency}
-                    styles={styles}
+                    accessibilityLabel={t("loanForm.offsetDepositFrequency")}
                   />
                 </View>
               ) : null}
@@ -983,42 +1000,66 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.text,
       fontWeight: "700",
     },
+    // The currency button is only as wide as its text, which leaves the amount
+    // column room for its label and both shortcuts on a narrow phone.
+    currencyAmountRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: 8,
+    },
+    currencyColumn: {
+      flexShrink: 0,
+    },
+    amountColumn: {
+      flex: 1,
+    },
+    // A field label that shares its line with something on the right.
+    labelRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      marginBottom: 6,
+      marginTop: 10,
+      minHeight: 22,
+    },
+    labelRowText: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontWeight: "600",
+    },
+    quickAddButton: {
+      borderRadius: 6,
+      paddingHorizontal: 4,
+      paddingVertical: 3,
+      backgroundColor: colors.segmentTrack,
+    },
+    quickAddText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.textSecondary,
+    },
+    rateBadge: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.accentTextStrong,
+    },
     currencySelectButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 4,
       borderWidth: 1,
       borderColor: colors.borderStrong,
       borderRadius: 10,
-      paddingHorizontal: 12,
+      paddingHorizontal: 9,
       paddingVertical: 10,
       backgroundColor: colors.inputBg,
     },
     currencySelectText: {
+      flexShrink: 1,
+      fontSize: 15,
       color: colors.text,
       fontWeight: "600",
-    },
-    frequencyWrap: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    frequencyButton: {
-      borderWidth: 1,
-      borderColor: colors.borderStrong,
-      borderRadius: 999,
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      backgroundColor: colors.inputBg,
-    },
-    frequencyButtonActive: {
-      borderColor: colors.primary,
-      backgroundColor: colors.primarySoft,
-    },
-    frequencyText: {
-      fontSize: 13,
-      color: colors.textSecondary,
-    },
-    frequencyTextActive: {
-      color: colors.accentTextDeep,
-      fontWeight: "700",
     },
     switchRow: {
       marginTop: 16,
@@ -1108,11 +1149,7 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "700",
     },
     termModeToggle: {
-      alignSelf: "flex-start",
       marginBottom: 4,
-    },
-    termModeButton: {
-      paddingHorizontal: 16,
     },
     startAfterToggleButtonActive: {
       backgroundColor: colors.primarySoft,

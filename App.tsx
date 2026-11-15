@@ -23,6 +23,7 @@ import {
 
 import { AmortizationGrid } from "./src/components/AmortizationGrid";
 import { BalanceComparisonChart } from "./src/components/BalanceComparisonChart";
+import { LiveRepaymentCard } from "./src/components/LiveRepaymentCard";
 import { LoanForm } from "./src/components/LoanForm";
 import { LoanStartChooser } from "./src/components/LoanStartChooser";
 import { PieBreakdownChart } from "./src/components/PieBreakdownChart";
@@ -886,6 +887,15 @@ function AppContent() {
     await refillAndPersist(remindersRef.current);
   };
 
+  const toggleLiveRepaymentCollapsed = () => {
+    const liveRepaymentCollapsed = !reminderSettingsRef.current.liveRepaymentCollapsed;
+    // Shown at once; the write only has to land before the app is closed.
+    const next = { ...reminderSettingsRef.current, liveRepaymentCollapsed };
+    reminderSettingsRef.current = next;
+    setReminderSettings(next);
+    patchAppSettings({ liveRepaymentCollapsed }).catch(() => {});
+  };
+
   const overlayScreen =
     screen === "settings" ||
     screen === "reminders" ||
@@ -1011,6 +1021,9 @@ function AppContent() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
+            // The live repayment card (the second child) stays pinned to the
+            // top once the loan picker above it has scrolled away.
+            stickyHeaderIndices={[1]}
           >
             <View style={styles.activeLoanRow}>
               <Pressable
@@ -1037,6 +1050,14 @@ function AppContent() {
                 <Ionicons name="add" size={16} color={colors.textInverse} />
                 <Text style={styles.newLoanButtonText}>{t("app.newLoan")}</Text>
               </Pressable>
+            </View>
+
+            <View style={styles.liveRepaymentWrap}>
+              <LiveRepaymentCard
+                input={draftInput}
+                collapsed={reminderSettings.liveRepaymentCollapsed}
+                onToggleCollapsed={toggleLiveRepaymentCollapsed}
+              />
             </View>
 
             <LoanForm initialValue={input} onDraftChange={setDraftInput} />
@@ -1699,7 +1720,14 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: "center",
       justifyContent: "space-between",
       gap: 12,
-      marginBottom: 10,
+      marginBottom: 2,
+    },
+    // Page-coloured, so the form scrolling underneath the pinned card does not
+    // show around its rounded corners or in the gap above it.
+    liveRepaymentWrap: {
+      paddingTop: 8,
+      paddingBottom: 12,
+      backgroundColor: colors.page,
     },
     loanPickerButton: {
       flex: 1,

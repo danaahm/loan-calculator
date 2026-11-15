@@ -94,6 +94,35 @@
     "fortnightly": "Fortnightly",
     "weekly": "Weekly"
   },
+  "frequencyPicker": {
+    "more": "More",
+    "moreLabel": "More frequencies",
+    "moreSelectedLabel": "{frequency} selected. More frequencies",
+    "sheetTitle": "More frequencies"
+  },
+  "liveCalc": {
+    "badge": "Live Calc",
+    "title": {
+      "yearly": "Estimated yearly repayment",
+      "quarterly": "Estimated quarterly repayment",
+      "monthly": "Estimated monthly repayment",
+      "fortnightly": "Estimated fortnightly repayment",
+      "weekly": "Estimated weekly repayment"
+    },
+    "per": {
+      "yearly": "/ year",
+      "quarterly": "/ quarter",
+      "monthly": "/ month",
+      "fortnightly": "/ fortnight",
+      "weekly": "/ week"
+    },
+    "principal": "Principal",
+    "totalInterest": "Total Interest",
+    "totalRepayments": "Total Repayments",
+    "emptyHint": "Enter the amount borrowed and the loan length to see your repayment.",
+    "showDetails": "Show repayment details",
+    "hideDetails": "Hide repayment details"
+  },
   "monthAnchor": {
     "onDate": "Same day each month",
     "startOfMonth": "Start of month",
@@ -151,6 +180,9 @@
     "clearFilter": "Clear filter",
     "amountBorrowed": "Amount Borrowed",
     "amountPlaceholder": "e.g. 500000",
+    "quickAdd10k": "+10k",
+    "quickAdd50k": "+50k",
+    "quickAddLabel": "Add {amount} to the amount borrowed",
     "interestRate": "Interest Rate (% per year)",
     "interestPlaceholder": "e.g. 6.25%",
     "repaymentFrequency": "Repayment Frequency",

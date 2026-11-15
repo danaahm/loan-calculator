@@ -59,6 +59,17 @@ export type ThemeColors = {
   switchTrackOff: string;
   switchTrackOn: string;
   switchThumb: string;
+  /** The live repayment card: white text on a blue-to-indigo gradient. */
+  heroGradientStart: string;
+  heroGradientEnd: string;
+  heroText: string;
+  heroTextMuted: string;
+  heroDivider: string;
+  heroPillBg: string;
+  heroPillBorder: string;
+  /** Track and selected segment of a one-line option picker. */
+  segmentTrack: string;
+  segmentThumb: string;
 };
 
 export const lightColors: ThemeColors = {
@@ -117,6 +128,15 @@ export const lightColors: ThemeColors = {
   switchTrackOff: "#d1d5db",
   switchTrackOn: "#93c5fd",
   switchThumb: "#ffffff",
+  heroGradientStart: "#2563eb",
+  heroGradientEnd: "#4338ca",
+  heroText: "#ffffff",
+  heroTextMuted: "rgba(255,255,255,0.86)",
+  heroDivider: "rgba(255,255,255,0.28)",
+  heroPillBg: "rgba(255,255,255,0.16)",
+  heroPillBorder: "rgba(255,255,255,0.45)",
+  segmentTrack: "#eef1f6",
+  segmentThumb: "#ffffff",
 };
 
 export const darkColors: ThemeColors = {
@@ -175,4 +195,13 @@ export const darkColors: ThemeColors = {
   switchTrackOff: "#475569",
   switchTrackOn: "#2563eb",
   switchThumb: "#f8fafc",
+  heroGradientStart: "#1d4ed8",
+  heroGradientEnd: "#3730a3",
+  heroText: "#ffffff",
+  heroTextMuted: "rgba(255,255,255,0.86)",
+  heroDivider: "rgba(255,255,255,0.24)",
+  heroPillBg: "rgba(255,255,255,0.14)",
+  heroPillBorder: "rgba(255,255,255,0.4)",
+  segmentTrack: "#0f172a",
+  segmentThumb: "#334155",
 };

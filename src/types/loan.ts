@@ -185,3 +185,17 @@ export const FREQUENCIES: RepaymentFrequency[] = [
   "fortnightly",
   "weekly",
 ];
+
+/**
+ * How a frequency picker lays the choices out: the everyday ones sit on one
+ * line, the rest go behind "More". Together they cover every frequency.
+ */
+export const COMMON_FREQUENCIES: RepaymentFrequency[] = [
+  "monthly",
+  "fortnightly",
+  "weekly",
+];
+export const LESS_COMMON_FREQUENCIES: RepaymentFrequency[] = [
+  "quarterly",
+  "yearly",
+];
