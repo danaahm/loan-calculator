@@ -1,8 +1,11 @@
 name: iOS Release
 
 # Builds a production iOS app (.ipa) and uploads it to App Store Connect, where
-# it lands in TestFlight. Shipping it to the App Store is done by hand in App
-# Store Connect, the same way Android production is promoted in Play Console.
+# it lands in TestFlight, then publishes the "What's new" text from
+# release-notes/<version>/ to the TestFlight build and the App Store version.
+# Shipping it to the App Store is done by hand in App Store Connect, the same
+# way Android production is promoted in Play Console. A manual run with
+# "notes_only" republishes the notes without building, e.g. after editing them.
 # The build runs locally on a GitHub macOS runner (eas build --local), so it
 # uses free public-repo Actions minutes and does NOT consume EAS cloud build
 # credits.
@@ -19,6 +22,12 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      notes_only:
+        description: "Only publish release notes for app.json's version (no build)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ios-release
@@ -30,9 +39,12 @@ permissions:
 jobs:
   build-and-submit:
     name: Build IPA and upload to TestFlight
+    if: ${{ !inputs.notes_only }}
     # Apple only accepts uploads built with the iOS 26 SDK or newer.
     runs-on: macos-26
     timeout-minutes: 120
+    outputs:
+      build_number: ${{ steps.build_number.outputs.value }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -86,10 +98,58 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # Uses the App Store Connect API key stored on EAS. App Store "What's
-      # New" text is entered by hand when the build is promoted, so nothing
-      # from release-notes/ is sent here.
+      # EAS sets the build number remotely, so read it back from the app
+      # itself. The release-notes job uses it to find this exact upload.
+      - name: Read build number
+        id: build_number
+        run: |
+          unzip -o -q app.ipa 'Payload/*.app/Info.plist' -d ipa
+          echo "value=$(plutil -extract CFBundleVersion raw ipa/Payload/*.app/Info.plist)" >> "$GITHUB_OUTPUT"
+
+      # Uses the App Store Connect API key stored on EAS. eas submit cannot
+      # send release notes; the release-notes job below does that.
       - name: Upload to TestFlight
         run: eas submit --non-interactive --platform ios --profile testflight --path app.ipa
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  # Sends release-notes/<version>/ to App Store Connect, as the Android release
+  # sends it to Google Play: the App Store version's "What's New" and the
+  # TestFlight build's "What to Test". A separate Linux job, because it mostly
+  # waits for Apple to finish processing the upload, and macOS minutes cost
+  # more. Unlike eas submit it needs an API key of its own as GitHub secrets
+  # (IOS_APP_STORE_DEPLOYMENT.md, step 8); until they exist it is skipped with
+  # a warning, so releases keep working.
+  release-notes:
+    name: Publish App Store release notes
+    needs: build-and-submit
+    if: ${{ !cancelled() && (needs.build-and-submit.result == 'success' || inputs.notes_only) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check tag and release notes
+        run: |
+          if [ "$REF_TYPE" = "tag" ]; then
+            node scripts/release-notes.mjs check --tag "$REF_NAME"
+          else
+            node scripts/release-notes.mjs check
+          fi
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+
+      - name: Publish What's New and What to Test
+        run: |
+          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_PRIVATE_KEY" ]; then
+            echo "::warning::App Store Connect API key secrets are not set, so release notes were not published. See IOS_APP_STORE_DEPLOYMENT.md, step 8."
+            exit 0
+          fi
+          node scripts/app-store-notes.mjs publish --build "$BUILD_NUMBER"
+        env:
+          BUILD_NUMBER: ${{ needs.build-and-submit.outputs.build_number }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}

@@ -15,12 +15,14 @@ app.ipa
   │  eas submit               ← EAS uses the App Store Connect API key it stores
   ▼
 App Store Connect → TestFlight
-  │  by hand: create the version, pick the build, submit for review
+  │  app-store-notes.mjs      ← GitHub Actions (Linux runner), ASC_* secrets; sets
+  │                             What to Test and the App Store version's What's New
+  │  by hand: pick the build, submit for review
   ▼
 App Store
 ```
 
-Apple never sees GitHub directly. EAS holds the three Apple credentials:
+The build never hands Apple anything from GitHub: EAS holds the three Apple credentials it uses:
 
 | Credential | What it does | Created by |
 | --- | --- | --- |
@@ -28,8 +30,8 @@ Apple never sees GitHub directly. EAS holds the three Apple credentials:
 | Provisioning profile | Ties the certificate to the bundle ID `com.danaa.loancalculator` | `eas credentials` |
 | App Store Connect API key | Lets EAS upload builds without your Apple ID password or 2FA | `eas credentials` |
 
-So the workflow needs only the `EXPO_TOKEN` secret, which the Android release
-already uses.
+So the build needs only the `EXPO_TOKEN` secret, which the Android release
+already uses. Publishing the release notes needs an API key of its own (step 8).
 
 ## One-time setup
 
@@ -115,6 +117,45 @@ On the app's **App Store** tab:
 Then under the version, pick the TestFlight build, choose **Add for Review**,
 and submit. Review usually takes one to two days.
 
+### 8) Let the release publish its notes
+
+The release workflow sends `release-notes/<version>/whatsnew-<locale>` (the same
+text Google Play shows) to App Store Connect, the way the Android release sends
+it to Play:
+
+- the App Store version's **What's New in This Version**. The workflow creates
+  the version in **Prepare for Submission** if it does not exist yet.
+- the TestFlight build's **What to Test**, once Apple has finished processing
+  the upload.
+
+`eas submit` cannot send notes, so `scripts/app-store-notes.mjs` calls the App
+Store Connect API itself. The API key EAS stores cannot be read back out of
+EAS, so this step needs a key of its own as GitHub secrets:
+
+1. App Store Connect → **Users and Access** → **Integrations** → **App Store
+   Connect API** → **Team Keys** → **+**. Name it `GitHub release notes`, role
+   **App Manager** (a Developer key cannot edit version text), and generate it.
+2. Download the `AuthKey_<id>.p8` file. Apple lets you download it only once.
+3. In GitHub → the repo → **Settings** → **Secrets and variables** → **Actions**,
+   add:
+
+   | Secret | Value |
+   | --- | --- |
+   | `ASC_KEY_ID` | The key's **Key ID** |
+   | `ASC_ISSUER_ID` | The **Issuer ID** shown above the key list |
+   | `ASC_PRIVATE_KEY` | The whole contents of the `.p8` file, including the `BEGIN`/`END` lines |
+
+4. Delete the `.p8` file from your computer, or keep it in a password manager.
+   `*.p8` is git-ignored, but it should not stay in the project folder.
+
+Until the secrets exist, the notes job is skipped with a warning and releases
+carry on as before. To check the notes without credentials:
+`node scripts/app-store-notes.mjs publish --dry-run`.
+
+Apple does not allow **What's New** on an app's very first App Store version,
+or on a version already in review. The job reports those as warnings rather
+than failing the release.
+
 ## Every release after that
 
 The same tag that releases Android also releases iOS:
@@ -125,15 +166,19 @@ git tag -a v1.7.0 -m "1.7.0" origin/main && git push origin v1.7.0
 
 `.github/workflows/ios-release.yml` builds the `.ipa` on a GitHub macOS runner
 with `eas build --local` (free Actions minutes on this public repo; no EAS build
-credits) and uploads it to TestFlight with `eas submit`. The iOS build number,
-like the Android `versionCode`, is managed remotely by EAS and increases on its
-own.
+credits) and uploads it to TestFlight with `eas submit`. A follow-up job then
+publishes the release notes to the TestFlight build and to the App Store
+version (step 8). The iOS build number, like the Android `versionCode`, is
+managed remotely by EAS and increases on its own.
 
 Releasing the build to the App Store stays manual, as Play production does:
 
-1. App Store Connect → the app → **+** next to iOS App → enter the version from
-   `app.json`.
+1. App Store Connect → the app → the version from `app.json`, which the
+   workflow created with **What's New** already filled in. (If the notes job
+   was skipped or warned, create the version with **+** next to iOS App and
+   paste `release-notes/<version>/whatsnew-en-US` yourself.)
 2. Under **Build**, pick the build the workflow uploaded.
-3. Paste `release-notes/<version>/whatsnew-en-US` into **What's New in This
-   Version**. It is the same text Google Play shows.
-4. **Add for Review** and submit.
+3. **Add for Review** and submit.
+
+Edited the notes after the release ran? Run **Actions → iOS Release → Run
+workflow** with **notes_only** ticked to send them again without a build.

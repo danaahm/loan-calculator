@@ -8,13 +8,16 @@ import { type ThemeColors } from "../theme/tokens";
 import { type LoanInput } from "../types/loan";
 import { formatCurrencyWhole } from "../utils/format";
 import { buildLiveEstimate } from "../utils/liveEstimate";
+import { validateLoanInput } from "../utils/loanMath";
 import { CollapsibleSection } from "./CollapsibleSection";
 
 interface LiveRepaymentCardProps {
-  /** The form as it stands right now, before Calculate is pressed. */
+  /** The form as it stands right now, keystroke by keystroke. */
   input: LoanInput;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  /** Scrolls to the charts and table below the form. */
+  onShowBreakdown?: () => void;
 }
 
 /**
@@ -25,6 +28,7 @@ export const LiveRepaymentCard = ({
   input,
   collapsed,
   onToggleCollapsed,
+  onShowBreakdown,
 }: LiveRepaymentCardProps) => {
   const { colors } = useTheme();
   const t = useTranslation();
@@ -32,6 +36,11 @@ export const LiveRepaymentCard = ({
   // Deferred so a full schedule is never worked out between two keystrokes.
   const deferredInput = useDeferredValue(input);
   const estimate = useMemo(() => buildLiveEstimate(deferredInput), [deferredInput]);
+  // The card is the one part of the page always in view, so a form that cannot
+  // be worked out says why here, not beside results scrolled out of sight.
+  const validation = useMemo(() => validateLoanInput(deferredInput), [deferredInput]);
+  const hint =
+    validation.ready && validation.error ? validation.error : t("liveCalc.emptyHint");
 
   const frequency = estimate?.frequency ?? input.repaymentFrequency;
   const currencyCode = input.currencyCode;
@@ -133,8 +142,21 @@ export const LiveRepaymentCard = ({
             ))}
           </View>
         ) : (
-          <Text style={styles.hint}>{t("liveCalc.emptyHint")}</Text>
+          <Text style={styles.hint}>{hint}</Text>
         )}
+        {/* The charts sit below a long form; without a Calculate button to
+            lead there, this says they exist and takes the user to them. */}
+        {estimate && onShowBreakdown ? (
+          <Pressable
+            onPress={onShowBreakdown}
+            style={styles.breakdownLink}
+            hitSlop={8}
+            accessibilityRole="button"
+          >
+            <Text style={styles.breakdownLinkText}>{t("liveCalc.showBreakdown")}</Text>
+            <Ionicons name="arrow-down" size={14} color={colors.heroText} />
+          </Pressable>
+        ) : null}
       </CollapsibleSection>
     </Pressable>
   );
@@ -250,5 +272,23 @@ const createStyles = (colors: ThemeColors) =>
       lineHeight: 18,
       fontWeight: "600",
       color: colors.heroTextMuted,
+    },
+    breakdownLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: 4,
+      marginTop: 12,
+      paddingVertical: 5,
+      paddingHorizontal: 10,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.heroPillBorder,
+      backgroundColor: colors.heroPillBg,
+    },
+    breakdownLinkText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.heroText,
     },
   });

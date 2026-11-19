@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentRef, useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -7,6 +7,7 @@ import {
   AppState,
   FlatList,
   Image,
+  Keyboard,
   Modal,
   Pressable,
   StyleSheet,
@@ -116,6 +117,8 @@ type AppScreen =
 
 /** Stamped into a backup file so a support request can name the build. */
 const APP_BUILD = getAppBuildInfo();
+/** How long the form has to sit still before the results below it update. */
+const AUTO_CALCULATE_DELAY_MS = 600;
 
 const NAV_TABS: {
   id: TabScreen;
@@ -220,8 +223,14 @@ function AppContent() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [screen, setScreen] = useState<AppScreen>("home");
   const previousScreenRef = useRef<Exclude<AppScreen, "settings">>("home");
+  // The loan the results below the form were worked out from. It follows the
+  // form on its own, a moment after typing stops.
   const [input, setInput] = useState<LoanInput>(DEFAULT_INPUT);
-  // The live form values, which only become `input` once Calculate is pressed.
+  // What the form was last filled from: a loaded loan, a saved one, or a blank
+  // one. Kept apart from `input` because the form refills every field when this
+  // changes, and that must never happen while someone is typing.
+  const [formSeed, setFormSeed] = useState<LoanInput>(DEFAULT_INPUT);
+  // The form as it stands right now, published on every parsed change.
   const [draftInput, setDraftInput] = useState<LoanInput>(DEFAULT_INPUT);
   const [result, setResult] = useState<LoanCalculationResult | null>(null);
   const [savedProfiles, setSavedProfiles] = useState<SavedLoanProfile[]>([]);
@@ -244,7 +253,6 @@ function AppContent() {
   const [renameProfileName, setRenameProfileName] = useState("");
   const [lastCalculatedHash, setLastCalculatedHash] = useState("");
   const [lastSavedHash, setLastSavedHash] = useState("");
-  const [isCalculating, setIsCalculating] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarText, setSnackbarText] = useState("");
   const [loadingState, setLoadingState] = useState(true);
@@ -264,15 +272,18 @@ function AppContent() {
 
   const inputHash = JSON.stringify(input);
   const draftValidation = validateLoanInput(draftInput);
-  const calculatorDirty =
-    JSON.stringify(normalizeInput(draftInput)) !== lastCalculatedHash;
-  const showCalculateBar =
-    screen === "calculator" &&
-    loanFormMode === "form" &&
-    draftValidation.ready &&
-    calculatorDirty;
-  const canSaveCalculatedProfile =
-    result !== null && lastCalculatedHash.length > 0 && lastCalculatedHash !== lastSavedHash;
+  const draftHash = JSON.stringify(normalizeInput(draftInput));
+  const draftCalculable = draftValidation.ready && !draftValidation.error;
+  // While the form is half-filled or invalid the last results stay on screen,
+  // dimmed, rather than vanishing and making the page jump.
+  const resultsStale = result !== null && !draftCalculable;
+  // Work that clearing the form would lose: edits to a saved loan, or a new
+  // loan the user has started (including one restored from the last session).
+  const hasUnsavedWork =
+    draftHash !== lastSavedHash || (selectedProfileId === null && result !== null);
+  // A form that cannot be worked out is not saved: it would store a loan
+  // different from the one on screen.
+  const canSaveLoan = hasUnsavedWork && draftCalculable;
   const minimumMonthlyRepayment = (() => {
     if (!result) {
       return 0;
@@ -357,8 +368,11 @@ function AppContent() {
     }, 4000);
   };
 
-  const ignoreCurrentCalculationSavePrompt = () => {
-    setLastSavedHash(lastCalculatedHash);
+  const openSaveDialog = () => {
+    // Saving stores the calculated loan, so bring it level with the form first
+    // in case the last edit is still waiting out the auto-calculate delay.
+    flushCalculationRef.current();
+    setSaveDialogVisible(true);
   };
 
   const openSettings = () => {
@@ -475,6 +489,7 @@ function AppContent() {
     setLoanFormMode(savedInput ? "form" : "chooser");
     const initialHash = JSON.stringify(initial);
     setInput(initial);
+    setFormSeed(initial);
     setDraftInput(initial);
     // Defaults are not a calculation the user made, and showing one on the
     // dashboard after "Delete everything" reads as data that survived it.
@@ -529,6 +544,7 @@ function AppContent() {
   useEffect(() => {
     hydrateFromStorage().catch(() => {
       setInput(DEFAULT_INPUT);
+      setFormSeed(DEFAULT_INPUT);
       setDraftInput(DEFAULT_INPUT);
       setResult(calculateLoan(DEFAULT_INPUT));
       const defaultHash = JSON.stringify(DEFAULT_INPUT);
@@ -556,18 +572,70 @@ function AppContent() {
     refillAndPersist(() => remindersRef.current).catch(() => {});
   }, [dateFormat, loadingState]);
 
-  const handleSubmit = async (nextInput: LoanInput) => {
-    const normalized = normalizeInput(nextInput);
-    setIsCalculating(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setInput(normalized);
-    setDraftInput(normalized);
-    setResult(calculateLoan(normalized));
-    setLastCalculatedHash(JSON.stringify(normalized));
-    await saveLoanInput(normalized);
-    setIsCalculating(false);
-    showSnackbar(t("snackbar.calculationReady"));
+  // Works the results out from the form once typing pauses. Waiting matters:
+  // typing 500000 passes through 5, 50 and 500, each a loan in its own right,
+  // and redrawing the charts for every one of them reads as flicker.
+  const flushCalculationRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (loadingState || !draftCalculable || draftHash === lastCalculatedHash) {
+      return;
+    }
+    const draft = draftInput;
+    const commit = () => {
+      flushCalculationRef.current = () => {};
+      const normalized = normalizeInput(draft);
+      setInput(normalized);
+      setResult(calculateLoan(normalized));
+      setLastCalculatedHash(JSON.stringify(normalized));
+      saveLoanInput(normalized).catch(() => {});
+    };
+    const timer = setTimeout(commit, AUTO_CALCULATE_DELAY_MS);
+    flushCalculationRef.current = () => {
+      clearTimeout(timer);
+      commit();
+    };
+    return () => {
+      clearTimeout(timer);
+      flushCalculationRef.current = () => {};
+    };
+    // Keyed on the hash: a new draft object holding the same loan is no change.
+  }, [draftHash, draftCalculable, lastCalculatedHash, loadingState]);
+
+  // "See full breakdown" scrolls to the results. They may not exist yet when
+  // the link is tapped mid-delay, so the scroll waits for their first layout.
+  const calculatorScrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const resultsYRef = useRef<number | null>(null);
+  const liveCardHeightRef = useRef(0);
+  const breakdownScrollPendingRef = useRef(false);
+  const scrollToResults = () => {
+    const y = resultsYRef.current;
+    if (y === null) {
+      return false;
+    }
+    breakdownScrollPendingRef.current = false;
+    // Lands the results just under the pinned live card, not behind it.
+    calculatorScrollRef.current?.scrollTo({
+      y: Math.max(0, y - liveCardHeightRef.current),
+      animated: true,
+    });
+    return true;
   };
+  const showBreakdown = () => {
+    Keyboard.dismiss();
+    flushCalculationRef.current();
+    if (!scrollToResults()) {
+      breakdownScrollPendingRef.current = true;
+    }
+  };
+
+  // Closing the keyboard is the clearest sign a number is finished, so the
+  // results catch up at once instead of waiting out the delay.
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      flushCalculationRef.current();
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -598,6 +666,7 @@ function AppContent() {
     const normalized = normalizeInput(profile.input);
     const hash = JSON.stringify(normalized);
     setInput(normalized);
+    setFormSeed(normalized);
     setDraftInput(normalized);
     setResult(calculateLoan(normalized));
     setProfileName(profile.name);
@@ -612,13 +681,91 @@ function AppContent() {
     const fresh = emptyInput(defaultCurrencyCode);
     const hash = JSON.stringify(normalizeInput(fresh));
     setInput(fresh);
+    setFormSeed(fresh);
     setDraftInput(fresh);
     setResult(null);
+    resultsYRef.current = null;
     setProfileName(t("profiles.defaultName"));
     setSelectedProfileId(null);
     setLastCalculatedHash(hash);
     setLastSavedHash(hash);
     setLoanFormMode("form");
+  };
+
+  // What "Save first" in a leave-this-loan prompt goes on to do once the save
+  // lands. Cleared if the save dialog is cancelled, so the user stays put.
+  const afterSaveRef = useRef<(() => void) | null>(null);
+
+  /** Runs a pending "Save first" action. True when there was one. */
+  const continueAfterSave = (message: string) => {
+    const next = afterSaveRef.current;
+    if (!next) {
+      return false;
+    }
+    afterSaveRef.current = null;
+    // A snackbar, not the usual saved alert: the user is on their way to
+    // something else and asked for that, not for a reminder offer.
+    showSnackbar(message);
+    next();
+    return true;
+  };
+
+  const closeSaveDialog = () => {
+    afterSaveRef.current = null;
+    setSaveDialogVisible(false);
+  };
+
+  /**
+   * Guards anything that replaces the loan on the form. New loan asks every
+   * time there is a loan on the form, because one stray tap used to wipe a
+   * half-typed loan; opening another loan asks only when work would be lost.
+   */
+  const confirmLeavingLoan = (kind: "new" | "switch", proceed: () => void) => {
+    const title = t(kind === "new" ? "leaveLoan.newTitle" : "leaveLoan.switchTitle");
+    const proceedLabel = t(kind === "new" ? "leaveLoan.startNew" : "leaveLoan.open");
+    if (!hasUnsavedWork) {
+      if (kind === "switch" || !selectedProfileId) {
+        // Nothing on the form to lose: a blank new loan, or a saved one.
+        proceed();
+        return;
+      }
+      Alert.alert(title, t("leaveLoan.savedBody", { name: profileName }), [
+        { text: t("common.cancel"), style: "cancel" },
+        { text: proceedLabel, onPress: proceed },
+      ]);
+      return;
+    }
+    const body = selectedProfileId
+      ? t("leaveLoan.editedBody", { name: profileName })
+      : t("leaveLoan.unsavedBody");
+    Alert.alert(title, body, [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("leaveLoan.discard"), style: "destructive", onPress: proceed },
+      // Offered only when the form can be saved as it stands.
+      ...(canSaveLoan
+        ? [
+            {
+              text: t("leaveLoan.saveFirst"),
+              onPress: () => {
+                afterSaveRef.current = proceed;
+                openSaveDialog();
+              },
+            },
+          ]
+        : []),
+    ]);
+  };
+
+  const requestNewLoan = () => confirmLeavingLoan("new", startNewLoan);
+
+  const requestOpenProfile = (profile: SavedLoanProfile) => {
+    // Reopening the loan already on the form would throw its edits away for
+    // nothing, so that is just a return to the calculator.
+    if (profile.id === selectedProfileId && loanFormMode === "form") {
+      setScreen("calculator");
+      return;
+    }
+    confirmLeavingLoan("switch", () => openProfile(profile));
   };
 
   const saveCurrentProfile = async (asNew: boolean) => {
@@ -638,6 +785,9 @@ function AppContent() {
       await persistProfiles(updated);
       setLastSavedHash(inputHash);
       setSaveDialogVisible(false);
+      if (continueAfterSave(t("profiles.updatedBody"))) {
+        return;
+      }
       Alert.alert(t("profiles.updated"), t("profiles.updatedBody"), [
         { text: t("common.ok") },
         {
@@ -664,6 +814,9 @@ function AppContent() {
     setSelectedProfileId(newProfile.id);
     setLastSavedHash(inputHash);
     setSaveDialogVisible(false);
+    if (continueAfterSave(t("profiles.savedBody"))) {
+      return;
+    }
     Alert.alert(t("profiles.saved"), t("profiles.savedBody"), [
       { text: t("common.ok") },
       {
@@ -973,23 +1126,6 @@ function AppContent() {
           </View>
         </View>
 
-        {screen === "calculator" && loanFormMode === "form" && canSaveCalculatedProfile ? (
-          <View style={styles.saveStickyBar}>
-            <Pressable
-              style={styles.saveStickyPrimaryButton}
-              onPress={() => setSaveDialogVisible(true)}
-            >
-              <Text style={styles.primaryButtonText}>{t("common.save")}</Text>
-            </Pressable>
-            <Pressable
-              style={styles.saveStickySecondaryButton}
-              onPress={ignoreCurrentCalculationSavePrompt}
-            >
-              <Text style={styles.secondaryButtonText}>{t("common.ignore")}</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
         <View style={styles.screenBody}>
         {screen === "home" ? (
           <HomeScreen
@@ -1017,6 +1153,7 @@ function AppContent() {
 
         {screen === "calculator" && loanFormMode === "form" ? (
           <ScrollView
+            ref={calculatorScrollRef}
             style={styles.screenBody}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
@@ -1029,41 +1166,96 @@ function AppContent() {
               <Pressable
                 style={styles.loanPickerButton}
                 accessibilityRole="button"
-                accessibilityLabel={t("loanPicker.switchLabel")}
+                accessibilityLabel={
+                  hasUnsavedWork
+                    ? `${t("loanPicker.switchLabel")}, ${t(
+                        selectedProfileId ? "app.edited" : "app.notSaved"
+                      )}`
+                    : t("loanPicker.switchLabel")
+                }
                 onPress={() => setLoanPickerVisible(true)}
               >
                 <Text style={styles.loanPickerName} numberOfLines={1}>
                   {selectedProfileId ? profileName : t("app.newLoan")}
                 </Text>
+                {/* A dot, not a word: the row is too narrow on a phone for a
+                    label beside the name, and the filled Save button already
+                    says there is something to save. */}
+                {hasUnsavedWork ? <View style={styles.unsavedDot} /> : null}
                 <Ionicons
                   name="chevron-down"
                   size={16}
                   color={colors.accentTextStrong}
                 />
               </Pressable>
+              {selectedProfileId && !hasUnsavedWork ? (
+                <View
+                  style={[styles.saveLoanButton, styles.saveLoanButtonSaved]}
+                  accessible
+                  accessibilityLabel={t("app.savedState")}
+                >
+                  <Ionicons name="checkmark" size={16} color={colors.textMuted} />
+                  <Text style={styles.saveLoanButtonSavedText}>{t("app.savedState")}</Text>
+                </View>
+              ) : (
+                <Pressable
+                  style={[styles.saveLoanButton, !canSaveLoan && styles.buttonDisabled]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("common.save")}
+                  accessibilityState={{ disabled: !canSaveLoan }}
+                  disabled={!canSaveLoan}
+                  onPress={openSaveDialog}
+                >
+                  <Ionicons name="bookmark-outline" size={15} color={colors.textInverse} />
+                  <Text style={styles.saveLoanButtonText}>{t("common.save")}</Text>
+                </Pressable>
+              )}
               <Pressable
                 style={styles.newLoanButton}
                 accessibilityRole="button"
                 accessibilityLabel={t("app.newLoan")}
-                onPress={startNewLoan}
+                onPress={requestNewLoan}
               >
-                <Ionicons name="add" size={16} color={colors.textInverse} />
+                <Ionicons name="add" size={16} color={colors.accentTextStrong} />
                 <Text style={styles.newLoanButtonText}>{t("app.newLoan")}</Text>
               </Pressable>
             </View>
 
-            <View style={styles.liveRepaymentWrap}>
+            <View
+              style={styles.liveRepaymentWrap}
+              onLayout={(event) => {
+                liveCardHeightRef.current = event.nativeEvent.layout.height;
+              }}
+            >
               <LiveRepaymentCard
                 input={draftInput}
                 collapsed={reminderSettings.liveRepaymentCollapsed}
                 onToggleCollapsed={toggleLiveRepaymentCollapsed}
+                onShowBreakdown={showBreakdown}
               />
             </View>
 
-            <LoanForm initialValue={input} onDraftChange={setDraftInput} />
+            <LoanForm initialValue={formSeed} onDraftChange={setDraftInput} />
+
+            {result ? null : (
+              <Text style={styles.resultsPlaceholder}>{t("results.placeholder")}</Text>
+            )}
+
+            {result && resultsStale ? (
+              <Text style={styles.resultsStaleHint}>{t("results.stale")}</Text>
+            ) : null}
 
             {result ? (
-              <View>
+              <View
+                style={resultsStale ? styles.resultsStale : null}
+                accessibilityHint={resultsStale ? t("results.stale") : undefined}
+                onLayout={(event) => {
+                  resultsYRef.current = event.nativeEvent.layout.y;
+                  if (breakdownScrollPendingRef.current) {
+                    scrollToResults();
+                  }
+                }}
+              >
                 <View style={styles.minimumRepaymentCard}>
                   <Text style={styles.minimumRepaymentTitle}>
                     Minimum Monthly Repayment
@@ -1302,7 +1494,7 @@ function AppContent() {
               onBack={() => setScreen("saved")}
               onOpenProfile={(profile) => {
                 exitCompareSelectMode();
-                openProfile(profile);
+                requestOpenProfile(profile);
               }}
             />
           </SwipeBackView>
@@ -1380,7 +1572,7 @@ function AppContent() {
                       toggleCompareSelection(item.id);
                       return;
                     }
-                    openProfile(item);
+                    requestOpenProfile(item);
                   }}
                   onLongPress={() => {
                     if (!compareSelectMode) {
@@ -1481,28 +1673,6 @@ function AppContent() {
         ) : null}
         </View>
 
-        {showCalculateBar ? (
-          <View style={styles.calculateStickyBar}>
-            {draftValidation.error ? (
-              <Text style={styles.calculateStickyHint}>{draftValidation.error}</Text>
-            ) : null}
-            <Pressable
-              style={[
-                styles.calculateStickyButton,
-                draftValidation.error ? styles.calculateStickyButtonDisabled : null,
-              ]}
-              disabled={Boolean(draftValidation.error) || isCalculating}
-              onPress={() => {
-                handleSubmit(draftInput).catch(() => {});
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: Boolean(draftValidation.error) }}
-            >
-              <Text style={styles.calculateStickyButtonText}>{t("app.calculate")}</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
         {!overlayScreen ? (
           <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
             {NAV_TABS.map((tab) => {
@@ -1566,7 +1736,13 @@ function AppContent() {
                         ]}
                         onPress={() => {
                           setLoanPickerVisible(false);
-                          openProfile(profile);
+                          if (hasUnsavedWork) {
+                            // iOS drops an alert raised while a modal is still
+                            // fading out, so ask once the picker has gone.
+                            setTimeout(() => requestOpenProfile(profile), 350);
+                          } else {
+                            requestOpenProfile(profile);
+                          }
                         }}
                       >
                         <View style={styles.loanPickerRowText}>
@@ -1639,7 +1815,7 @@ function AppContent() {
           visible={saveDialogVisible}
           transparent
           animationType="fade"
-          onRequestClose={() => setSaveDialogVisible(false)}
+          onRequestClose={closeSaveDialog}
         >
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
@@ -1674,19 +1850,10 @@ function AppContent() {
               </View>
               <Pressable
                 style={styles.cancelButton}
-                onPress={() => setSaveDialogVisible(false)}
+                onPress={closeSaveDialog}
               >
                 <Text style={styles.cancelButtonText}>{t("common.cancel")}</Text>
               </Pressable>
-            </View>
-          </View>
-        </Modal>
-
-        <Modal visible={isCalculating} transparent animationType="fade">
-          <View style={styles.calculatingBackdrop}>
-            <View style={styles.calculatingCard}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.calculatingText}>{t("app.calculating")}</Text>
             </View>
           </View>
         </Modal>
@@ -1719,7 +1886,7 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      gap: 12,
+      gap: 8,
       marginBottom: 2,
     },
     // Page-coloured, so the form scrolling underneath the pinned card does not
@@ -1747,18 +1914,52 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "800",
       color: colors.text,
     },
+    unsavedDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.dueDotSoon,
+    },
+    saveLoanButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingVertical: 9,
+      paddingHorizontal: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+    },
+    saveLoanButtonText: {
+      fontWeight: "800",
+      color: colors.textInverse,
+    },
+    saveLoanButtonSaved: {
+      borderColor: "transparent",
+      backgroundColor: "transparent",
+      paddingHorizontal: 4,
+    },
+    saveLoanButtonSavedText: {
+      fontWeight: "700",
+      color: colors.textMuted,
+    },
+    // Outlined, not filled: Save is the action to reach for, and starting a new
+    // loan should not be the most inviting thing on the row.
     newLoanButton: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
       paddingVertical: 9,
-      paddingHorizontal: 12,
+      paddingHorizontal: 10,
       borderRadius: 10,
-      backgroundColor: colors.primary,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.inputBg,
     },
     newLoanButtonText: {
       fontWeight: "800",
-      color: colors.textInverse,
+      color: colors.accentTextStrong,
     },
     loanPickerList: {
       maxHeight: 320,
@@ -1842,61 +2043,24 @@ const createStyles = (colors: ThemeColors) =>
       borderWidth: 2,
       borderColor: colors.header,
     },
-    calculateStickyBar: {
-      paddingHorizontal: 16,
-      paddingTop: 10,
-      paddingBottom: 10,
-      borderTopWidth: 1,
-      borderTopColor: colors.headerBorder,
-      backgroundColor: colors.saveBarBg,
-    },
-    calculateStickyHint: {
-      color: colors.errorText,
+    resultsPlaceholder: {
+      marginTop: 4,
+      paddingHorizontal: 8,
+      textAlign: "center",
+      fontSize: 13,
+      lineHeight: 18,
       fontWeight: "600",
-      fontSize: 12,
+      color: colors.textMuted,
+    },
+    resultsStaleHint: {
       marginBottom: 8,
-    },
-    calculateStickyButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 12,
-    },
-    calculateStickyButtonDisabled: {
-      opacity: 0.5,
-    },
-    calculateStickyButtonText: {
-      color: colors.textInverse,
+      paddingHorizontal: 4,
+      fontSize: 13,
       fontWeight: "700",
-      fontSize: 16,
+      color: colors.textMuted,
     },
-    saveStickyBar: {
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.headerBorder,
-      backgroundColor: colors.saveBarBg,
-      flexDirection: "row",
-      gap: 8,
-    },
-    saveStickyPrimaryButton: {
-      flex: 1,
-      backgroundColor: colors.primary,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 10,
-    },
-    saveStickySecondaryButton: {
-      flex: 1,
-      borderWidth: 1,
-      borderColor: colors.borderStrong,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 10,
-      backgroundColor: colors.card,
+    resultsStale: {
+      opacity: 0.4,
     },
     bottomNav: {
       flexDirection: "row",
@@ -2211,26 +2375,6 @@ const createStyles = (colors: ThemeColors) =>
     },
     cancelButtonText: {
       color: colors.textSecondary,
-      fontWeight: "700",
-    },
-    calculatingBackdrop: {
-      flex: 1,
-      backgroundColor: colors.calculatingBackdrop,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 20,
-    },
-    calculatingCard: {
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      alignItems: "center",
-      minWidth: 220,
-    },
-    calculatingText: {
-      marginTop: 10,
-      color: colors.text,
       fontWeight: "700",
     },
     snackbarWrap: {

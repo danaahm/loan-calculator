@@ -35,8 +35,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Advisory on PRs: this compares against the newest patches Expo has
+      # published, not against anything the PR changed, so it starts failing
+      # every PR the day Expo ships a patch. The release workflows still block
+      # on it, so a stale dependency is caught before a build, not a merge.
+      # Fix with `npx expo install --fix`.
       - name: Check Expo dependency versions
         run: npx expo install --check
+        continue-on-error: true
 
       # Every change that reaches the app ships under a new version, so a PR
       # that touches the app must raise it above main's. Picking patch, minor

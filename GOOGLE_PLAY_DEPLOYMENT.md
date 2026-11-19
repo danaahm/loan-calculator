@@ -123,6 +123,10 @@ are over Google Play's 500-character limit. Run the same check locally with
 
 Promoting a release to another track in Play Console carries its notes with it.
 
+The iOS release sends the same files to App Store Connect; see step 8 of
+`IOS_APP_STORE_DEPLOYMENT.md`. Only locales the App Store listing already has
+are sent there.
+
 ### Required GitHub secrets
 
 Create these under GitHub → repo → Settings → Secrets and variables → Actions →
