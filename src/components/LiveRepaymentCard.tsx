@@ -8,10 +8,11 @@ import { type ThemeColors } from "../theme/tokens";
 import { type LoanInput } from "../types/loan";
 import { formatCurrencyWhole } from "../utils/format";
 import { buildLiveEstimate } from "../utils/liveEstimate";
+import { validateLoanInput } from "../utils/loanMath";
 import { CollapsibleSection } from "./CollapsibleSection";
 
 interface LiveRepaymentCardProps {
-  /** The form as it stands right now, before Calculate is pressed. */
+  /** The form as it stands right now, keystroke by keystroke. */
   input: LoanInput;
   collapsed: boolean;
   onToggleCollapsed: () => void;
@@ -32,6 +33,11 @@ export const LiveRepaymentCard = ({
   // Deferred so a full schedule is never worked out between two keystrokes.
   const deferredInput = useDeferredValue(input);
   const estimate = useMemo(() => buildLiveEstimate(deferredInput), [deferredInput]);
+  // The card is the one part of the page always in view, so a form that cannot
+  // be worked out says why here, not beside results scrolled out of sight.
+  const validation = useMemo(() => validateLoanInput(deferredInput), [deferredInput]);
+  const hint =
+    validation.ready && validation.error ? validation.error : t("liveCalc.emptyHint");
 
   const frequency = estimate?.frequency ?? input.repaymentFrequency;
   const currencyCode = input.currencyCode;
@@ -133,7 +139,7 @@ export const LiveRepaymentCard = ({
             ))}
           </View>
         ) : (
-          <Text style={styles.hint}>{t("liveCalc.emptyHint")}</Text>
+          <Text style={styles.hint}>{hint}</Text>
         )}
       </CollapsibleSection>
     </Pressable>

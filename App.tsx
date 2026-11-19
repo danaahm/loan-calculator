@@ -7,6 +7,7 @@ import {
   AppState,
   FlatList,
   Image,
+  Keyboard,
   Modal,
   Pressable,
   StyleSheet,
@@ -116,6 +117,8 @@ type AppScreen =
 
 /** Stamped into a backup file so a support request can name the build. */
 const APP_BUILD = getAppBuildInfo();
+/** How long the form has to sit still before the results below it update. */
+const AUTO_CALCULATE_DELAY_MS = 600;
 
 const NAV_TABS: {
   id: TabScreen;
@@ -220,8 +223,14 @@ function AppContent() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [screen, setScreen] = useState<AppScreen>("home");
   const previousScreenRef = useRef<Exclude<AppScreen, "settings">>("home");
+  // The loan the results below the form were worked out from. It follows the
+  // form on its own, a moment after typing stops.
   const [input, setInput] = useState<LoanInput>(DEFAULT_INPUT);
-  // The live form values, which only become `input` once Calculate is pressed.
+  // What the form was last filled from: a loaded loan, a saved one, or a blank
+  // one. Kept apart from `input` because the form refills every field when this
+  // changes, and that must never happen while someone is typing.
+  const [formSeed, setFormSeed] = useState<LoanInput>(DEFAULT_INPUT);
+  // The form as it stands right now, published on every parsed change.
   const [draftInput, setDraftInput] = useState<LoanInput>(DEFAULT_INPUT);
   const [result, setResult] = useState<LoanCalculationResult | null>(null);
   const [savedProfiles, setSavedProfiles] = useState<SavedLoanProfile[]>([]);
@@ -244,7 +253,6 @@ function AppContent() {
   const [renameProfileName, setRenameProfileName] = useState("");
   const [lastCalculatedHash, setLastCalculatedHash] = useState("");
   const [lastSavedHash, setLastSavedHash] = useState("");
-  const [isCalculating, setIsCalculating] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarText, setSnackbarText] = useState("");
   const [loadingState, setLoadingState] = useState(true);
@@ -264,13 +272,11 @@ function AppContent() {
 
   const inputHash = JSON.stringify(input);
   const draftValidation = validateLoanInput(draftInput);
-  const calculatorDirty =
-    JSON.stringify(normalizeInput(draftInput)) !== lastCalculatedHash;
-  const showCalculateBar =
-    screen === "calculator" &&
-    loanFormMode === "form" &&
-    draftValidation.ready &&
-    calculatorDirty;
+  const draftHash = JSON.stringify(normalizeInput(draftInput));
+  const draftCalculable = draftValidation.ready && !draftValidation.error;
+  // While the form is half-filled or invalid the last results stay on screen,
+  // dimmed, rather than vanishing and making the page jump.
+  const resultsStale = result !== null && !draftCalculable;
   const canSaveCalculatedProfile =
     result !== null && lastCalculatedHash.length > 0 && lastCalculatedHash !== lastSavedHash;
   const minimumMonthlyRepayment = (() => {
@@ -475,6 +481,7 @@ function AppContent() {
     setLoanFormMode(savedInput ? "form" : "chooser");
     const initialHash = JSON.stringify(initial);
     setInput(initial);
+    setFormSeed(initial);
     setDraftInput(initial);
     // Defaults are not a calculation the user made, and showing one on the
     // dashboard after "Delete everything" reads as data that survived it.
@@ -529,6 +536,7 @@ function AppContent() {
   useEffect(() => {
     hydrateFromStorage().catch(() => {
       setInput(DEFAULT_INPUT);
+      setFormSeed(DEFAULT_INPUT);
       setDraftInput(DEFAULT_INPUT);
       setResult(calculateLoan(DEFAULT_INPUT));
       const defaultHash = JSON.stringify(DEFAULT_INPUT);
@@ -556,18 +564,43 @@ function AppContent() {
     refillAndPersist(() => remindersRef.current).catch(() => {});
   }, [dateFormat, loadingState]);
 
-  const handleSubmit = async (nextInput: LoanInput) => {
-    const normalized = normalizeInput(nextInput);
-    setIsCalculating(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setInput(normalized);
-    setDraftInput(normalized);
-    setResult(calculateLoan(normalized));
-    setLastCalculatedHash(JSON.stringify(normalized));
-    await saveLoanInput(normalized);
-    setIsCalculating(false);
-    showSnackbar(t("snackbar.calculationReady"));
-  };
+  // Works the results out from the form once typing pauses. Waiting matters:
+  // typing 500000 passes through 5, 50 and 500, each a loan in its own right,
+  // and redrawing the charts for every one of them reads as flicker.
+  const flushCalculationRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (loadingState || !draftCalculable || draftHash === lastCalculatedHash) {
+      return;
+    }
+    const draft = draftInput;
+    const commit = () => {
+      flushCalculationRef.current = () => {};
+      const normalized = normalizeInput(draft);
+      setInput(normalized);
+      setResult(calculateLoan(normalized));
+      setLastCalculatedHash(JSON.stringify(normalized));
+      saveLoanInput(normalized).catch(() => {});
+    };
+    const timer = setTimeout(commit, AUTO_CALCULATE_DELAY_MS);
+    flushCalculationRef.current = () => {
+      clearTimeout(timer);
+      commit();
+    };
+    return () => {
+      clearTimeout(timer);
+      flushCalculationRef.current = () => {};
+    };
+    // Keyed on the hash: a new draft object holding the same loan is no change.
+  }, [draftHash, draftCalculable, lastCalculatedHash, loadingState]);
+
+  // Closing the keyboard is the clearest sign a number is finished, so the
+  // results catch up at once instead of waiting out the delay.
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      flushCalculationRef.current();
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -598,6 +631,7 @@ function AppContent() {
     const normalized = normalizeInput(profile.input);
     const hash = JSON.stringify(normalized);
     setInput(normalized);
+    setFormSeed(normalized);
     setDraftInput(normalized);
     setResult(calculateLoan(normalized));
     setProfileName(profile.name);
@@ -612,6 +646,7 @@ function AppContent() {
     const fresh = emptyInput(defaultCurrencyCode);
     const hash = JSON.stringify(normalizeInput(fresh));
     setInput(fresh);
+    setFormSeed(fresh);
     setDraftInput(fresh);
     setResult(null);
     setProfileName(t("profiles.defaultName"));
@@ -1060,10 +1095,21 @@ function AppContent() {
               />
             </View>
 
-            <LoanForm initialValue={input} onDraftChange={setDraftInput} />
+            <LoanForm initialValue={formSeed} onDraftChange={setDraftInput} />
+
+            {result ? null : (
+              <Text style={styles.resultsPlaceholder}>{t("results.placeholder")}</Text>
+            )}
+
+            {result && resultsStale ? (
+              <Text style={styles.resultsStaleHint}>{t("results.stale")}</Text>
+            ) : null}
 
             {result ? (
-              <View>
+              <View
+                style={resultsStale ? styles.resultsStale : null}
+                accessibilityHint={resultsStale ? t("results.stale") : undefined}
+              >
                 <View style={styles.minimumRepaymentCard}>
                   <Text style={styles.minimumRepaymentTitle}>
                     Minimum Monthly Repayment
@@ -1481,28 +1527,6 @@ function AppContent() {
         ) : null}
         </View>
 
-        {showCalculateBar ? (
-          <View style={styles.calculateStickyBar}>
-            {draftValidation.error ? (
-              <Text style={styles.calculateStickyHint}>{draftValidation.error}</Text>
-            ) : null}
-            <Pressable
-              style={[
-                styles.calculateStickyButton,
-                draftValidation.error ? styles.calculateStickyButtonDisabled : null,
-              ]}
-              disabled={Boolean(draftValidation.error) || isCalculating}
-              onPress={() => {
-                handleSubmit(draftInput).catch(() => {});
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: Boolean(draftValidation.error) }}
-            >
-              <Text style={styles.calculateStickyButtonText}>{t("app.calculate")}</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
         {!overlayScreen ? (
           <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
             {NAV_TABS.map((tab) => {
@@ -1682,15 +1706,6 @@ function AppContent() {
           </View>
         </Modal>
 
-        <Modal visible={isCalculating} transparent animationType="fade">
-          <View style={styles.calculatingBackdrop}>
-            <View style={styles.calculatingCard}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.calculatingText}>{t("app.calculating")}</Text>
-            </View>
-          </View>
-        </Modal>
-
       </SafeAreaView>
     </GestureHandlerRootView>
   );
@@ -1842,34 +1857,24 @@ const createStyles = (colors: ThemeColors) =>
       borderWidth: 2,
       borderColor: colors.header,
     },
-    calculateStickyBar: {
-      paddingHorizontal: 16,
-      paddingTop: 10,
-      paddingBottom: 10,
-      borderTopWidth: 1,
-      borderTopColor: colors.headerBorder,
-      backgroundColor: colors.saveBarBg,
-    },
-    calculateStickyHint: {
-      color: colors.errorText,
+    resultsPlaceholder: {
+      marginTop: 4,
+      paddingHorizontal: 8,
+      textAlign: "center",
+      fontSize: 13,
+      lineHeight: 18,
       fontWeight: "600",
-      fontSize: 12,
+      color: colors.textMuted,
+    },
+    resultsStaleHint: {
       marginBottom: 8,
-    },
-    calculateStickyButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 12,
-    },
-    calculateStickyButtonDisabled: {
-      opacity: 0.5,
-    },
-    calculateStickyButtonText: {
-      color: colors.textInverse,
+      paddingHorizontal: 4,
+      fontSize: 13,
       fontWeight: "700",
-      fontSize: 16,
+      color: colors.textMuted,
+    },
+    resultsStale: {
+      opacity: 0.4,
     },
     saveStickyBar: {
       paddingHorizontal: 16,
@@ -2211,26 +2216,6 @@ const createStyles = (colors: ThemeColors) =>
     },
     cancelButtonText: {
       color: colors.textSecondary,
-      fontWeight: "700",
-    },
-    calculatingBackdrop: {
-      flex: 1,
-      backgroundColor: colors.calculatingBackdrop,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 20,
-    },
-    calculatingCard: {
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      alignItems: "center",
-      minWidth: 220,
-    },
-    calculatingText: {
-      marginTop: 10,
-      color: colors.text,
       fontWeight: "700",
     },
     snackbarWrap: {

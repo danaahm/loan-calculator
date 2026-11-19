@@ -41,7 +41,6 @@ export type ThemeColors = {
   chartTooltipLine: string;
   pieInset: string;
   modalBackdrop: string;
-  calculatingBackdrop: string;
   snackbarBg: string;
   navButtonBg: string;
   saveBarBg: string;
@@ -110,7 +109,6 @@ export const lightColors: ThemeColors = {
   chartTooltipLine: "rgba(17,24,39,0.28)",
   pieInset: "#ffffff",
   modalBackdrop: "rgba(17,24,39,0.45)",
-  calculatingBackdrop: "rgba(17,24,39,0.28)",
   snackbarBg: "rgba(17,24,39,0.9)",
   navButtonBg: "#f9fafb",
   saveBarBg: "#f8fafc",
@@ -177,7 +175,6 @@ export const darkColors: ThemeColors = {
   chartTooltipLine: "rgba(248,250,252,0.35)",
   pieInset: "#1e293b",
   modalBackdrop: "rgba(2,6,23,0.62)",
-  calculatingBackdrop: "rgba(2,6,23,0.5)",
   snackbarBg: "rgba(15,23,42,0.94)",
   navButtonBg: "#0f172a",
   saveBarBg: "#0f172a",

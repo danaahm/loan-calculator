@@ -51,7 +51,7 @@ type FormStyles = ReturnType<typeof createStyles>;
 
 interface LoanFormProps {
   initialValue: LoanInput;
-  /** Fires on every field change so the sticky Calculate bar can react. */
+  /** Fires on every parsed field change; the results follow it on their own. */
   onDraftChange: (value: LoanInput) => void;
 }
 
@@ -444,8 +444,8 @@ export const LoanForm = ({ initialValue, onDraftChange }: LoanFormProps) => {
     );
   };
 
-  // Publish the live draft upward so the sticky Calculate bar can enable
-  // itself. Runs only when a parsed field actually changes, not per keystroke.
+  // Publish the live draft upward, where the results are worked out from it.
+  // Runs only when a parsed field actually changes, not per keystroke.
   useEffect(() => {
     onDraftChange(fieldValue);
   }, [fieldValue, onDraftChange]);

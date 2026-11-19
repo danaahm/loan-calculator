@@ -31,9 +31,11 @@
     "repaymentRemindersDueNow": "Repayment reminders, a payment is due"
   },
   "app": {
-    "calculate": "Calculate",
-    "calculating": "Calculating your loan...",
     "newLoan": "New loan"
+  },
+  "results": {
+    "placeholder": "Your charts and repayment table appear here as soon as the amount borrowed and the loan length are filled in.",
+    "stale": "Finish the loan details above to update these results."
   },
   "repaymentPhases": {
     "title": "Repayment changes (monthly)",
@@ -46,9 +48,6 @@
     "title": "Your saved loans",
     "switchLabel": "Switch loan",
     "empty": "No saved loans yet. Tap New loan to start one."
-  },
-  "snackbar": {
-    "calculationReady": "Your loan calculation is ready"
   },
   "updates": {
     "readyTitle": "Update ready",
