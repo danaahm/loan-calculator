@@ -43,7 +43,6 @@ export type ThemeColors = {
   modalBackdrop: string;
   snackbarBg: string;
   navButtonBg: string;
-  saveBarBg: string;
   gridHeaderBg: string;
   gridOddRow: string;
   keyNumberBg: string;
@@ -111,7 +110,6 @@ export const lightColors: ThemeColors = {
   modalBackdrop: "rgba(17,24,39,0.45)",
   snackbarBg: "rgba(17,24,39,0.9)",
   navButtonBg: "#f9fafb",
-  saveBarBg: "#f8fafc",
   gridHeaderBg: "#f3f4f6",
   gridOddRow: "#f9fafb",
   keyNumberBg: "#f3f4f6",
@@ -177,7 +175,6 @@ export const darkColors: ThemeColors = {
   modalBackdrop: "rgba(2,6,23,0.62)",
   snackbarBg: "rgba(15,23,42,0.94)",
   navButtonBg: "#0f172a",
-  saveBarBg: "#0f172a",
   gridHeaderBg: "#0f172a",
   gridOddRow: "#162032",
   keyNumberBg: "#334155",

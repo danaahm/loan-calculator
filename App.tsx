@@ -277,8 +277,13 @@ function AppContent() {
   // While the form is half-filled or invalid the last results stay on screen,
   // dimmed, rather than vanishing and making the page jump.
   const resultsStale = result !== null && !draftCalculable;
-  const canSaveCalculatedProfile =
-    result !== null && lastCalculatedHash.length > 0 && lastCalculatedHash !== lastSavedHash;
+  // Work that clearing the form would lose: edits to a saved loan, or a new
+  // loan the user has started (including one restored from the last session).
+  const hasUnsavedWork =
+    draftHash !== lastSavedHash || (selectedProfileId === null && result !== null);
+  // A form that cannot be worked out is not saved: it would store a loan
+  // different from the one on screen.
+  const canSaveLoan = hasUnsavedWork && draftCalculable;
   const minimumMonthlyRepayment = (() => {
     if (!result) {
       return 0;
@@ -363,8 +368,11 @@ function AppContent() {
     }, 4000);
   };
 
-  const ignoreCurrentCalculationSavePrompt = () => {
-    setLastSavedHash(lastCalculatedHash);
+  const openSaveDialog = () => {
+    // Saving stores the calculated loan, so bring it level with the form first
+    // in case the last edit is still waiting out the auto-calculate delay.
+    flushCalculationRef.current();
+    setSaveDialogVisible(true);
   };
 
   const openSettings = () => {
@@ -1036,23 +1044,6 @@ function AppContent() {
           </View>
         </View>
 
-        {screen === "calculator" && loanFormMode === "form" && canSaveCalculatedProfile ? (
-          <View style={styles.saveStickyBar}>
-            <Pressable
-              style={styles.saveStickyPrimaryButton}
-              onPress={() => setSaveDialogVisible(true)}
-            >
-              <Text style={styles.primaryButtonText}>{t("common.save")}</Text>
-            </Pressable>
-            <Pressable
-              style={styles.saveStickySecondaryButton}
-              onPress={ignoreCurrentCalculationSavePrompt}
-            >
-              <Text style={styles.secondaryButtonText}>{t("common.ignore")}</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
         <View style={styles.screenBody}>
         {screen === "home" ? (
           <HomeScreen
@@ -1093,25 +1084,57 @@ function AppContent() {
               <Pressable
                 style={styles.loanPickerButton}
                 accessibilityRole="button"
-                accessibilityLabel={t("loanPicker.switchLabel")}
+                accessibilityLabel={
+                  hasUnsavedWork
+                    ? `${t("loanPicker.switchLabel")}, ${t(
+                        selectedProfileId ? "app.edited" : "app.notSaved"
+                      )}`
+                    : t("loanPicker.switchLabel")
+                }
                 onPress={() => setLoanPickerVisible(true)}
               >
                 <Text style={styles.loanPickerName} numberOfLines={1}>
                   {selectedProfileId ? profileName : t("app.newLoan")}
                 </Text>
+                {/* A dot, not a word: the row is too narrow on a phone for a
+                    label beside the name, and the filled Save button already
+                    says there is something to save. */}
+                {hasUnsavedWork ? <View style={styles.unsavedDot} /> : null}
                 <Ionicons
                   name="chevron-down"
                   size={16}
                   color={colors.accentTextStrong}
                 />
               </Pressable>
+              {selectedProfileId && !hasUnsavedWork ? (
+                <View
+                  style={[styles.saveLoanButton, styles.saveLoanButtonSaved]}
+                  accessible
+                  accessibilityLabel={t("app.savedState")}
+                >
+                  <Ionicons name="checkmark" size={16} color={colors.textMuted} />
+                  <Text style={styles.saveLoanButtonSavedText}>{t("app.savedState")}</Text>
+                </View>
+              ) : (
+                <Pressable
+                  style={[styles.saveLoanButton, !canSaveLoan && styles.buttonDisabled]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("common.save")}
+                  accessibilityState={{ disabled: !canSaveLoan }}
+                  disabled={!canSaveLoan}
+                  onPress={openSaveDialog}
+                >
+                  <Ionicons name="bookmark-outline" size={15} color={colors.textInverse} />
+                  <Text style={styles.saveLoanButtonText}>{t("common.save")}</Text>
+                </Pressable>
+              )}
               <Pressable
                 style={styles.newLoanButton}
                 accessibilityRole="button"
                 accessibilityLabel={t("app.newLoan")}
                 onPress={startNewLoan}
               >
-                <Ionicons name="add" size={16} color={colors.textInverse} />
+                <Ionicons name="add" size={16} color={colors.accentTextStrong} />
                 <Text style={styles.newLoanButtonText}>{t("app.newLoan")}</Text>
               </Pressable>
             </View>
@@ -1775,7 +1798,7 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      gap: 12,
+      gap: 8,
       marginBottom: 2,
     },
     // Page-coloured, so the form scrolling underneath the pinned card does not
@@ -1803,18 +1826,52 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "800",
       color: colors.text,
     },
+    unsavedDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.dueDotSoon,
+    },
+    saveLoanButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingVertical: 9,
+      paddingHorizontal: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+    },
+    saveLoanButtonText: {
+      fontWeight: "800",
+      color: colors.textInverse,
+    },
+    saveLoanButtonSaved: {
+      borderColor: "transparent",
+      backgroundColor: "transparent",
+      paddingHorizontal: 4,
+    },
+    saveLoanButtonSavedText: {
+      fontWeight: "700",
+      color: colors.textMuted,
+    },
+    // Outlined, not filled: Save is the action to reach for, and starting a new
+    // loan should not be the most inviting thing on the row.
     newLoanButton: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
       paddingVertical: 9,
-      paddingHorizontal: 12,
+      paddingHorizontal: 10,
       borderRadius: 10,
-      backgroundColor: colors.primary,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.inputBg,
     },
     newLoanButtonText: {
       fontWeight: "800",
-      color: colors.textInverse,
+      color: colors.accentTextStrong,
     },
     loanPickerList: {
       maxHeight: 320,
@@ -1916,33 +1973,6 @@ const createStyles = (colors: ThemeColors) =>
     },
     resultsStale: {
       opacity: 0.4,
-    },
-    saveStickyBar: {
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.headerBorder,
-      backgroundColor: colors.saveBarBg,
-      flexDirection: "row",
-      gap: 8,
-    },
-    saveStickyPrimaryButton: {
-      flex: 1,
-      backgroundColor: colors.primary,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 10,
-    },
-    saveStickySecondaryButton: {
-      flex: 1,
-      borderWidth: 1,
-      borderColor: colors.borderStrong,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 10,
-      backgroundColor: colors.card,
     },
     bottomNav: {
       flexDirection: "row",

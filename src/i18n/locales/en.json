@@ -10,7 +10,6 @@
     "delete": "Delete",
     "done": "Done",
     "emptyValue": "—",
-    "ignore": "Ignore",
     "none": "None",
     "ok": "OK",
     "open": "Open",
@@ -31,7 +30,10 @@
     "repaymentRemindersDueNow": "Repayment reminders, a payment is due"
   },
   "app": {
-    "newLoan": "New loan"
+    "newLoan": "New loan",
+    "edited": "edited, not saved",
+    "notSaved": "not saved",
+    "savedState": "Saved"
   },
   "results": {
     "placeholder": "Your charts and repayment table appear here as soon as the amount borrowed and the loan length are filled in.",
