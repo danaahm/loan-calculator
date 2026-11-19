@@ -2,7 +2,7 @@
   "expo": {
     "name": "SLC",
     "slug": "loan-calculator",
-    "version": "1.10.0",
+    "version": "1.10.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -53,6 +53,7 @@
       "expo-font",
       "expo-localization",
       "expo-sharing",
+      "./plugins/with-optional-portrait",
       [
         "expo-build-properties",
         {
