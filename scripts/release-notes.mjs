@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Checks the Google Play "What's new" text that ships with each release.
+ * Checks the "What's new" text that ships with each release, to Google Play
+ * and (through scripts/app-store-notes.mjs) to App Store Connect.
  *
  *   node scripts/release-notes.mjs check [--tag <git tag>]
  *
@@ -64,7 +65,7 @@ const check = (tag) => {
     if (!existsSync(path)) {
       problems.push(
         `No ${locale} release notes for ${version}.\n` +
-          `  Add ${path.replace(/\\/g, "/")} with the "What's new" text for Google Play.`
+          `  Add ${path.replace(/\\/g, "/")} with the "What's new" text for Google Play and the App Store.`
       );
     }
   }
