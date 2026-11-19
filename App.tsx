@@ -692,6 +692,82 @@ function AppContent() {
     setLoanFormMode("form");
   };
 
+  // What "Save first" in a leave-this-loan prompt goes on to do once the save
+  // lands. Cleared if the save dialog is cancelled, so the user stays put.
+  const afterSaveRef = useRef<(() => void) | null>(null);
+
+  /** Runs a pending "Save first" action. True when there was one. */
+  const continueAfterSave = (message: string) => {
+    const next = afterSaveRef.current;
+    if (!next) {
+      return false;
+    }
+    afterSaveRef.current = null;
+    // A snackbar, not the usual saved alert: the user is on their way to
+    // something else and asked for that, not for a reminder offer.
+    showSnackbar(message);
+    next();
+    return true;
+  };
+
+  const closeSaveDialog = () => {
+    afterSaveRef.current = null;
+    setSaveDialogVisible(false);
+  };
+
+  /**
+   * Guards anything that replaces the loan on the form. New loan asks every
+   * time there is a loan on the form, because one stray tap used to wipe a
+   * half-typed loan; opening another loan asks only when work would be lost.
+   */
+  const confirmLeavingLoan = (kind: "new" | "switch", proceed: () => void) => {
+    const title = t(kind === "new" ? "leaveLoan.newTitle" : "leaveLoan.switchTitle");
+    const proceedLabel = t(kind === "new" ? "leaveLoan.startNew" : "leaveLoan.open");
+    if (!hasUnsavedWork) {
+      if (kind === "switch" || !selectedProfileId) {
+        // Nothing on the form to lose: a blank new loan, or a saved one.
+        proceed();
+        return;
+      }
+      Alert.alert(title, t("leaveLoan.savedBody", { name: profileName }), [
+        { text: t("common.cancel"), style: "cancel" },
+        { text: proceedLabel, onPress: proceed },
+      ]);
+      return;
+    }
+    const body = selectedProfileId
+      ? t("leaveLoan.editedBody", { name: profileName })
+      : t("leaveLoan.unsavedBody");
+    Alert.alert(title, body, [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("leaveLoan.discard"), style: "destructive", onPress: proceed },
+      // Offered only when the form can be saved as it stands.
+      ...(canSaveLoan
+        ? [
+            {
+              text: t("leaveLoan.saveFirst"),
+              onPress: () => {
+                afterSaveRef.current = proceed;
+                openSaveDialog();
+              },
+            },
+          ]
+        : []),
+    ]);
+  };
+
+  const requestNewLoan = () => confirmLeavingLoan("new", startNewLoan);
+
+  const requestOpenProfile = (profile: SavedLoanProfile) => {
+    // Reopening the loan already on the form would throw its edits away for
+    // nothing, so that is just a return to the calculator.
+    if (profile.id === selectedProfileId && loanFormMode === "form") {
+      setScreen("calculator");
+      return;
+    }
+    confirmLeavingLoan("switch", () => openProfile(profile));
+  };
+
   const saveCurrentProfile = async (asNew: boolean) => {
     const name = profileName.trim();
     if (!name) {
@@ -709,6 +785,9 @@ function AppContent() {
       await persistProfiles(updated);
       setLastSavedHash(inputHash);
       setSaveDialogVisible(false);
+      if (continueAfterSave(t("profiles.updatedBody"))) {
+        return;
+      }
       Alert.alert(t("profiles.updated"), t("profiles.updatedBody"), [
         { text: t("common.ok") },
         {
@@ -735,6 +814,9 @@ function AppContent() {
     setSelectedProfileId(newProfile.id);
     setLastSavedHash(inputHash);
     setSaveDialogVisible(false);
+    if (continueAfterSave(t("profiles.savedBody"))) {
+      return;
+    }
     Alert.alert(t("profiles.saved"), t("profiles.savedBody"), [
       { text: t("common.ok") },
       {
@@ -1132,7 +1214,7 @@ function AppContent() {
                 style={styles.newLoanButton}
                 accessibilityRole="button"
                 accessibilityLabel={t("app.newLoan")}
-                onPress={startNewLoan}
+                onPress={requestNewLoan}
               >
                 <Ionicons name="add" size={16} color={colors.accentTextStrong} />
                 <Text style={styles.newLoanButtonText}>{t("app.newLoan")}</Text>
@@ -1412,7 +1494,7 @@ function AppContent() {
               onBack={() => setScreen("saved")}
               onOpenProfile={(profile) => {
                 exitCompareSelectMode();
-                openProfile(profile);
+                requestOpenProfile(profile);
               }}
             />
           </SwipeBackView>
@@ -1490,7 +1572,7 @@ function AppContent() {
                       toggleCompareSelection(item.id);
                       return;
                     }
-                    openProfile(item);
+                    requestOpenProfile(item);
                   }}
                   onLongPress={() => {
                     if (!compareSelectMode) {
@@ -1654,7 +1736,13 @@ function AppContent() {
                         ]}
                         onPress={() => {
                           setLoanPickerVisible(false);
-                          openProfile(profile);
+                          if (hasUnsavedWork) {
+                            // iOS drops an alert raised while a modal is still
+                            // fading out, so ask once the picker has gone.
+                            setTimeout(() => requestOpenProfile(profile), 350);
+                          } else {
+                            requestOpenProfile(profile);
+                          }
                         }}
                       >
                         <View style={styles.loanPickerRowText}>
@@ -1727,7 +1815,7 @@ function AppContent() {
           visible={saveDialogVisible}
           transparent
           animationType="fade"
-          onRequestClose={() => setSaveDialogVisible(false)}
+          onRequestClose={closeSaveDialog}
         >
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
@@ -1762,7 +1850,7 @@ function AppContent() {
               </View>
               <Pressable
                 style={styles.cancelButton}
-                onPress={() => setSaveDialogVisible(false)}
+                onPress={closeSaveDialog}
               >
                 <Text style={styles.cancelButtonText}>{t("common.cancel")}</Text>
               </Pressable>

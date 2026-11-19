@@ -35,6 +35,17 @@
     "notSaved": "not saved",
     "savedState": "Saved"
   },
+  "leaveLoan": {
+    "newTitle": "Start a new loan?",
+    "switchTitle": "Open another loan?",
+    "savedBody": "This clears the form. \"{name}\" stays in your saved loans.",
+    "editedBody": "Your changes to \"{name}\" aren't saved and will be lost.",
+    "unsavedBody": "This loan isn't saved yet. It will be cleared from the form.",
+    "discard": "Discard",
+    "saveFirst": "Save first",
+    "startNew": "New loan",
+    "open": "Open"
+  },
   "results": {
     "placeholder": "Your charts and repayment table appear here as soon as the amount borrowed and the loan length are filled in.",
     "stale": "Finish the loan details above to update these results."
