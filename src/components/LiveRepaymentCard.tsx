@@ -16,6 +16,8 @@ interface LiveRepaymentCardProps {
   input: LoanInput;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  /** Scrolls to the charts and table below the form. */
+  onShowBreakdown?: () => void;
 }
 
 /**
@@ -26,6 +28,7 @@ export const LiveRepaymentCard = ({
   input,
   collapsed,
   onToggleCollapsed,
+  onShowBreakdown,
 }: LiveRepaymentCardProps) => {
   const { colors } = useTheme();
   const t = useTranslation();
@@ -141,6 +144,19 @@ export const LiveRepaymentCard = ({
         ) : (
           <Text style={styles.hint}>{hint}</Text>
         )}
+        {/* The charts sit below a long form; without a Calculate button to
+            lead there, this says they exist and takes the user to them. */}
+        {estimate && onShowBreakdown ? (
+          <Pressable
+            onPress={onShowBreakdown}
+            style={styles.breakdownLink}
+            hitSlop={8}
+            accessibilityRole="button"
+          >
+            <Text style={styles.breakdownLinkText}>{t("liveCalc.showBreakdown")}</Text>
+            <Ionicons name="arrow-down" size={14} color={colors.heroText} />
+          </Pressable>
+        ) : null}
       </CollapsibleSection>
     </Pressable>
   );
@@ -256,5 +272,23 @@ const createStyles = (colors: ThemeColors) =>
       lineHeight: 18,
       fontWeight: "600",
       color: colors.heroTextMuted,
+    },
+    breakdownLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: 4,
+      marginTop: 12,
+      paddingVertical: 5,
+      paddingHorizontal: 10,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.heroPillBorder,
+      backgroundColor: colors.heroPillBg,
+    },
+    breakdownLinkText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: colors.heroText,
     },
   });

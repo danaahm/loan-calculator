@@ -119,6 +119,7 @@
     "totalInterest": "Total Interest",
     "totalRepayments": "Total Repayments",
     "emptyHint": "Enter the amount borrowed and the loan length to see your repayment.",
+    "showBreakdown": "See full breakdown",
     "showDetails": "Show repayment details",
     "hideDetails": "Hide repayment details"
   },

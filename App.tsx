@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentRef, useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -593,6 +593,33 @@ function AppContent() {
     // Keyed on the hash: a new draft object holding the same loan is no change.
   }, [draftHash, draftCalculable, lastCalculatedHash, loadingState]);
 
+  // "See full breakdown" scrolls to the results. They may not exist yet when
+  // the link is tapped mid-delay, so the scroll waits for their first layout.
+  const calculatorScrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const resultsYRef = useRef<number | null>(null);
+  const liveCardHeightRef = useRef(0);
+  const breakdownScrollPendingRef = useRef(false);
+  const scrollToResults = () => {
+    const y = resultsYRef.current;
+    if (y === null) {
+      return false;
+    }
+    breakdownScrollPendingRef.current = false;
+    // Lands the results just under the pinned live card, not behind it.
+    calculatorScrollRef.current?.scrollTo({
+      y: Math.max(0, y - liveCardHeightRef.current),
+      animated: true,
+    });
+    return true;
+  };
+  const showBreakdown = () => {
+    Keyboard.dismiss();
+    flushCalculationRef.current();
+    if (!scrollToResults()) {
+      breakdownScrollPendingRef.current = true;
+    }
+  };
+
   // Closing the keyboard is the clearest sign a number is finished, so the
   // results catch up at once instead of waiting out the delay.
   useEffect(() => {
@@ -649,6 +676,7 @@ function AppContent() {
     setFormSeed(fresh);
     setDraftInput(fresh);
     setResult(null);
+    resultsYRef.current = null;
     setProfileName(t("profiles.defaultName"));
     setSelectedProfileId(null);
     setLastCalculatedHash(hash);
@@ -1052,6 +1080,7 @@ function AppContent() {
 
         {screen === "calculator" && loanFormMode === "form" ? (
           <ScrollView
+            ref={calculatorScrollRef}
             style={styles.screenBody}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
@@ -1087,11 +1116,17 @@ function AppContent() {
               </Pressable>
             </View>
 
-            <View style={styles.liveRepaymentWrap}>
+            <View
+              style={styles.liveRepaymentWrap}
+              onLayout={(event) => {
+                liveCardHeightRef.current = event.nativeEvent.layout.height;
+              }}
+            >
               <LiveRepaymentCard
                 input={draftInput}
                 collapsed={reminderSettings.liveRepaymentCollapsed}
                 onToggleCollapsed={toggleLiveRepaymentCollapsed}
+                onShowBreakdown={showBreakdown}
               />
             </View>
 
@@ -1109,6 +1144,12 @@ function AppContent() {
               <View
                 style={resultsStale ? styles.resultsStale : null}
                 accessibilityHint={resultsStale ? t("results.stale") : undefined}
+                onLayout={(event) => {
+                  resultsYRef.current = event.nativeEvent.layout.y;
+                  if (breakdownScrollPendingRef.current) {
+                    scrollToResults();
+                  }
+                }}
               >
                 <View style={styles.minimumRepaymentCard}>
                   <Text style={styles.minimumRepaymentTitle}>
