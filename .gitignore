@@ -62,3 +62,6 @@ modules/*/ios/build/
 
 # test coverage output
 /coverage
+
+# Local Claude Code instructions, kept out of the repo
+/CLAUDE.md
